@@ -57,10 +57,21 @@ export async function POST(request: NextRequest) {
   const unmatchedToDate = normalizeString(unmatchedFilters.toDate);
   const unmatchedStorecode = normalizeString(unmatchedFilters.storecode || selectedStorecode);
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
+  const requesterWalletAddress = normalizeString(signedOrdersBody.requesterWalletAddress);
+  const requesterStorecode = normalizeString(signedOrdersBody.requesterStorecode) || "admin";
 
   const jobs: Array<Promise<{ ok: boolean; status: number; json: any }>> = [
     postRemoteJson("/api/order/getTotalNumberOfBuyOrders", {}),
     postRemoteJson("/api/order/getTotalNumberOfClearanceOrders", {}),
+    postRemoteJson("/api/summary/getTradeSummary", {
+      requesterStorecode,
+      walletAddress: requesterWalletAddress,
+      storecode: selectedStorecode,
+      fromDate: normalizeString(signedOrdersBody.fromDate),
+      toDate: normalizeString(signedOrdersBody.toDate),
+      searchBuyer: normalizeString(signedOrdersBody.searchBuyer),
+      searchOrderStatusCompleted: Boolean(signedOrdersBody.searchOrderStatusCompleted),
+    }),
     postRemoteJson("/api/store/getAllStoresForBalance", {
       limit: storesLimit,
       page: storesPage,
@@ -92,9 +103,10 @@ export async function POST(request: NextRequest) {
 
   const totalBuyOrdersResponse = results[0];
   const totalClearanceOrdersResponse = results[1];
-  const storesResponse = results[2];
-  const unmatchedTransfersResponse = results[3];
-  const selectedStoreResponse = selectedStorecode ? results[4] : null;
+  const tradeSummaryResponse = results[2];
+  const storesResponse = results[3];
+  const unmatchedTransfersResponse = results[4];
+  const selectedStoreResponse = selectedStorecode ? results[5] : null;
   const signedOrdersResponse = hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
@@ -116,6 +128,8 @@ export async function POST(request: NextRequest) {
         totalBuyOrders: totalBuyOrdersResponse.json?.result?.totalCount || 0,
         totalClearanceOrders: totalClearanceOrdersResponse.json?.result?.totalCount || 0,
         audioOnBuyOrders: totalBuyOrdersResponse.json?.result?.audioOnCount || 0,
+        p2pTradeCount: tradeSummaryResponse.json?.result?.totalCount || 0,
+        storePaymentCount: tradeSummaryResponse.json?.result?.totalSettlementCount || 0,
       },
       orders: signedOrdersResponse?.json?.result?.orders || [],
       orderTotalCount: signedOrdersResponse?.json?.result?.totalCount || 0,

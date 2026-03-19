@@ -101,6 +101,8 @@ type DashboardResult = {
     totalBuyOrders: number;
     totalClearanceOrders: number;
     audioOnBuyOrders: number;
+    p2pTradeCount: number;
+    storePaymentCount: number;
   };
   orders: BuyOrder[];
   orderTotalCount: number;
@@ -157,18 +159,18 @@ const createInputDate = (daysOffset = 0) => {
   return date.toISOString().slice(0, 10);
 };
 
-const DEFAULT_FILTERS: FilterState = {
+const createDefaultFilters = (): FilterState => ({
   storecode: "",
   limit: 50,
   page: 1,
-  fromDate: createInputDate(-7),
+  fromDate: createInputDate(0),
   toDate: createInputDate(0),
   searchTradeId: "",
   searchBuyer: "",
   searchMyOrders: false,
   searchOrderStatusCancelled: false,
   searchOrderStatusCompleted: false,
-};
+});
 
 const statusMetaMap: Record<string, { label: string; className: string }> = {
   ordered: {
@@ -438,8 +440,8 @@ const getStoreLogoSrc = (order: BuyOrder, stores: StoreItem[]) => {
 
 export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const activeAccount = useActiveAccount();
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
-  const [draftFilters, setDraftFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
+  const [draftFilters, setDraftFilters] = useState<FilterState>(() => createDefaultFilters());
   const [data, setData] = useState<DashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -790,6 +792,18 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       caption: "검색 가능한 가맹점 수",
       accent: "bg-violet-500",
     },
+    {
+      label: "P2P 거래수(건)",
+      value: NUMBER_FORMATTER.format(data?.metrics.p2pTradeCount || 0),
+      caption: "trade summary totalCount",
+      accent: "bg-emerald-500",
+    },
+    {
+      label: "가맹점 결제수(건)",
+      value: NUMBER_FORMATTER.format(data?.metrics.storePaymentCount || 0),
+      caption: "trade summary settlement count",
+      accent: "bg-amber-500",
+    },
   ];
   const selectedScopeLabel = selectedStoreSummary
     ? (selectedStoreSummary as any).storeName
@@ -846,6 +860,34 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       value: `${NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}건`,
     },
   ];
+  const orderLimit = Math.max(1, Number(filters.limit) || 1);
+  const totalOrderCount = Math.max(0, Number(data?.orderTotalCount || 0));
+  const totalOrderPages = Math.max(1, Math.ceil(totalOrderCount / orderLimit));
+  const currentOrderPage = Math.min(Math.max(1, Number(filters.page) || 1), totalOrderPages);
+  const currentOrderRangeStart = orders.length === 0 ? 0 : ((currentOrderPage - 1) * orderLimit) + 1;
+  const currentOrderRangeEnd = orders.length === 0 ? 0 : currentOrderRangeStart + orders.length - 1;
+  const visibleOrderPages = useMemo(() => {
+    const start = Math.max(1, currentOrderPage - 2);
+    const end = Math.min(totalOrderPages, start + 4);
+    const adjustedStart = Math.max(1, end - 4);
+
+    return Array.from({ length: end - adjustedStart + 1 }, (_, index) => adjustedStart + index);
+  }, [currentOrderPage, totalOrderPages]);
+
+  const setOrderPage = useCallback((nextPage: number) => {
+    const safePage = Math.min(Math.max(1, nextPage), totalOrderPages);
+
+    setDraftFilters((prev) => (prev.page === safePage ? prev : { ...prev, page: safePage }));
+    setFilters((prev) => (prev.page === safePage ? prev : { ...prev, page: safePage }));
+  }, [totalOrderPages]);
+
+  useEffect(() => {
+    if (filters.page <= totalOrderPages) {
+      return;
+    }
+
+    setOrderPage(totalOrderPages);
+  }, [filters.page, setOrderPage, totalOrderPages]);
 
   return (
     <div className="console-shell px-4 py-6 sm:px-6 lg:px-8">
@@ -1030,7 +1072,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           {metricCards.map((item) => (
             <article key={item.label} className="console-panel relative overflow-hidden rounded-[28px] p-5">
               <div className={`absolute left-5 top-5 h-2 w-10 rounded-full ${item.accent}`} />
@@ -1064,8 +1106,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setDraftFilters(DEFAULT_FILTERS);
-                    setFilters(DEFAULT_FILTERS);
+                    const nextFilters = createDefaultFilters();
+                    setDraftFilters(nextFilters);
+                    setFilters(nextFilters);
                   }}
                   className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
@@ -1099,7 +1142,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+	              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                 <label className="space-y-2 text-sm xl:col-span-2">
                   <span className="font-medium text-slate-200">Storecode</span>
                   <input
@@ -1130,9 +1173,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   />
                 </label>
 
-                <label className="space-y-2 text-sm xl:col-span-2">
-                  <span className="font-medium text-slate-200">Buyer search</span>
-                  <input
+	                <label className="space-y-2 text-sm xl:col-span-2">
+	                  <span className="font-medium text-slate-200">Buyer search</span>
+	                  <input
                     value={draftFilters.searchBuyer}
                     onChange={(event) =>
                       setDraftFilters((prev) => ({
@@ -1142,13 +1185,40 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     }
                     placeholder="nickname or wallet"
                     className={fieldClassName}
-                  />
-                </label>
+	                  />
+	                </label>
 
-                <label className="space-y-2 text-sm xl:col-span-2">
-                  <span className="font-medium text-slate-200">From date</span>
-                  <input
-                    type="date"
+	                <div className="space-y-2 text-sm xl:col-span-2">
+	                  <span className="font-medium text-slate-200">Date presets</span>
+	                  <div className="flex flex-wrap gap-2">
+	                    {[
+	                      { label: "오늘", offset: 0 },
+	                      { label: "어제", offset: -1 },
+	                    ].map((item) => (
+	                      <button
+	                        key={item.label}
+	                        type="button"
+	                        onClick={() => {
+	                          const date = createInputDate(item.offset);
+	                          setDraftFilters((prev) => ({
+	                            ...prev,
+	                            fromDate: date,
+	                            toDate: date,
+	                            page: 1,
+	                          }));
+	                        }}
+	                        className="rounded-full border border-white/10 bg-white/6 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+	                      >
+	                        {item.label}
+	                      </button>
+	                    ))}
+	                  </div>
+	                </div>
+
+	                <label className="space-y-2 text-sm xl:col-span-2">
+	                  <span className="font-medium text-slate-200">From date</span>
+	                  <input
+	                    type="date"
                     value={draftFilters.fromDate}
                     onChange={(event) =>
                       setDraftFilters((prev) => ({
@@ -1384,11 +1454,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Unmatched deposit
-                          </div>
-                          <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-rose-600">
+                          <div className="text-2xl font-semibold tracking-[-0.04em] text-rose-600">
                             {formatKrw(transfer.amount || 0)}
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-slate-900">
+                            {transfer.transactionName || "-"}
                           </div>
                         </div>
                         {isHighlighted ? (
@@ -1398,36 +1468,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         ) : null}
                       </div>
 
-                      <div className="mt-4 space-y-3 text-sm text-slate-600">
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Holder
-                          </div>
-                          <div className="mt-1 font-medium text-slate-950">
-                            {maskName(transfer.transactionName)}
-                          </div>
+                      <div className="mt-4 space-y-2 text-sm text-slate-600">
+                        <div className="font-medium text-slate-950">
+                          {transfer.bankAccountNumber || "-"}
                         </div>
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Account
-                          </div>
-                          <div className="mt-1 font-medium text-slate-950">
-                            {maskAccountNumber(transfer.bankAccountNumber)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Scope
-                          </div>
-                          <div className="mt-1 font-medium text-slate-950">{storeLabel}</div>
-                        </div>
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Received
-                          </div>
-                          <div className="mt-1 font-medium text-slate-950">
-                            {formatDateTime(transactionDate)}
-                          </div>
+                        <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                          <span className="truncate">{storeLabel}</span>
+                          <span className="shrink-0">{formatDateTime(transactionDate)}</span>
                         </div>
                       </div>
                     </article>
@@ -1451,8 +1498,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               </div>
               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <span className="rounded-full bg-slate-100 px-3 py-1">
-                  Loaded {NUMBER_FORMATTER.format(orders.length)} /{" "}
-                  {NUMBER_FORMATTER.format(data?.orderTotalCount || 0)}
+                  Rows {NUMBER_FORMATTER.format(currentOrderRangeStart)}-
+                  {NUMBER_FORMATTER.format(currentOrderRangeEnd)} /{" "}
+                  {NUMBER_FORMATTER.format(totalOrderCount)}
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  Page {NUMBER_FORMATTER.format(currentOrderPage)} / {NUMBER_FORMATTER.format(totalOrderPages)}
                 </span>
                 <span className="rounded-full bg-slate-100 px-3 py-1">{syncStatusLabel}</span>
                 <span
@@ -1485,7 +1536,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
                   <th className="border-b border-slate-200 px-4 py-3">Trade / Created</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Status</th>
+                  <th className="w-[156px] border-b border-slate-200 px-4 py-3">Status</th>
                   <th className="border-b border-slate-200 px-4 py-3">Store</th>
                   <th className="border-b border-slate-200 px-4 py-3">Buyer</th>
                   <th className="border-b border-slate-200 px-4 py-3">Seller</th>
@@ -1543,10 +1594,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               : `${createdAtLabel} · ${createdTimeAgoLabel}`}
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="w-[156px] border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col items-start gap-2">
                             <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}
+                              className={`inline-flex w-[108px] justify-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}
                             >
                               {statusMeta.label}
                             </span>
@@ -1591,9 +1642,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 text-right align-top font-medium tabular-nums text-slate-950">
-                          <div>{formatUsdt(order.usdtAmount)}</div>
-                          <div className="mt-1 text-xs text-slate-500">
+                          <div className="text-base font-semibold tracking-[-0.02em] text-slate-950">
                             {formatKrw(order.krwAmount)}
+                          </div>
+                          <div className="mt-1 text-xs font-medium text-slate-500">
+                            {formatUsdt(order.usdtAmount)}
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
@@ -1623,6 +1676,66 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200/80 px-6 py-5">
+            <div className="text-sm text-slate-600">
+              {orders.length === 0
+                ? "현재 페이지에 표시할 주문이 없습니다."
+                : `${NUMBER_FORMATTER.format(currentOrderRangeStart)}-${NUMBER_FORMATTER.format(currentOrderRangeEnd)} / ${NUMBER_FORMATTER.format(totalOrderCount)} rows`}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setOrderPage(1)}
+                disabled={currentOrderPage === 1 || loading}
+                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                처음
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderPage(currentOrderPage - 1)}
+                disabled={currentOrderPage === 1 || loading}
+                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                이전
+              </button>
+
+              {visibleOrderPages.map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setOrderPage(page)}
+                  disabled={loading && page === currentOrderPage}
+                  className={`min-w-[42px] rounded-full px-3 py-2 text-sm font-medium transition ${
+                    page === currentOrderPage
+                      ? "bg-slate-950 text-white"
+                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  } ${loading && page === currentOrderPage ? "cursor-not-allowed opacity-70" : ""}`}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setOrderPage(currentOrderPage + 1)}
+                disabled={currentOrderPage === totalOrderPages || loading}
+                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                다음
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderPage(totalOrderPages)}
+                disabled={currentOrderPage === totalOrderPages || loading}
+                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                마지막
+              </button>
+            </div>
           </div>
         </section>
 
