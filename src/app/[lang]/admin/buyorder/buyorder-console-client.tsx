@@ -390,12 +390,94 @@ const getSellerBankSummary = (order: BuyOrder) => {
   return { primary, secondary };
 };
 
+const getActorDisplayLabel = (value: unknown) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return "";
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const namedKeys = ["name", "nickname", "displayName", "fullName", "email"];
+  for (const key of namedKeys) {
+    const next = String(candidate[key] || "").trim();
+    if (next) {
+      return next;
+    }
+  }
+
+  const walletValue = String(candidate.walletAddress || candidate.address || "").trim();
+  if (walletValue) {
+    return shortAddress(walletValue);
+  }
+
+  const idValue = String(candidate.userId || candidate.id || "").trim();
+  return idValue;
+};
+
+const getDepositProcessedByLabel = (order: BuyOrder) => {
+  const rawOrder = order as Record<string, unknown>;
+  const objectCandidates = [
+    rawOrder.paymentConfirmedBy,
+    rawOrder.confirmedBy,
+    rawOrder.processedBy,
+    rawOrder.updatedBy,
+    rawOrder.matchedByAdminUser,
+    rawOrder.adminUser,
+    rawOrder.operator,
+    rawOrder.manager,
+    rawOrder.staff,
+  ];
+
+  for (const candidate of objectCandidates) {
+    const label = getActorDisplayLabel(candidate);
+    if (label) {
+      return label;
+    }
+  }
+
+  const stringKeys = [
+    "paymentConfirmedByName",
+    "confirmedByName",
+    "processedByName",
+    "updatedByName",
+    "matchedByAdminName",
+    "adminName",
+    "operatorName",
+    "managerName",
+    "staffName",
+    "paymentConfirmedByWalletAddress",
+    "confirmedByWalletAddress",
+    "processedByWalletAddress",
+    "updatedByWalletAddress",
+    "adminWalletAddress",
+  ];
+
+  for (const key of stringKeys) {
+    const next = String(rawOrder[key] || "").trim();
+    if (next) {
+      return key.toLowerCase().includes("wallet") ? shortAddress(next) : next;
+    }
+  }
+
+  return "";
+};
+
 const getDepositProcessingMeta = (order: BuyOrder) => {
+  const processedByLabel = getDepositProcessedByLabel(order);
+
   if (order.autoConfirmPayment === true) {
     return {
       label: "자동",
       className: "bg-sky-100 text-sky-700",
       detail: "자동입금확인",
+      actor: "",
     };
   }
 
@@ -404,6 +486,7 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
       label: "수동",
       className: "bg-amber-100 text-amber-800",
       detail: "수동입금확인",
+      actor: processedByLabel || "관리자",
     };
   }
 
@@ -412,6 +495,7 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
       label: "수동",
       className: "bg-amber-100 text-amber-800",
       detail: "관리자 확인",
+      actor: processedByLabel || "관리자",
     };
   }
 
@@ -420,6 +504,16 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
       label: "자동",
       className: "bg-sky-100 text-sky-700",
       detail: "자동 매칭",
+      actor: "",
+    };
+  }
+
+  if (order.status === "paymentConfirmed" || order.status === "paymentSettled") {
+    return {
+      label: "수동",
+      className: "bg-amber-100 text-amber-800",
+      detail: "수동입금확인",
+      actor: processedByLabel || "관리자",
     };
   }
 
@@ -428,6 +522,7 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
       label: "확인중",
       className: "bg-slate-100 text-slate-700",
       detail: "입금 확인 대기",
+      actor: "",
     };
   }
 
@@ -435,6 +530,7 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
     label: "-",
     className: "bg-slate-100 text-slate-500",
     detail: "",
+    actor: "",
   };
 };
 
@@ -2263,6 +2359,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             </div>
                             {depositProcessing.detail ? (
                               <span className="text-xs text-slate-500">{depositProcessing.detail}</span>
+                            ) : null}
+                            {depositProcessing.actor ? (
+                              <span className="text-xs font-medium text-slate-700">
+                                처리자 {depositProcessing.actor}
+                              </span>
                             ) : null}
                           </div>
                         </td>
