@@ -1079,10 +1079,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               <div className="console-mono pl-14 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
                 {item.label}
               </div>
-              <div className="console-display mt-5 text-5xl font-semibold tracking-[-0.06em] text-slate-950">
+              <div className="console-display mt-5 text-right text-5xl font-semibold tracking-[-0.06em] text-slate-950">
                 {item.value}
               </div>
-              <div className="mt-2 text-sm leading-6 text-slate-600">{item.caption}</div>
+              <div className="mt-2 text-right text-sm leading-6 text-slate-600">{item.caption}</div>
             </article>
           ))}
         </section>
@@ -1323,40 +1323,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </div>
 
           <aside className="space-y-5">
-            <div className="console-dark-card rounded-[30px] p-5 text-white">
-              <div>
-                <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
-                  Scope briefing
-                </p>
-                <h2 className="console-display mt-1 text-3xl font-semibold tracking-[-0.05em] text-white">
-                  Filter context
-                </h2>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
-                  <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                    Active scope
-                  </div>
-                  <div className="console-display mt-2 text-3xl font-semibold tracking-[-0.05em] text-white">
-                    {filters.storecode || "admin"}
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-slate-300">{selectedScopeLabel}</div>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
-                  <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                    Feed policy
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-slate-300">
-                    {isSignedIn
-                      ? "Signed mode is active. Ably 이벤트를 받으면 즉시 BFF를 다시 읽고, 60초 fallback polling이 남아 있습니다."
-                      : "Summary mode is active. Connect a wallet to unlock protected rows while Ably keeps the feed warm."}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="console-panel rounded-[30px] p-5">
               <div>
                 <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
@@ -1378,24 +1344,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     </div>
                   </div>
                 ))}
-
-                <div className="console-panel-muted rounded-[24px] p-4">
-                  <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                    Remote admin
-                  </div>
-                  <div className="mt-2 break-all text-sm font-medium leading-6 text-slate-900">
-                    {remoteAdminUrl}
-                  </div>
-                  <div className="mt-4">
-                    <Link
-                      href={remoteAdminUrl}
-                      target="_blank"
-                      className="inline-flex rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                    >
-                      Open original admin
-                    </Link>
-                  </div>
-                </div>
               </div>
             </div>
           </aside>
