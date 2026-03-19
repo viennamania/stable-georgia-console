@@ -2220,6 +2220,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const canCancelOrder = isSignedIn && (status === "accepted" || status === "paymentRequested");
                     const isCancellingThisOrder = Boolean(cancellingTradeId && rowMatchKey === cancellingTradeId);
                     const transactionHash = String(order.transactionHash || "").trim();
+                    const shouldShowUsdtTransferAmount = status === "paymentConfirmed";
                     const isUsdtTransferPending =
                       status === "paymentConfirmed" && (!transactionHash || transactionHash === "0x");
 
@@ -2284,7 +2285,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                     : "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
                                 }`}
                               >
-                                {isCancellingThisOrder ? "취소중..." : "거래취소"}
+                                {isCancellingThisOrder ? "거래취소중..." : "거래취소하기"}
                               </button>
                             ) : null}
                           </div>
@@ -2353,7 +2354,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                       : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                                   }`}
                                 >
-                                  {isConfirmingThisOrder ? "완료중..." : "완료하기"}
+                                  {isConfirmingThisOrder ? "거래완료중..." : "거래완료하기"}
                                 </button>
                               ) : null}
                             </div>
@@ -2368,9 +2369,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 text-right align-top">
-                          <div className="text-base font-semibold tabular-nums tracking-[-0.02em] text-slate-950">
-                            {formatUsdt(order.usdtAmount)}
-                          </div>
+                          {shouldShowUsdtTransferAmount ? (
+                            <div className="text-base font-semibold tabular-nums tracking-[-0.02em] text-slate-950">
+                              {formatUsdt(order.usdtAmount)}
+                            </div>
+                          ) : null}
                           {isUsdtTransferPending ? (
                             <div className="mt-1">
                               <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
@@ -2634,7 +2637,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         : "bg-emerald-600 hover:bg-emerald-700"
                     }`}
                   >
-                    {depositModalSubmitting ? "완료 처리중..." : "완료하기"}
+                    {depositModalSubmitting ? "거래완료 처리중..." : "거래완료하기"}
                   </button>
                 </div>
               </div>
