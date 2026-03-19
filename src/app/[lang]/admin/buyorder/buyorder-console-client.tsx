@@ -87,6 +87,7 @@ type UnmatchedTransfer = {
   storeInfo?: {
     storecode?: string;
     storeName?: string;
+    storeLogo?: string;
   } | null;
 };
 
@@ -436,6 +437,30 @@ const getStoreLogoSrc = (order: BuyOrder, stores: StoreItem[]) => {
 
   const fallbackLogo = stores.find((item) => String(item.storecode || "").trim() === storecode)?.storeLogo;
   return String(fallbackLogo || "").trim() || "/logo.png";
+};
+
+const getUnmatchedTransferStoreLogoSrc = (transfer: UnmatchedTransfer, stores: StoreItem[]) => {
+  const directLogo = String(transfer.storeInfo?.storeLogo || "").trim();
+  if (directLogo) {
+    return directLogo;
+  }
+
+  const storecode = String(transfer.storeInfo?.storecode || "").trim();
+  const storeName = String(transfer.storeInfo?.storeName || "").trim();
+
+  const matchedStore = stores.find((item) => {
+    const itemStorecode = String(item.storecode || "").trim();
+    const itemStoreName = String(item.storeName || "").trim();
+    const itemCompanyName = String(item.companyName || "").trim();
+
+    if (storecode && itemStorecode === storecode) {
+      return true;
+    }
+
+    return Boolean(storeName && (itemStoreName === storeName || itemCompanyName === storeName));
+  });
+
+  return String(matchedStore?.storeLogo || "").trim() || "/logo.png";
 };
 
 export default function BuyorderConsoleClient({ lang }: { lang: string }) {
@@ -1388,42 +1413,50 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
                   const storeLabel =
                     transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
+                  const storeLogoSrc = getUnmatchedTransferStoreLogoSrc(transfer, stores);
                   const transactionDate =
                     transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
 
                   return (
                     <article
                       key={id}
-                      className={`min-w-[280px] max-w-[320px] rounded-[24px] border px-4 py-4 shadow-sm transition ${
+                      className={`min-w-[260px] max-w-[300px] rounded-[24px] border px-4 py-3 shadow-sm transition ${
                         isHighlighted
                           ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
                           : "border-slate-200 bg-white"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-2xl font-semibold tracking-[-0.04em] text-rose-600">
-                            {formatKrw(transfer.amount || 0)}
-                          </div>
-                          <div className="mt-1 text-sm font-medium text-slate-900">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold text-slate-900">
                             {transfer.transactionName || "-"}
                           </div>
+                          <div className="mt-1 truncate text-sm text-slate-600">
+                            {transfer.bankAccountNumber || "-"}
+                          </div>
                         </div>
-                        {isHighlighted ? (
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                            live updated
-                          </span>
-                        ) : null}
+                        <div className="shrink-0 text-right">
+                          <div className="text-xl font-semibold tracking-[-0.04em] text-rose-600">
+                            {formatKrw(transfer.amount || 0)}
+                          </div>
+                          {isHighlighted ? (
+                            <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                              live updated
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
 
-                      <div className="mt-4 space-y-2 text-sm text-slate-600">
-                        <div className="font-medium text-slate-950">
-                          {transfer.bankAccountNumber || "-"}
-                        </div>
-                        <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="h-6 w-6 shrink-0 rounded-xl border border-slate-200 bg-slate-100 bg-cover bg-center"
+                            style={{ backgroundImage: `url(${storeLogoSrc})` }}
+                            aria-hidden="true"
+                          />
                           <span className="truncate">{storeLabel}</span>
-                          <span className="shrink-0">{formatDateTime(transactionDate)}</span>
                         </div>
+                        <span className="shrink-0">{formatDateTime(transactionDate)}</span>
                       </div>
                     </article>
                   );
