@@ -899,7 +899,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
   const isSignedIn = Boolean(activeAccount);
   const fieldClassName =
-    "w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100";
+    "h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100";
   const metricCards = [
     {
       label: "Total buy orders",
@@ -928,13 +928,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     {
       label: "P2P 거래수(건)",
       value: NUMBER_FORMATTER.format(data?.metrics.p2pTradeCount || 0),
-      caption: "trade summary totalCount",
+      caption: "total trade count",
       accent: "bg-emerald-500",
     },
     {
       label: "가맹점 결제수(건)",
       value: NUMBER_FORMATTER.format(data?.metrics.storePaymentCount || 0),
-      caption: "trade summary settlement count",
+      caption: "total settlement count",
       accent: "bg-amber-500",
     },
   ];
@@ -1250,45 +1250,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
                   Admin query
                 </h2>
-                <p className="text-sm text-slate-600">
-                  필요한 조건만 좁혀서 주문 테이블을 읽기 쉬운 상태로 유지합니다.
-                </p>
               </div>
             </div>
 
             <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="console-mono rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-slate-300">
-                  scope: {filters.storecode || "admin"}
-                </span>
-                <span className="console-mono rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-slate-300">
-                  rows: {NUMBER_FORMATTER.format(orders.length)}
-                </span>
-                <span className="console-mono rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-slate-300">
-                  mode: {isSignedIn ? "signed" : "summary"}
-                </span>
-              </div>
-
-	              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                <div className="space-y-2 text-sm xl:col-span-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium text-slate-200">가맹점 선택</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStoreSearchQuery("");
-                        setStoreSearchOpen(false);
-                        setDraftFilters((prev) => ({
-                          ...prev,
-                          storecode: "",
-                          page: 1,
-                        }));
-                      }}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/10"
-                    >
-                      전체 범위
-                    </button>
-                  </div>
+              <div className="grid gap-3 xl:grid-cols-12">
+                <div className="space-y-2 text-sm xl:col-span-4">
+                  <span className="font-medium text-slate-200">가맹점 선택</span>
                   <div ref={storeSearchRef} className="relative">
                     <input
                       value={storeSearchQuery}
@@ -1417,29 +1385,29 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     ) : null}
                   </div>
                   {selectedDraftStoreSummary ? (
-                    <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-2">
                       <img
                         src={getStoreOptionLogoSrc(selectedDraftStoreSummary)}
                         alt={getStoreDisplayName(selectedDraftStoreSummary) || draftFilters.storecode}
-                        className="h-11 w-11 rounded-2xl border border-white/10 bg-white object-cover"
+                        className="h-7 w-7 rounded-full border border-white/10 bg-white object-cover"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-white">
+                        <div className="truncate text-xs font-semibold text-white">
                           {getStoreDisplayName(selectedDraftStoreSummary) || draftFilters.storecode}
                         </div>
-                        <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-400">
+                        <div className="console-mono truncate text-[10px] uppercase tracking-[0.14em] text-slate-400">
                           {draftFilters.storecode}
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-[22px] border border-dashed border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-400">
-                      현재는 전체 가맹점 범위입니다. 검색에서 가맹점을 선택하면 해당 storecode만 필터링됩니다.
+                    <div className="px-1 text-xs text-slate-400">
+                      전체 가맹점 범위
                     </div>
                   )}
                 </div>
 
-                <label className="space-y-2 text-sm xl:col-span-2">
+                <label className="space-y-2 text-sm xl:col-span-3">
                   <span className="font-medium text-slate-200">Trade ID</span>
                   <input
                     value={draftFilters.searchTradeId}
@@ -1450,14 +1418,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         page: 1,
                       }))
                     }
-                    placeholder="search tradeId"
+                    placeholder="tradeId 검색"
                     className={fieldClassName}
                   />
                 </label>
 
-	                <label className="space-y-2 text-sm xl:col-span-2">
-	                  <span className="font-medium text-slate-200">Buyer search</span>
-	                  <input
+                <label className="space-y-2 text-sm xl:col-span-3">
+                  <span className="font-medium text-slate-200">구매자 검색</span>
+                  <input
                     value={draftFilters.searchBuyer}
                     onChange={(event) =>
                       setDraftFilters((prev) => ({
@@ -1466,50 +1434,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         page: 1,
                       }))
                     }
-                    placeholder="nickname or wallet"
+                    placeholder="닉네임 / wallet"
                     className={fieldClassName}
-	                  />
-	                </label>
+                  />
+                </label>
 
-	                <div className="space-y-2 text-sm xl:col-span-2">
-	                  <span className="font-medium text-slate-200">Date presets</span>
-	                  <div className="flex flex-wrap gap-2">
-	                    {[
-	                      { label: "오늘", offset: 0 },
-	                      { label: "어제", offset: -1 },
-	                    ].map((item) => {
-	                      const date = createInputDate(item.offset);
-	                      const isSelected = draftFilters.fromDate === date && draftFilters.toDate === date;
-
-	                      return (
-	                        <button
-	                          key={item.label}
-	                          type="button"
-	                          onClick={() => {
-	                            setDraftFilters((prev) => ({
-	                              ...prev,
-	                              fromDate: date,
-	                              toDate: date,
-	                              page: 1,
-	                            }));
-	                          }}
-	                          className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-	                            isSelected
-	                              ? "border-sky-300 bg-sky-300/15 text-sky-100"
-	                              : "border-white/10 bg-white/6 text-slate-200 hover:bg-white/10"
-	                          }`}
-	                        >
-	                          {item.label}
-	                        </button>
-	                      );
-	                    })}
-	                  </div>
-	                </div>
-
-	                <label className="space-y-2 text-sm xl:col-span-2">
-	                  <span className="font-medium text-slate-200">Date</span>
-	                  <input
-	                    type="date"
+                <label className="space-y-2 text-sm xl:col-span-2">
+                  <span className="font-medium text-slate-200">날짜</span>
+                  <input
+                    type="date"
                     value={draftFilters.fromDate}
                     onChange={(event) =>
                       setDraftFilters((prev) => ({
@@ -1522,45 +1455,83 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     className={fieldClassName}
                   />
                 </label>
-              </div>
 
-              <div className="mt-5 flex flex-wrap gap-3">
-                {[
-                  {
-                    label: "My orders",
-                    value: draftFilters.searchMyOrders,
-                    key: "searchMyOrders",
-                  },
-                  {
-                    label: "Include cancelled",
-                    value: draftFilters.searchOrderStatusCancelled,
-                    key: "searchOrderStatusCancelled",
-                  },
-                  {
-                    label: "Include completed",
-                    value: draftFilters.searchOrderStatusCompleted,
-                    key: "searchOrderStatusCompleted",
-                  },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        [item.key]: !item.value,
-                        page: 1,
-                      }))
-                    }
-                    className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                      item.value
-                        ? "border-sky-300 bg-sky-300/15 text-sky-100"
-                        : "border-white/10 bg-white/6 text-slate-200 hover:bg-white/10"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                <div className="space-y-2 text-sm xl:col-span-4">
+                  <span className="font-medium text-slate-200">빠른 날짜</span>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "오늘", offset: 0 },
+                      { label: "어제", offset: -1 },
+                    ].map((item) => {
+                      const date = createInputDate(item.offset);
+                      const isSelected = draftFilters.fromDate === date && draftFilters.toDate === date;
+
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => {
+                            setDraftFilters((prev) => ({
+                              ...prev,
+                              fromDate: date,
+                              toDate: date,
+                              page: 1,
+                            }));
+                          }}
+                          className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                            isSelected
+                              ? "border-sky-300 bg-sky-300/15 text-sky-100"
+                              : "border-white/10 bg-white/6 text-slate-200 hover:bg-white/10"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-sm xl:col-span-8">
+                  <span className="font-medium text-slate-200">표시 옵션</span>
+                  <div className="flex flex-wrap gap-2.5">
+                    {[
+                      {
+                        label: "내 주문",
+                        value: draftFilters.searchMyOrders,
+                        key: "searchMyOrders",
+                      },
+                      {
+                        label: "취소 포함",
+                        value: draftFilters.searchOrderStatusCancelled,
+                        key: "searchOrderStatusCancelled",
+                      },
+                      {
+                        label: "완료 포함",
+                        value: draftFilters.searchOrderStatusCompleted,
+                        key: "searchOrderStatusCompleted",
+                      },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() =>
+                          setDraftFilters((prev) => ({
+                            ...prev,
+                            [item.key]: !item.value,
+                            page: 1,
+                          }))
+                        }
+                        className={`rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+                          item.value
+                            ? "border-sky-300 bg-sky-300/15 text-sky-100"
+                            : "border-white/10 bg-white/6 text-slate-200 hover:bg-white/10"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
