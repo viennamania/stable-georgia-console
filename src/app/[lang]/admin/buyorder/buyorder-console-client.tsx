@@ -1311,6 +1311,39 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     {storeSearchOpen ? (
                       <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
                         <div className="max-h-80 overflow-y-auto p-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDraftFilters((prev) => ({
+                                ...prev,
+                                storecode: "",
+                                page: 1,
+                              }));
+                              setStoreSearchQuery("");
+                              setStoreSearchOpen(false);
+                            }}
+                            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                              draftFilters.storecode
+                                ? "text-slate-700 hover:bg-slate-50"
+                                : "bg-sky-50 text-sky-900"
+                            }`}
+                          >
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                              All
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-semibold text-slate-900">전체</div>
+                              <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                                all stores
+                              </div>
+                            </div>
+                            {!draftFilters.storecode ? (
+                              <span className="rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                                Selected
+                              </span>
+                            ) : null}
+                          </button>
+
                           {filteredStoreOptions.length ? (
                             filteredStoreOptions.map((item) => {
                               const storecode = String(item.storecode || "").trim();
