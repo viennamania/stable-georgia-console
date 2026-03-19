@@ -2219,6 +2219,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isConfirmingThisOrder = Boolean(confirmingTradeId && rowMatchKey === confirmingTradeId);
                     const canCancelOrder = isSignedIn && (status === "accepted" || status === "paymentRequested");
                     const isCancellingThisOrder = Boolean(cancellingTradeId && rowMatchKey === cancellingTradeId);
+                    const shouldHighlightSellerBankInfo = status === "paymentRequested";
                     const transactionHash = String(order.transactionHash || "").trim();
                     const shouldShowUsdtTransferAmount = status === "paymentConfirmed";
                     const isUsdtTransferPending =
@@ -2318,12 +2319,28 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
                           <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
-                          <div className="mt-1 text-xs text-slate-600">
-                            {sellerBankSummary.primary}
-                          </div>
-                          <div className="console-mono mt-1 text-xs text-slate-500">
-                            {sellerBankSummary.secondary}
-                          </div>
+                          {shouldHighlightSellerBankInfo ? (
+                            <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
+                              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
+                                입금계좌
+                              </div>
+                              <div className="console-mono mt-1 text-sm font-semibold tracking-[-0.01em] text-slate-950">
+                                {sellerBankSummary.secondary}
+                              </div>
+                              <div className="mt-1 text-xs font-medium text-slate-700">
+                                {sellerBankSummary.primary}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="mt-1 text-xs text-slate-600">
+                                {sellerBankSummary.primary}
+                              </div>
+                              <div className="console-mono mt-1 text-xs text-slate-500">
+                                {sellerBankSummary.secondary}
+                              </div>
+                            </>
+                          )}
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 text-right align-top font-medium tabular-nums text-slate-950">
                           <div className="text-base font-semibold tracking-[-0.02em] text-slate-950">
