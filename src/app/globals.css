@@ -3,31 +3,82 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --background: #edf3fb;
+  --background-soft: #f8fbff;
+  --panel: rgba(255, 255, 255, 0.94);
+  --panel-muted: #f6f9fc;
+  --border: rgba(15, 23, 42, 0.08);
+  --foreground: #0f172a;
+  --muted: #5f6f86;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.14);
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  min-height: 100vh;
+  color: var(--foreground);
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.16), transparent 26%),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.1), transparent 24%),
+    linear-gradient(180deg, #edf3fb 0%, #f8fbff 42%, #eef3f9 100%);
+  background-attachment: fixed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .console-shell {
+    @apply min-h-screen text-slate-900;
+  }
+
+  .console-display {
+    font-family: var(--font-display), sans-serif;
+  }
+
+  .console-mono {
+    font-family: var(--font-mono), monospace;
+  }
+
+  .console-panel {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+    border: 1px solid var(--border);
+    box-shadow: 0 30px 70px -48px rgba(15, 23, 42, 0.28);
+  }
+
+  .console-panel-muted {
+    background: linear-gradient(180deg, #fbfdff 0%, #f3f7fb 100%);
+    border: 1px solid var(--border);
+  }
+
+  .console-hero {
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      radial-gradient(circle at top right, rgba(125, 211, 252, 0.18), transparent 26%),
+      radial-gradient(circle at 18% 22%, rgba(45, 212, 191, 0.12), transparent 18%),
+      linear-gradient(135deg, #081122 0%, #12233f 52%, #1d3a68 100%);
+    background-size: 32px 32px, 32px 32px, auto, auto, auto;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    box-shadow: 0 42px 90px -54px rgba(15, 23, 42, 0.78);
+  }
+
+  .console-dark-card {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(15, 23, 42, 0.68));
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 }
