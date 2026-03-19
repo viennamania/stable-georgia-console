@@ -1287,6 +1287,113 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                  Ably unmatched feed
+                </p>
+                <h2 className="console-display mt-1 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                  미신청입금 live
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  {NUMBER_FORMATTER.format(unmatchedTransfers.length)} / {NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  {formatKrw(data?.unmatchedTotalAmount || 0)}
+                </span>
+                <span
+                  className={`rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${liveTransportBadgeClassName}`}
+                >
+                  {liveTransportLabel}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto px-4 py-4">
+            {unmatchedTransfers.length === 0 ? (
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
+                No unmatched deposits returned for the current filter.
+              </div>
+            ) : (
+              <div className="flex min-w-full gap-3">
+                {unmatchedTransfers.map((transfer, index) => {
+                  const id = String(transfer._id || `unmatched-${index}`);
+                  const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
+                  const storeLabel =
+                    transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
+                  const transactionDate =
+                    transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
+
+                  return (
+                    <article
+                      key={id}
+                      className={`min-w-[280px] max-w-[320px] rounded-[24px] border px-4 py-4 shadow-sm transition ${
+                        isHighlighted
+                          ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
+                          : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Unmatched deposit
+                          </div>
+                          <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-rose-600">
+                            {formatKrw(transfer.amount || 0)}
+                          </div>
+                        </div>
+                        {isHighlighted ? (
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                            live updated
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-4 space-y-3 text-sm text-slate-600">
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Holder
+                          </div>
+                          <div className="mt-1 font-medium text-slate-950">
+                            {maskName(transfer.transactionName)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Account
+                          </div>
+                          <div className="mt-1 font-medium text-slate-950">
+                            {maskAccountNumber(transfer.bankAccountNumber)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Scope
+                          </div>
+                          <div className="mt-1 font-medium text-slate-950">{storeLabel}</div>
+                        </div>
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Received
+                          </div>
+                          <div className="mt-1 font-medium text-slate-950">
+                            {formatDateTime(transactionDate)}
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="console-panel overflow-hidden rounded-[30px]">
+          <div className="border-b border-slate-200/80 px-6 py-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
                   Signed feed
                 </p>
                 <h2 className="console-display mt-1 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
@@ -1449,112 +1556,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </div>
         </section>
 
-        <section className="console-panel overflow-hidden rounded-[30px]">
-          <div className="border-b border-slate-200/80 px-6 py-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                  Ably unmatched feed
-                </p>
-                <h2 className="console-display mt-1 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                  미신청입금 live
-                </h2>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                <span className="rounded-full bg-slate-100 px-3 py-1">
-                  {NUMBER_FORMATTER.format(unmatchedTransfers.length)} / {NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}
-                </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1">
-                  {formatKrw(data?.unmatchedTotalAmount || 0)}
-                </span>
-                <span
-                  className={`rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${liveTransportBadgeClassName}`}
-                >
-                  {liveTransportLabel}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto px-4 py-4">
-            {unmatchedTransfers.length === 0 ? (
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
-                No unmatched deposits returned for the current filter.
-              </div>
-            ) : (
-              <div className="flex min-w-full gap-3">
-                {unmatchedTransfers.map((transfer, index) => {
-                  const id = String(transfer._id || `unmatched-${index}`);
-                  const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
-                  const storeLabel =
-                    transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
-                  const transactionDate =
-                    transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
-
-                  return (
-                    <article
-                      key={id}
-                      className={`min-w-[280px] max-w-[320px] rounded-[24px] border px-4 py-4 shadow-sm transition ${
-                        isHighlighted
-                          ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
-                          : "border-slate-200 bg-white"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Unmatched deposit
-                          </div>
-                          <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-rose-600">
-                            {formatKrw(transfer.amount || 0)}
-                          </div>
-                        </div>
-                        {isHighlighted ? (
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                            live updated
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-4 space-y-3 text-sm text-slate-600">
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Holder
-                          </div>
-                          <div className="mt-1 font-medium text-slate-950">
-                            {maskName(transfer.transactionName)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Account
-                          </div>
-                          <div className="mt-1 font-medium text-slate-950">
-                            {maskAccountNumber(transfer.bankAccountNumber)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Scope
-                          </div>
-                          <div className="mt-1 font-medium text-slate-950">{storeLabel}</div>
-                        </div>
-                        <div>
-                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                            Received
-                          </div>
-                          <div className="mt-1 font-medium text-slate-950">
-                            {formatDateTime(transactionDate)}
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
       </div>
     </div>
   );
