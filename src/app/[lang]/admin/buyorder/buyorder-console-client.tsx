@@ -59,6 +59,7 @@ type BuyOrder = {
   store?: {
     storecode?: string;
     storeName?: string;
+    storeLogo?: string;
     bankInfo?: BankInfo;
     bankInfoAAA?: BankInfo;
     bankInfoBBB?: BankInfo;
@@ -71,6 +72,7 @@ type StoreItem = {
   storecode?: string;
   storeName?: string;
   companyName?: string;
+  storeLogo?: string;
 };
 
 type UnmatchedTransfer = {
@@ -168,14 +170,42 @@ const DEFAULT_FILTERS: FilterState = {
   searchOrderStatusCompleted: false,
 };
 
-const statusToneMap: Record<string, string> = {
-  ordered: "bg-slate-100 text-slate-700",
-  accepted: "bg-sky-100 text-sky-700",
-  paymentRequested: "bg-amber-100 text-amber-800",
-  paymentConfirmed: "bg-emerald-100 text-emerald-800",
-  paymentSettled: "bg-zinc-900 text-white",
-  cancelled: "bg-rose-100 text-rose-700",
-  canceled: "bg-rose-100 text-rose-700",
+const statusMetaMap: Record<string, { label: string; className: string }> = {
+  ordered: {
+    label: "주문접수",
+    className: "border border-slate-200 bg-slate-100 text-slate-700",
+  },
+  accepted: {
+    label: "접수완료",
+    className: "border border-sky-200 bg-sky-100 text-sky-700",
+  },
+  paymentRequested: {
+    label: "결제요청",
+    className: "border border-amber-200 bg-amber-50 text-amber-700",
+  },
+  paymentConfirmed: {
+    label: "거래완료",
+    className: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  paymentSettled: {
+    label: "정산완료",
+    className: "border border-zinc-900 bg-zinc-900 text-white",
+  },
+  cancelled: {
+    label: "거래취소",
+    className: "border border-rose-200 bg-rose-50 text-rose-700",
+  },
+  canceled: {
+    label: "거래취소",
+    className: "border border-rose-200 bg-rose-50 text-rose-700",
+  },
+};
+
+const statusRowToneMap: Record<string, string> = {
+  paymentRequested: "bg-amber-50/70",
+  paymentConfirmed: "bg-emerald-50/45",
+  cancelled: "bg-rose-50/70",
+  canceled: "bg-rose-50/70",
 };
 
 const shortAddress = (value?: string | null) => {
@@ -380,11 +410,30 @@ const getBuyerLabel = (order: BuyOrder) => {
   );
 };
 
+const getBuyerDepositName = (order: BuyOrder) => {
+  return String(order.buyer?.depositName || "").trim();
+};
+
 const getSellerLabel = (order: BuyOrder) => {
   return (
     order.seller?.nickname
     || shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)
   );
+};
+
+const getStoreLogoSrc = (order: BuyOrder, stores: StoreItem[]) => {
+  const directLogo = String(order.store?.storeLogo || "").trim();
+  if (directLogo) {
+    return directLogo;
+  }
+
+  const storecode = String(order.store?.storecode || order.storecode || "").trim();
+  if (!storecode) {
+    return "/logo.png";
+  }
+
+  const fallbackLogo = stores.find((item) => String(item.storecode || "").trim() === storecode)?.storeLogo;
+  return String(fallbackLogo || "").trim() || "/logo.png";
 };
 
 export default function BuyorderConsoleClient({ lang }: { lang: string }) {
@@ -1455,12 +1504,17 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 ) : (
                   orders.map((order, index) => {
                     const status = String(order.status || "").trim();
-                    const statusTone = statusToneMap[status] || "bg-slate-100 text-slate-700";
+                    const statusMeta = statusMetaMap[status] || {
+                      label: status || "-",
+                      className: "border border-slate-200 bg-slate-100 text-slate-700",
+                    };
+                    const statusRowTone = statusRowToneMap[status] || "";
                     const storeLabel =
                       order.store?.storeName
                       || order.store?.storecode
                       || order.storecode
                       || "-";
+                    const storeLogoSrc = getStoreLogoSrc(order, stores);
                     const rowMatchKey = String(order.tradeId || order._id || "").trim();
                     const isRealtimeHighlighted = highlightedTradeId && rowMatchKey === highlightedTradeId;
                     const createdAtLabel = formatDateTime(order.createdAt);
@@ -1474,6 +1528,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         className={`text-sm text-slate-700 transition hover:bg-sky-50/70 ${
                           isRealtimeHighlighted
                             ? "bg-emerald-50 ring-1 ring-inset ring-emerald-200"
+                            : statusRowTone
+                              ? statusRowTone
                             : index % 2 === 0
                               ? "bg-white"
                               : "bg-slate-50/60"
@@ -1490,9 +1546,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col items-start gap-2">
                             <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusTone}`}
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}
                             >
-                              {status || "-"}
+                              {statusMeta.label}
                             </span>
                             {isRealtimeHighlighted ? (
                               <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
@@ -1502,11 +1558,25 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="font-medium text-slate-950">{storeLabel}</div>
-                          <div className="mt-1 text-xs text-slate-500">{order.storecode || "-"}</div>
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={storeLogoSrc}
+                              alt={storeLabel}
+                              className="h-10 w-10 rounded-2xl border border-slate-200 bg-slate-100 object-cover"
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate font-medium text-slate-950">{storeLabel}</div>
+                              <div className="mt-1 text-xs text-slate-500">{order.storecode || "-"}</div>
+                            </div>
+                          </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
                           <div className="font-medium text-slate-950">{getBuyerLabel(order)}</div>
+                          {getBuyerDepositName(order) ? (
+                            <div className="mt-1 text-xs text-slate-600">
+                              입금자명 {getBuyerDepositName(order)}
+                            </div>
+                          ) : null}
                           <div className="mt-1 text-xs text-slate-500">
                             {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                           </div>
