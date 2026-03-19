@@ -42,6 +42,9 @@ type BuyOrder = {
   matchedByAdmin?: boolean | null;
   userType?: string;
   paymentMethod?: string;
+  escrowWallet?: {
+    transactionHash?: string;
+  } | null;
   buyer?: {
     nickname?: string;
     walletAddress?: string;
@@ -525,6 +528,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [selectedDepositIds, setSelectedDepositIds] = useState<string[]>([]);
   const [targetConfirmOrder, setTargetConfirmOrder] = useState<BuyOrder | null>(null);
   const [confirmingTradeId, setConfirmingTradeId] = useState("");
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelModalSubmitting, setCancelModalSubmitting] = useState(false);
+  const [cancelModalError, setCancelModalError] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
+  const [targetCancelOrder, setTargetCancelOrder] = useState<BuyOrder | null>(null);
+  const [cancellingTradeId, setCancellingTradeId] = useState("");
   const [data, setData] = useState<DashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1011,6 +1020,119 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     selectedDepositTotal,
     targetConfirmOrder,
   ]);
+
+  const openCancelModalForOrder = useCallback((order: BuyOrder) => {
+    if (!activeAccount) {
+      setError("관리자 지갑을 연결해야 거래취소를 처리할 수 있습니다.");
+      return;
+    }
+
+    setError("");
+    setCancelModalError("");
+    setCancelReason("");
+    setTargetCancelOrder(order);
+    setCancelModalOpen(true);
+  }, [activeAccount]);
+
+  const closeCancelModal = useCallback(() => {
+    if (cancelModalSubmitting) {
+      return;
+    }
+
+    setCancelModalOpen(false);
+    setCancelModalError("");
+    setCancelReason("");
+    setTargetCancelOrder(null);
+  }, [cancelModalSubmitting]);
+
+  const handleCancelTradeFromConsole = useCallback(async () => {
+    if (!activeAccount || !targetCancelOrder) {
+      setCancelModalError("취소 대상 주문이 없습니다.");
+      return;
+    }
+
+    const matchKey = String(targetCancelOrder.tradeId || targetCancelOrder._id || "").trim();
+    const orderId = String(targetCancelOrder._id || "").trim();
+    const walletAddress = String(activeAccount.address || "").trim().toLowerCase();
+    const hasEscrowWallet = Boolean(String(targetCancelOrder.escrowWallet?.transactionHash || "").trim());
+
+    if (!orderId) {
+      setCancelModalError("주문 식별 정보가 부족합니다.");
+      return;
+    }
+
+    setCancelModalSubmitting(true);
+    setCancelModalError("");
+    setCancellingTradeId(matchKey);
+
+    try {
+      if (hasEscrowWallet) {
+        const response = await fetch("/api/bff/admin/order-action", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            route: "/api/order/cancelTradeBySellerWithEscrow",
+            body: {
+              orderId,
+              storecode: "admin",
+              walletAddress,
+              cancelTradeReason: cancelReason,
+            },
+          }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || "거래취소에 실패했습니다.");
+        }
+      } else {
+        const signedBody = await createCenterStoreAdminSignedBody({
+          account: activeAccount,
+          route: "/api/order/cancelTradeBySeller",
+          storecode: "admin",
+          requesterWalletAddress: activeAccount.address,
+          body: {
+            orderId,
+            storecode: "admin",
+            walletAddress,
+            cancelTradeReason: cancelReason,
+          },
+        });
+
+        const response = await fetch("/api/bff/admin/signed-order-action", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            route: "/api/order/cancelTradeBySeller",
+            signedBody,
+          }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || "거래취소에 실패했습니다.");
+        }
+      }
+
+      patchOrderInDashboard(matchKey, {
+        status: "cancelled",
+        updatedAt: new Date().toISOString(),
+      });
+      closeCancelModal();
+      void loadDashboard({ silent: true });
+    } catch (cancelError) {
+      setCancelModalError(
+        cancelError instanceof Error ? cancelError.message : "거래취소에 실패했습니다.",
+      );
+    } finally {
+      setCancelModalSubmitting(false);
+      setCancellingTradeId("");
+    }
+  }, [activeAccount, cancelReason, closeCancelModal, loadDashboard, patchOrderInDashboard, targetCancelOrder]);
 
   useEffect(() => {
     void loadDashboard();
@@ -1962,7 +2084,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   <th className="border-b border-slate-200 px-4 py-3">Seller</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
                   <th className="border-b border-slate-200 px-4 py-3">입금처리</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Tx</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">USDT 전송</th>
                 </tr>
               </thead>
               <tbody>
@@ -1999,6 +2121,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const shouldShowBuyerLabel = !buyerDepositName || buyerDepositName !== buyerLabel;
                     const canCompleteOrder = isSignedIn && status === "paymentRequested";
                     const isConfirmingThisOrder = Boolean(confirmingTradeId && rowMatchKey === confirmingTradeId);
+                    const canCancelOrder = isSignedIn && (status === "accepted" || status === "paymentRequested");
+                    const isCancellingThisOrder = Boolean(cancellingTradeId && rowMatchKey === cancellingTradeId);
 
                     return (
                       <tr
@@ -2052,6 +2176,22 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                                 live updated
                               </span>
+                            ) : null}
+                            {canCancelOrder ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  openCancelModalForOrder(order);
+                                }}
+                                disabled={isCancellingThisOrder || cancelModalSubmitting}
+                                className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
+                                  isCancellingThisOrder || cancelModalSubmitting
+                                    ? "cursor-not-allowed border border-rose-200 bg-rose-100 text-rose-700 opacity-70"
+                                    : "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                }`}
+                              >
+                                {isCancellingThisOrder ? "취소중..." : "거래취소"}
+                              </button>
                             ) : null}
                           </div>
                         </td>
@@ -2126,14 +2266,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             ) : null}
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="border-b border-slate-100 px-4 py-4 text-right align-top">
+                          <div className="text-base font-semibold tabular-nums tracking-[-0.02em] text-slate-950">
+                            {formatUsdt(order.usdtAmount)}
+                          </div>
                           {order.transactionHash ? (
-                            <span className="console-mono text-xs text-slate-600">
+                            <div className="console-mono mt-1 text-[11px] text-slate-500">
                               {shortAddress(order.transactionHash)}
-                            </span>
-                          ) : (
-                            "-"
-                          )}
+                            </div>
+                          ) : null}
                         </td>
                       </tr>
                     );
@@ -2385,6 +2526,109 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     }`}
                   >
                     {depositModalSubmitting ? "완료 처리중..." : "완료하기"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {cancelModalOpen && targetCancelOrder ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
+            <div className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
+              <div className="border-b border-slate-200 px-6 py-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      거래취소 확인
+                    </div>
+                    <h3 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+                      이 주문을 취소하시겠습니까?
+                    </h3>
+                    <p className="text-sm text-slate-600">
+                      취소 후 주문 상태는 `cancelled`로 변경됩니다. escrow 주문이면 escrow 취소 route를,
+                      일반 주문이면 관리자 서명 취소 route를 사용합니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeCancelModal}
+                    disabled={cancelModalSubmitting}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    닫기
+                  </button>
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-4">
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">Trade ID</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">
+                      {targetCancelOrder.tradeId || "-"}
+                    </div>
+                  </div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">Store</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">
+                      {targetCancelOrder.store?.storeName || targetCancelOrder.storecode || "-"}
+                    </div>
+                  </div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">Buyer</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">
+                      {getBuyerDepositName(targetCancelOrder) || getBuyerLabel(targetCancelOrder)}
+                    </div>
+                  </div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">Order KRW</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">
+                      {formatKrw(targetCancelOrder.krwAmount)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 py-5">
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-slate-700">취소 사유</span>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(event) => setCancelReason(event.target.value)}
+                    placeholder="거래취소 사유를 입력하세요"
+                    rows={4}
+                    className="w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                  />
+                </label>
+                {cancelModalError ? (
+                  <div className="mt-4 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {cancelModalError}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="border-t border-slate-200 px-6 py-4">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeCancelModal}
+                    disabled={cancelModalSubmitting}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    닫기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleCancelTradeFromConsole();
+                    }}
+                    disabled={cancelModalSubmitting}
+                    className={`rounded-full px-5 py-2 text-sm font-semibold text-white transition ${
+                      cancelModalSubmitting
+                        ? "cursor-not-allowed bg-rose-300"
+                        : "bg-rose-600 hover:bg-rose-700"
+                    }`}
+                  >
+                    {cancelModalSubmitting ? "취소 처리중..." : "거래취소하기"}
                   </button>
                 </div>
               </div>

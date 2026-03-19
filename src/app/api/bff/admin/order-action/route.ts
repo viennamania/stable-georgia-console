@@ -4,9 +4,7 @@ import { postRemoteJson } from "@/lib/server/remote-backend";
 export const runtime = "nodejs";
 
 const ALLOWED_ROUTES = new Set([
-  "/api/order/buyOrderConfirmPaymentWithEscrow",
-  "/api/order/buyOrderConfirmPaymentWithoutEscrow",
-  "/api/order/cancelTradeBySeller",
+  "/api/order/cancelTradeBySellerWithEscrow",
 ]);
 
 const normalizeString = (value: unknown) => {
@@ -40,32 +38,23 @@ export async function POST(request: NextRequest) {
   }
 
   const route = normalizeString(body.route);
-  const signedBody = asPlainObject(body.signedBody);
+  const actionBody = asPlainObject(body.body);
 
   if (!ALLOWED_ROUTES.has(route)) {
     return NextResponse.json(
       {
-        error: "Unsupported signed action route",
+        error: "Unsupported order action route",
       },
       { status: 400 },
     );
   }
 
-  if (!Object.keys(signedBody).length) {
-    return NextResponse.json(
-      {
-        error: "signedBody is required",
-      },
-      { status: 400 },
-    );
-  }
-
-  const response = await postRemoteJson(route, signedBody);
+  const response = await postRemoteJson(route, actionBody);
 
   if (!response.ok) {
     return NextResponse.json(
       {
-        error: resolveRemoteError(response.json, "Signed action failed"),
+        error: resolveRemoteError(response.json, "Order action failed"),
         result: response.json?.result || null,
       },
       { status: response.status || 502 },
