@@ -18,6 +18,13 @@ import {
 } from "@/lib/realtime/banktransfer";
 import { thirdwebClient } from "@/lib/thirdweb-client";
 
+type BankInfo = {
+  bankName?: string;
+  accountHolder?: string;
+  accountNumber?: string;
+  realAccountNumber?: string;
+};
+
 type BuyOrder = {
   _id?: string;
   tradeId?: string;
@@ -31,23 +38,32 @@ type BuyOrder = {
   storecode?: string;
   nickname?: string;
   walletAddress?: string;
+  autoConfirmPayment?: boolean | null;
+  matchedByAdmin?: boolean | null;
+  userType?: string;
+  paymentMethod?: string;
   buyer?: {
     nickname?: string;
     walletAddress?: string;
-    bankInfo?: {
-      bankName?: string;
-      accountHolder?: string;
-      accountNumber?: string;
-    };
+    bankInfo?: BankInfo;
+    depositBankName?: string;
+    depositBankAccountNumber?: string;
+    depositName?: string;
   } | null;
   seller?: {
     nickname?: string;
     walletAddress?: string;
     signerAddress?: string;
+    bankInfo?: BankInfo;
   } | null;
   store?: {
     storecode?: string;
     storeName?: string;
+    bankInfo?: BankInfo;
+    bankInfoAAA?: BankInfo;
+    bankInfoBBB?: BankInfo;
+    bankInfoCCC?: BankInfo;
+    bankInfoDDD?: BankInfo;
   } | null;
 };
 
@@ -116,6 +132,9 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
   hour: "2-digit",
   minute: "2-digit",
 });
+const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat("ko", {
+  numeric: "auto",
+});
 
 const NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
@@ -181,6 +200,41 @@ const formatDateTime = (value?: string | null) => {
   return DATE_FORMATTER.format(parsed);
 };
 
+const formatTimeAgo = (value?: string | null) => {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+  const time = parsed.getTime();
+  if (Number.isNaN(time)) {
+    return "-";
+  }
+
+  const diffMs = time - Date.now();
+  const absMs = Math.abs(diffMs);
+
+  if (absMs < 45_000) {
+    return diffMs >= 0 ? "곧" : "방금 전";
+  }
+
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+    ["year", 1000 * 60 * 60 * 24 * 365],
+    ["month", 1000 * 60 * 60 * 24 * 30],
+    ["day", 1000 * 60 * 60 * 24],
+    ["hour", 1000 * 60 * 60],
+    ["minute", 1000 * 60],
+  ];
+
+  for (const [unit, size] of units) {
+    if (absMs >= size) {
+      return RELATIVE_TIME_FORMATTER.format(Math.round(diffMs / size), unit);
+    }
+  }
+
+  return RELATIVE_TIME_FORMATTER.format(Math.round(diffMs / 1000), "second");
+};
+
 const formatUsdt = (value?: number | null) => {
   const numeric = Number(value || 0);
   return `${USDT_FORMATTER.format(numeric)} USDT`;
@@ -215,6 +269,107 @@ const maskAccountNumber = (value?: string | null) => {
   }
   const head = safe.slice(0, -4).replace(/[0-9A-Za-z가-힣]/g, "*");
   return `${head}${safe.slice(-4)}`;
+};
+
+const hasBankInfo = (value?: BankInfo | null) => {
+  return Boolean(
+    value?.bankName
+      || value?.accountHolder
+      || value?.accountNumber
+      || value?.realAccountNumber,
+  );
+};
+
+const getFirstAvailableBankInfo = (...values: Array<BankInfo | null | undefined>) => {
+  return values.find((value) => hasBankInfo(value)) || null;
+};
+
+const getSellerBankInfo = (order: BuyOrder) => {
+  const userType = String(order.userType || "").trim();
+  const storeBankInfo =
+    userType === "AAA"
+      ? order.store?.bankInfoAAA
+      : userType === "BBB"
+        ? order.store?.bankInfoBBB
+        : userType === "CCC"
+          ? order.store?.bankInfoCCC
+          : userType === "DDD"
+            ? order.store?.bankInfoDDD
+            : order.store?.bankInfo;
+
+  return getFirstAvailableBankInfo(
+    order.seller?.bankInfo,
+    storeBankInfo,
+    order.store?.bankInfo,
+    order.store?.bankInfoAAA,
+    order.store?.bankInfoBBB,
+    order.store?.bankInfoCCC,
+    order.store?.bankInfoDDD,
+  );
+};
+
+const getSellerBankSummary = (order: BuyOrder) => {
+  const bankInfo = getSellerBankInfo(order);
+  if (!bankInfo) {
+    return {
+      primary: "계좌정보 없음",
+      secondary: shortAddress(order.seller?.walletAddress || order.seller?.signerAddress),
+    };
+  }
+
+  const accountNumber = bankInfo.realAccountNumber || bankInfo.accountNumber || "";
+  const primary = [bankInfo.bankName, bankInfo.accountHolder].filter(Boolean).join(" / ") || "계좌정보 없음";
+  const secondary = accountNumber || shortAddress(order.seller?.walletAddress || order.seller?.signerAddress);
+
+  return { primary, secondary };
+};
+
+const getDepositProcessingMeta = (order: BuyOrder) => {
+  if (order.autoConfirmPayment === true) {
+    return {
+      label: "자동",
+      className: "bg-sky-100 text-sky-700",
+      detail: "자동입금확인",
+    };
+  }
+
+  if (order.autoConfirmPayment === false) {
+    return {
+      label: "수동",
+      className: "bg-amber-100 text-amber-800",
+      detail: "수동입금확인",
+    };
+  }
+
+  if (order.matchedByAdmin === true) {
+    return {
+      label: "수동",
+      className: "bg-amber-100 text-amber-800",
+      detail: "관리자 확인",
+    };
+  }
+
+  if (order.matchedByAdmin === false) {
+    return {
+      label: "자동",
+      className: "bg-sky-100 text-sky-700",
+      detail: "자동 매칭",
+    };
+  }
+
+  if (order.status === "paymentRequested") {
+    return {
+      label: "확인중",
+      className: "bg-slate-100 text-slate-700",
+      detail: "입금 확인 대기",
+    };
+  }
+
+  return {
+    label: "-",
+    className: "bg-slate-100 text-slate-500",
+    detail: "",
+  };
 };
 
 const getBuyerLabel = (order: BuyOrder) => {
@@ -1170,24 +1325,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </div>
 
           <div className="overflow-x-auto px-2 pb-2">
-            <table className="min-w-[1120px] w-full border-separate border-spacing-0">
+            <table className="min-w-[1240px] w-full border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                  <th className="border-b border-slate-200 px-4 py-3">Trade</th>
+                  <th className="border-b border-slate-200 px-4 py-3">Trade / Created</th>
                   <th className="border-b border-slate-200 px-4 py-3">Status</th>
                   <th className="border-b border-slate-200 px-4 py-3">Store</th>
                   <th className="border-b border-slate-200 px-4 py-3">Buyer</th>
                   <th className="border-b border-slate-200 px-4 py-3">Seller</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">USDT</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">KRW</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Created</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
+                  <th className="border-b border-slate-200 px-4 py-3">입금처리</th>
                   <th className="border-b border-slate-200 px-4 py-3">Tx</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
                       {loading ? "Loading orders..." : "No orders returned for the current filter."}
                     </td>
                   </tr>
@@ -1202,6 +1356,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       || "-";
                     const rowMatchKey = String(order.tradeId || order._id || "").trim();
                     const isRealtimeHighlighted = highlightedTradeId && rowMatchKey === highlightedTradeId;
+                    const createdAtLabel = formatDateTime(order.createdAt);
+                    const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
+                    const sellerBankSummary = getSellerBankSummary(order);
+                    const depositProcessing = getDepositProcessingMeta(order);
 
                     return (
                       <tr
@@ -1216,8 +1374,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       >
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
                           <div className="font-semibold text-slate-950">{order.tradeId || "-"}</div>
-                          <div className="console-mono mt-1 text-xs text-slate-500">
-                            {order._id || "-"}
+                          <div className="mt-1 text-xs text-slate-500">
+                            {createdAtLabel === "-"
+                              ? "-"
+                              : `${createdAtLabel} · ${createdTimeAgoLabel}`}
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
@@ -1246,22 +1406,29 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
                           <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {shortAddress(
-                              order.seller?.walletAddress || order.seller?.signerAddress,
-                            )}
+                          <div className="mt-1 text-xs text-slate-600">
+                            {sellerBankSummary.primary}
+                          </div>
+                          <div className="console-mono mt-1 text-xs text-slate-500">
+                            {sellerBankSummary.secondary}
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 text-right align-top font-medium tabular-nums text-slate-950">
-                          {formatUsdt(order.usdtAmount)}
-                        </td>
-                        <td className="border-b border-slate-100 px-4 py-4 text-right align-top font-medium tabular-nums text-slate-950">
-                          {formatKrw(order.krwAmount)}
+                          <div>{formatUsdt(order.usdtAmount)}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {formatKrw(order.krwAmount)}
+                          </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div>{formatDateTime(order.createdAt)}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            Updated {formatDateTime(order.updatedAt)}
+                          <div className="flex flex-col items-start gap-2">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${depositProcessing.className}`}
+                            >
+                              {depositProcessing.label}
+                            </span>
+                            {depositProcessing.detail ? (
+                              <span className="text-xs text-slate-500">{depositProcessing.detail}</span>
+                            ) : null}
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
