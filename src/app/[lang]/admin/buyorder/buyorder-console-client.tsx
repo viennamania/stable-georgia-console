@@ -2123,6 +2123,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isConfirmingThisOrder = Boolean(confirmingTradeId && rowMatchKey === confirmingTradeId);
                     const canCancelOrder = isSignedIn && (status === "accepted" || status === "paymentRequested");
                     const isCancellingThisOrder = Boolean(cancellingTradeId && rowMatchKey === cancellingTradeId);
+                    const transactionHash = String(order.transactionHash || "").trim();
+                    const isUsdtTransferPending =
+                      status === "paymentConfirmed" && (!transactionHash || transactionHash === "0x");
 
                     return (
                       <tr
@@ -2172,11 +2175,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             >
                               {statusMeta.label}
                             </span>
-                            {isRealtimeHighlighted ? (
-                              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                                live updated
-                              </span>
-                            ) : null}
                             {canCancelOrder ? (
                               <button
                                 type="button"
@@ -2270,11 +2268,19 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           <div className="text-base font-semibold tabular-nums tracking-[-0.02em] text-slate-950">
                             {formatUsdt(order.usdtAmount)}
                           </div>
-                          {order.transactionHash ? (
-                            <div className="console-mono mt-1 text-[11px] text-slate-500">
-                              {shortAddress(order.transactionHash)}
+                          {isUsdtTransferPending ? (
+                            <div className="mt-1">
+                              <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                                전송중
+                              </span>
                             </div>
-                          ) : null}
+                          ) : transactionHash ? (
+                            <div className="console-mono mt-1 text-[11px] text-slate-500">
+                              {shortAddress(transactionHash)}
+                            </div>
+                          ) : (
+                            <div className="mt-1 text-[11px] text-slate-400">-</div>
+                          )}
                         </td>
                       </tr>
                     );
