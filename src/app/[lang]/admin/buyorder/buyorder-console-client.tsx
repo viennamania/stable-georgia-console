@@ -91,6 +91,19 @@ type UnmatchedTransfer = {
   } | null;
 };
 
+type DepositOption = {
+  _id?: string;
+  amount?: number;
+  transactionName?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  transactionDateUtc?: string;
+  processingDate?: string;
+  regDate?: string;
+  tradeId?: string;
+  userId?: string;
+};
+
 const EMPTY_ORDERS: BuyOrder[] = [];
 const EMPTY_STORES: StoreItem[] = [];
 const EMPTY_UNMATCHED_TRANSFERS: UnmatchedTransfer[] = [];
@@ -504,6 +517,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [draftFilters, setDraftFilters] = useState<FilterState>(() => createDefaultFilters());
   const [storeSearchQuery, setStoreSearchQuery] = useState("");
   const [storeSearchOpen, setStoreSearchOpen] = useState(false);
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [depositModalLoading, setDepositModalLoading] = useState(false);
+  const [depositModalSubmitting, setDepositModalSubmitting] = useState(false);
+  const [depositModalError, setDepositModalError] = useState("");
+  const [depositOptions, setDepositOptions] = useState<DepositOption[]>([]);
+  const [selectedDepositIds, setSelectedDepositIds] = useState<string[]>([]);
+  const [targetConfirmOrder, setTargetConfirmOrder] = useState<BuyOrder | null>(null);
+  const [confirmingTradeId, setConfirmingTradeId] = useState("");
   const [data, setData] = useState<DashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -525,6 +546,22 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const lastUnmatchedRealtimeEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-buyorder-${Math.random().toString(36).slice(2, 10)}`);
   const storeSearchRef = useRef<HTMLDivElement | null>(null);
+  const selectedDepositTotal = useMemo(() => {
+    return depositOptions.reduce((sum, item) => {
+      const itemId = String(item._id || "");
+      if (!selectedDepositIds.includes(itemId)) {
+        return sum;
+      }
+      return sum + (Number(item.amount) || 0);
+    }, 0);
+  }, [depositOptions, selectedDepositIds]);
+  const depositAmountMatches = useMemo(() => {
+    if (!targetConfirmOrder || selectedDepositIds.length === 0) {
+      return true;
+    }
+
+    return (Number(targetConfirmOrder.krwAmount) || 0) === selectedDepositTotal;
+  }, [selectedDepositIds.length, selectedDepositTotal, targetConfirmOrder]);
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -749,6 +786,231 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     },
     [filters.storecode],
   );
+
+  const patchOrderInDashboard = useCallback((matchKey: string, patch: Partial<BuyOrder>) => {
+    if (!matchKey) {
+      return;
+    }
+
+    setData((current) => {
+      if (!current) {
+        return current;
+      }
+
+      let changed = false;
+      const patchOrder = (order: BuyOrder) => {
+        const orderMatchKey = String(order.tradeId || order._id || "").trim();
+        if (orderMatchKey !== matchKey) {
+          return order;
+        }
+
+        changed = true;
+        return {
+          ...order,
+          ...patch,
+        };
+      };
+
+      const nextOrders = current.orders.map(patchOrder);
+      const nextProcessingBuyOrders = current.processingBuyOrders.map(patchOrder);
+      const nextProcessingClearanceOrders = current.processingClearanceOrders.map(patchOrder);
+
+      if (!changed) {
+        return current;
+      }
+
+      return {
+        ...current,
+        orders: nextOrders,
+        processingBuyOrders: nextProcessingBuyOrders,
+        processingClearanceOrders: nextProcessingClearanceOrders,
+      };
+    });
+  }, []);
+
+  const fetchDepositsForOrder = useCallback(async (order: BuyOrder | null) => {
+    if (!order) {
+      return;
+    }
+
+    const sellerAccountNumber = String(order.seller?.bankInfo?.accountNumber || "").trim();
+    if (!sellerAccountNumber) {
+      throw new Error("판매자 계좌번호가 없습니다.");
+    }
+
+    setDepositModalLoading(true);
+    setDepositModalError("");
+
+    try {
+      const response = await fetch("/api/bff/admin/bank-transfers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accountNumber: sellerAccountNumber,
+          transactionType: "deposited",
+          matchStatus: "unmatched",
+          page: 1,
+          limit: 50,
+          fromDate: filters.fromDate,
+          toDate: filters.toDate,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || `입금내역 조회 실패 (${response.status})`);
+      }
+
+      const nextOptions = ((payload?.result?.transfers || []) as DepositOption[])
+        .filter((item) => {
+          const transactionType = String((item as any)?.transactionType || "").trim().toLowerCase();
+          return !transactionType || transactionType === "deposited" || transactionType === "deposit";
+        })
+        .sort((left, right) => {
+          const leftTime = new Date(left.transactionDateUtc || left.regDate || 0).getTime();
+          const rightTime = new Date(right.transactionDateUtc || right.regDate || 0).getTime();
+          return rightTime - leftTime;
+        });
+
+      setDepositOptions(nextOptions);
+    } catch (fetchError) {
+      const message = fetchError instanceof Error ? fetchError.message : "입금내역을 불러오지 못했습니다.";
+      setDepositModalError(message);
+      setDepositOptions([]);
+    } finally {
+      setDepositModalLoading(false);
+    }
+  }, [filters.fromDate, filters.toDate]);
+
+  const openDepositModalForOrder = useCallback(async (order: BuyOrder) => {
+    if (!activeAccount) {
+      setError("관리자 지갑을 연결해야 완료 처리할 수 있습니다.");
+      return;
+    }
+
+    const sellerAccountNumber = String(order.seller?.bankInfo?.accountNumber || "").trim();
+    if (!sellerAccountNumber) {
+      setError("판매자 계좌번호가 없습니다.");
+      return;
+    }
+
+    setError("");
+    setTargetConfirmOrder(order);
+    setSelectedDepositIds([]);
+    setDepositOptions([]);
+    setDepositModalError("");
+    setDepositModalOpen(true);
+    await fetchDepositsForOrder(order);
+  }, [activeAccount, fetchDepositsForOrder]);
+
+  const closeDepositModal = useCallback(() => {
+    if (depositModalSubmitting) {
+      return;
+    }
+
+    setDepositModalOpen(false);
+    setDepositModalError("");
+    setDepositOptions([]);
+    setSelectedDepositIds([]);
+    setTargetConfirmOrder(null);
+  }, [depositModalSubmitting]);
+
+  const handleConfirmPaymentFromConsole = useCallback(async () => {
+    if (!activeAccount || !targetConfirmOrder) {
+      setDepositModalError("완료 처리 대상 주문이 없습니다.");
+      return;
+    }
+
+    const matchKey = String(targetConfirmOrder.tradeId || targetConfirmOrder._id || "").trim();
+    const storecode = String(targetConfirmOrder.storecode || targetConfirmOrder.store?.storecode || "").trim();
+    const orderId = String(targetConfirmOrder._id || "").trim();
+
+    if (!storecode || !orderId) {
+      setDepositModalError("주문 식별 정보가 부족합니다.");
+      return;
+    }
+
+    if (selectedDepositIds.length > 0 && !depositAmountMatches) {
+      setDepositModalError("선택한 입금 합계와 주문 금액이 일치하지 않습니다.");
+      return;
+    }
+
+    const route =
+      String(targetConfirmOrder.paymentMethod || "").trim() === "mkrw"
+        ? "/api/order/buyOrderConfirmPaymentWithEscrow"
+        : "/api/order/buyOrderConfirmPaymentWithoutEscrow";
+
+    const bankTransferIds = selectedDepositIds.length ? selectedDepositIds : ["000000000"];
+    const bankTransferAmount = selectedDepositIds.length ? selectedDepositTotal : 0;
+
+    setDepositModalSubmitting(true);
+    setDepositModalError("");
+    setConfirmingTradeId(matchKey);
+
+    try {
+      const signedBody = await createCenterStoreAdminSignedBody({
+        account: activeAccount,
+        route,
+        storecode,
+        requesterWalletAddress: activeAccount.address,
+        body: {
+          lang,
+          storecode,
+          orderId,
+          paymentAmount: Number(targetConfirmOrder.krwAmount) || 0,
+          transactionHash: "0x",
+          bankTransferId: bankTransferIds[0],
+          bankTransferIds,
+          bankTransferAmount,
+          isSmartAccount: false,
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/signed-order-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route,
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "완료 처리에 실패했습니다.");
+      }
+
+      patchOrderInDashboard(matchKey, {
+        status: "paymentConfirmed",
+        transactionHash: "0x",
+        matchedByAdmin: true,
+        updatedAt: new Date().toISOString(),
+      });
+      closeDepositModal();
+      void loadDashboard({ silent: true });
+    } catch (confirmError) {
+      setDepositModalError(
+        confirmError instanceof Error ? confirmError.message : "완료 처리에 실패했습니다.",
+      );
+    } finally {
+      setDepositModalSubmitting(false);
+      setConfirmingTradeId("");
+    }
+  }, [
+    activeAccount,
+    closeDepositModal,
+    depositAmountMatches,
+    lang,
+    loadDashboard,
+    patchOrderInDashboard,
+    selectedDepositIds,
+    selectedDepositTotal,
+    targetConfirmOrder,
+  ]);
 
   useEffect(() => {
     void loadDashboard();
@@ -1735,6 +1997,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const buyerLabel = getBuyerLabel(order);
                     const buyerDepositName = getBuyerDepositName(order);
                     const shouldShowBuyerLabel = !buyerDepositName || buyerDepositName !== buyerLabel;
+                    const canCompleteOrder = isSignedIn && status === "paymentRequested";
+                    const isConfirmingThisOrder = Boolean(confirmingTradeId && rowMatchKey === confirmingTradeId);
 
                     return (
                       <tr
@@ -1844,6 +2108,22 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             {depositProcessing.detail ? (
                               <span className="text-xs text-slate-500">{depositProcessing.detail}</span>
                             ) : null}
+                            {canCompleteOrder ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void openDepositModalForOrder(order);
+                                }}
+                                disabled={isConfirmingThisOrder || depositModalSubmitting}
+                                className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
+                                  isConfirmingThisOrder || depositModalSubmitting
+                                    ? "cursor-not-allowed border border-emerald-200 bg-emerald-100 text-emerald-700 opacity-70"
+                                    : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                }`}
+                              >
+                                {isConfirmingThisOrder ? "완료중..." : "완료하기"}
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
@@ -1923,6 +2203,194 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             </div>
           </div>
         </section>
+
+        {depositModalOpen && targetConfirmOrder ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
+            <div className="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
+              <div className="border-b border-slate-200 px-6 py-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                      결제 완료 처리
+                    </div>
+                    <h3 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+                      미신청입금 선택 후 완료하기
+                    </h3>
+                    <p className="text-sm text-slate-600">
+                      판매자 계좌로 들어온 미신청입금을 선택하고, 관리자 서명으로 주문을 `paymentConfirmed`
+                      상태로 넘깁니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeDepositModal}
+                    disabled={depositModalSubmitting}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    닫기
+                  </button>
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-4">
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">Trade ID</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">
+                      {targetConfirmOrder.tradeId || "-"}
+                    </div>
+                  </div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">Store</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">
+                      {targetConfirmOrder.store?.storeName || targetConfirmOrder.storecode || "-"}
+                    </div>
+                  </div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">Order KRW</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">
+                      {formatKrw(targetConfirmOrder.krwAmount)}
+                    </div>
+                  </div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">Seller account</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-950">
+                      {targetConfirmOrder.seller?.bankInfo?.accountNumber || "-"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700">
+                    선택 {NUMBER_FORMATTER.format(selectedDepositIds.length)}건
+                  </span>
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700">
+                    합계 {formatKrw(selectedDepositTotal)}
+                  </span>
+                  {selectedDepositIds.length > 0 ? (
+                    <span
+                      className={`rounded-full border px-3 py-1.5 font-semibold ${
+                        depositAmountMatches
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-amber-200 bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {depositAmountMatches ? "주문 금액과 일치" : "주문 금액과 불일치"}
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-500">
+                      선택 없이 완료하면 기본 sentinel 값으로 처리됩니다.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="max-h-[48vh] overflow-y-auto px-6 py-5">
+                {depositModalLoading ? (
+                  <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-12 text-center text-sm text-slate-500">
+                    미신청입금 내역을 불러오는 중입니다.
+                  </div>
+                ) : depositOptions.length === 0 ? (
+                  <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-12 text-center text-sm text-slate-500">
+                    선택 가능한 미신청입금이 없습니다.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {depositOptions.map((item, index) => {
+                      const itemId = String(item._id || `deposit-${index}`);
+                      const isSelected = selectedDepositIds.includes(itemId);
+
+                      return (
+                        <label
+                          key={itemId}
+                          className={`flex cursor-pointer items-start justify-between gap-4 rounded-[24px] border px-4 py-4 transition ${
+                            isSelected
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="flex min-w-0 items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                setSelectedDepositIds((prev) =>
+                                  prev.includes(itemId)
+                                    ? prev.filter((value) => value !== itemId)
+                                    : [...prev, itemId],
+                                );
+                              }}
+                              className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-slate-950">
+                                {item.transactionName || "-"}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-600">
+                                {item.bankName || "-"} · {item.bankAccountNumber || "-"}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {formatDateTime(item.transactionDateUtc || item.processingDate || item.regDate)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-base font-semibold tracking-[-0.03em] text-emerald-700">
+                              {formatKrw(item.amount)}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {item.tradeId ? `trade ${item.tradeId}` : item.userId ? `user ${item.userId}` : "unmatched"}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-200 px-6 py-4">
+                {depositModalError ? (
+                  <div className="mb-3 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {depositModalError}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void fetchDepositsForOrder(targetConfirmOrder);
+                    }}
+                    disabled={depositModalLoading || depositModalSubmitting}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    새로고침
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeDepositModal}
+                    disabled={depositModalSubmitting}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleConfirmPaymentFromConsole();
+                    }}
+                    disabled={depositModalSubmitting || depositModalLoading}
+                    className={`rounded-full px-5 py-2 text-sm font-semibold text-white transition ${
+                      depositModalSubmitting || depositModalLoading
+                        ? "cursor-not-allowed bg-emerald-300"
+                        : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
+                  >
+                    {depositModalSubmitting ? "완료 처리중..." : "완료하기"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
       </div>
     </div>
