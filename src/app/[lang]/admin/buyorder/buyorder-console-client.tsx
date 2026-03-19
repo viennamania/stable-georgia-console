@@ -2083,7 +2083,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   <th className="border-b border-slate-200 px-4 py-3">Buyer</th>
                   <th className="border-b border-slate-200 px-4 py-3">Seller</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
-                  <th className="border-b border-slate-200 px-4 py-3">입금처리</th>
+                  <th className="w-[228px] border-b border-slate-200 px-4 py-3">입금처리</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">USDT 전송</th>
                 </tr>
               </thead>
@@ -2236,31 +2236,33 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             {formatUsdt(order.usdtAmount)}
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="flex flex-col items-start gap-2">
-                            <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${depositProcessing.className}`}
-                            >
-                              {depositProcessing.label}
-                            </span>
+                        <td className="w-[228px] border-b border-slate-100 px-4 py-4 align-top">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${depositProcessing.className}`}
+                              >
+                                {depositProcessing.label}
+                              </span>
+                              {canCompleteOrder ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void openDepositModalForOrder(order);
+                                  }}
+                                  disabled={isConfirmingThisOrder || depositModalSubmitting}
+                                  className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
+                                    isConfirmingThisOrder || depositModalSubmitting
+                                      ? "cursor-not-allowed border border-emerald-200 bg-emerald-100 text-emerald-700 opacity-70"
+                                      : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                  }`}
+                                >
+                                  {isConfirmingThisOrder ? "완료중..." : "완료하기"}
+                                </button>
+                              ) : null}
+                            </div>
                             {depositProcessing.detail ? (
                               <span className="text-xs text-slate-500">{depositProcessing.detail}</span>
-                            ) : null}
-                            {canCompleteOrder ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void openDepositModalForOrder(order);
-                                }}
-                                disabled={isConfirmingThisOrder || depositModalSubmitting}
-                                className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
-                                  isConfirmingThisOrder || depositModalSubmitting
-                                    ? "cursor-not-allowed border border-emerald-200 bg-emerald-100 text-emerald-700 opacity-70"
-                                    : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                                }`}
-                              >
-                                {isConfirmingThisOrder ? "완료중..." : "완료하기"}
-                              </button>
                             ) : null}
                           </div>
                         </td>
