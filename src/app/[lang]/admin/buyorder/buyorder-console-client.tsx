@@ -1268,6 +1268,21 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       placeholder="storecode / 가맹점명 검색"
                       className={fieldClassName}
                     />
+                    {!storeSearchOpen && !storeSearchQuery && selectedDraftStoreSummary ? (
+                      <div className="pointer-events-none absolute inset-x-4 inset-y-0 flex items-center gap-3">
+                        <img
+                          src={getStoreOptionLogoSrc(selectedDraftStoreSummary)}
+                          alt={getStoreDisplayName(selectedDraftStoreSummary) || draftFilters.storecode}
+                          className="h-7 w-7 rounded-full border border-slate-200 bg-white object-cover"
+                        />
+                        <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+                          {getStoreDisplayName(selectedDraftStoreSummary) || draftFilters.storecode}
+                        </div>
+                        <div className="console-mono truncate text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                          {draftFilters.storecode}
+                        </div>
+                      </div>
+                    ) : null}
                     {storeSearchOpen ? (
                       <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
                         <div className="max-h-80 overflow-y-auto p-2">
@@ -1384,27 +1399,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       </div>
                     ) : null}
                   </div>
-                  {selectedDraftStoreSummary ? (
-                    <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-2">
-                      <img
-                        src={getStoreOptionLogoSrc(selectedDraftStoreSummary)}
-                        alt={getStoreDisplayName(selectedDraftStoreSummary) || draftFilters.storecode}
-                        className="h-7 w-7 rounded-full border border-white/10 bg-white object-cover"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-semibold text-white">
-                          {getStoreDisplayName(selectedDraftStoreSummary) || draftFilters.storecode}
-                        </div>
-                        <div className="console-mono truncate text-[10px] uppercase tracking-[0.14em] text-slate-400">
-                          {draftFilters.storecode}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="px-1 text-xs text-slate-400">
-                      전체 가맹점 범위
-                    </div>
-                  )}
                 </div>
 
                 <label className="space-y-2 text-sm xl:col-span-3">
