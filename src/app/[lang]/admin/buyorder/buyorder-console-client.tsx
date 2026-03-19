@@ -945,21 +945,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     : "전체 가맹점 범위";
   const syncStatusLabel = loading
     ? "Loading dashboard"
-    : refreshing
-      ? "Refreshing dashboard"
-      : connectionState === "connected"
-        ? "Ably live connected"
-        : connectionState === "connecting" || connectionState === "initialized"
-          ? "Connecting Ably live"
-          : connectionState === "failed"
-            ? "Ably failed, fallback polling"
-            : connectionState === "suspended"
-              ? "Ably suspended, fallback polling"
-              : "Fallback polling active";
+    : connectionState === "connected"
+      ? "Ably live connected"
+      : connectionState === "connecting" || connectionState === "initialized"
+        ? "Connecting Ably live"
+        : connectionState === "failed"
+          ? "Ably failed, fallback polling"
+          : connectionState === "suspended"
+            ? "Ably suspended, fallback polling"
+            : "Fallback polling active";
   const syncStatusTone = loading
     ? "text-sky-300"
     : refreshing
-      ? "text-amber-300"
+      ? connectionState === "connected"
+        ? "text-emerald-300"
+        : connectionState === "connecting" || connectionState === "initialized"
+          ? "text-sky-300"
+          : "text-amber-300"
       : connectionState === "connected"
         ? "text-emerald-300"
         : connectionState === "connecting" || connectionState === "initialized"
@@ -1315,7 +1317,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
                               draftFilters.storecode
                                 ? "text-slate-700 hover:bg-slate-50"
-                                : "bg-sky-50 text-sky-900"
+                                : "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
                             }`}
                           >
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -1328,7 +1330,19 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               </div>
                             </div>
                             {!draftFilters.storecode ? (
-                              <span className="rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 16 16"
+                                  className="h-3 w-3"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+                                </svg>
                                 Selected
                               </span>
                             ) : null}
@@ -1356,7 +1370,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                   }}
                                   className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
                                     isSelected
-                                      ? "bg-sky-50 text-sky-900"
+                                      ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
                                       : "text-slate-700 hover:bg-slate-50"
                                   }`}
                                 >
@@ -1374,7 +1388,19 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                     </div>
                                   </div>
                                   {isSelected ? (
-                                    <span className="rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                                      <svg
+                                        aria-hidden="true"
+                                        viewBox="0 0 16 16"
+                                        className="h-3 w-3"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+                                      </svg>
                                       Selected
                                     </span>
                                   ) : null}
@@ -1659,10 +1685,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           <div className="border-b border-slate-200/80 px-6 py-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                  Signed feed
-                </p>
-                <h2 className="console-display mt-1 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
                   Buyorder stream
                 </h2>
               </div>
