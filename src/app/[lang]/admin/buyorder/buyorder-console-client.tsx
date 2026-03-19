@@ -11,6 +11,11 @@ import {
   BUYORDER_STATUS_ABLY_EVENT_NAME,
   type BuyOrderStatusRealtimeEvent,
 } from "@/lib/realtime/buyorder";
+import {
+  BANKTRANSFER_UNMATCHED_ABLY_CHANNEL,
+  BANKTRANSFER_UNMATCHED_ABLY_EVENT_NAME,
+  type BankTransferUnmatchedRealtimeEvent,
+} from "@/lib/realtime/banktransfer";
 import { thirdwebClient } from "@/lib/thirdweb-client";
 
 type BuyOrder = {
@@ -52,8 +57,24 @@ type StoreItem = {
   companyName?: string;
 };
 
+type UnmatchedTransfer = {
+  _id?: string;
+  amount?: number;
+  transactionName?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  transactionDateUtc?: string;
+  processingDate?: string;
+  regDate?: string;
+  storeInfo?: {
+    storecode?: string;
+    storeName?: string;
+  } | null;
+};
+
 const EMPTY_ORDERS: BuyOrder[] = [];
 const EMPTY_STORES: StoreItem[] = [];
+const EMPTY_UNMATCHED_TRANSFERS: UnmatchedTransfer[] = [];
 
 type DashboardResult = {
   fetchedAt: string;
@@ -69,6 +90,9 @@ type DashboardResult = {
   processingClearanceOrders: BuyOrder[];
   stores: StoreItem[];
   storeTotalCount: number;
+  unmatchedTransfers: UnmatchedTransfer[];
+  unmatchedTotalAmount: number;
+  unmatchedTotalCount: number;
   selectedStore: Record<string, unknown> | null;
 };
 
@@ -167,6 +191,32 @@ const formatKrw = (value?: number | null) => {
   return `${KRW_FORMATTER.format(numeric)} KRW`;
 };
 
+const maskName = (value?: string | null) => {
+  const safe = String(value || "").trim();
+  if (!safe) {
+    return "-";
+  }
+  if (safe.length <= 1) {
+    return "*";
+  }
+  if (safe.length === 2) {
+    return `${safe[0]}*`;
+  }
+  return `${safe[0]}${"*".repeat(Math.max(1, safe.length - 2))}${safe[safe.length - 1]}`;
+};
+
+const maskAccountNumber = (value?: string | null) => {
+  const safe = String(value || "").trim();
+  if (!safe) {
+    return "-";
+  }
+  if (safe.length <= 4) {
+    return `${"*".repeat(Math.max(1, safe.length - 1))}${safe.slice(-1)}`;
+  }
+  const head = safe.slice(0, -4).replace(/[0-9A-Za-z가-힣]/g, "*");
+  return `${head}${safe.slice(-4)}`;
+};
+
 const getBuyerLabel = (order: BuyOrder) => {
   return (
     order.buyer?.nickname
@@ -193,12 +243,16 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [connectionState, setConnectionState] = useState<Ably.ConnectionState>("initialized");
   const [connectionError, setConnectionError] = useState("");
   const [lastRealtimeEventAt, setLastRealtimeEventAt] = useState("");
+  const [lastUnmatchedEventAt, setLastUnmatchedEventAt] = useState("");
   const [highlightedTradeId, setHighlightedTradeId] = useState("");
+  const [highlightedUnmatchedId, setHighlightedUnmatchedId] = useState("");
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
   const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const highlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unmatchedHighlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRealtimeEventIdRef = useRef("");
+  const lastUnmatchedRealtimeEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-buyorder-${Math.random().toString(36).slice(2, 10)}`);
 
   const loadDashboard = useCallback(
@@ -252,6 +306,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             selectedStorecode: filters.storecode,
             storesLimit: 100,
             storesPage: 1,
+            unmatchedFilters: {
+              limit: 24,
+              page: 1,
+              fromDate: filters.fromDate,
+              toDate: filters.toDate,
+              storecode: filters.storecode,
+            },
           }),
         });
 
@@ -345,6 +406,59 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     }, 4000);
   }, []);
 
+  const applyUnmatchedRealtimeEventToDashboard = useCallback(
+    (event: BankTransferUnmatchedRealtimeEvent) => {
+      setLastUnmatchedEventAt(event.publishedAt || new Date().toISOString());
+      const matchStorecode = String(event.storecode || event.store?.code || "").trim();
+      if (filters.storecode && matchStorecode && matchStorecode !== filters.storecode) {
+        return;
+      }
+
+      const syntheticId = String(event.eventId || `${event.transactionDate || ""}-${event.bankAccountNumber || ""}`);
+      if (!syntheticId) {
+        return;
+      }
+
+      setHighlightedUnmatchedId(syntheticId);
+      if (unmatchedHighlightResetTimerRef.current) {
+        clearTimeout(unmatchedHighlightResetTimerRef.current);
+      }
+      unmatchedHighlightResetTimerRef.current = setTimeout(() => {
+        setHighlightedUnmatchedId("");
+      }, 4000);
+
+      setData((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextTransfer: UnmatchedTransfer = {
+          _id: syntheticId,
+          amount: Number(event.amount || 0),
+          transactionName: String(event.transactionName || "").trim(),
+          bankAccountNumber: String(event.bankAccountNumber || "").trim(),
+          transactionDateUtc: event.transactionDate || null || undefined,
+          processingDate: event.processingDate || null || undefined,
+          storeInfo: {
+            storecode: matchStorecode || undefined,
+            storeName: String(event.store?.name || "").trim() || undefined,
+          },
+        };
+
+        const nextTransfers = [nextTransfer, ...current.unmatchedTransfers.filter((item) => String(item._id || "") !== syntheticId)]
+          .slice(0, 24);
+
+        return {
+          ...current,
+          unmatchedTransfers: nextTransfers,
+          unmatchedTotalAmount: current.unmatchedTotalAmount + Number(event.amount || 0),
+          unmatchedTotalCount: current.unmatchedTotalCount + 1,
+        };
+      });
+    },
+    [filters.storecode],
+  );
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
@@ -359,9 +473,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
   useEffect(() => {
     const realtime = new Ably.Realtime({
-      authUrl: `/api/bff/realtime/ably-token?stream=buyorder&clientId=${ablyClientIdRef.current}`,
+      authUrl: `/api/bff/realtime/ably-token?stream=ops-admin&clientId=${ablyClientIdRef.current}`,
     });
     const channel = realtime.channels.get(BUYORDER_STATUS_ABLY_CHANNEL);
+    const unmatchedChannel = realtime.channels.get(BANKTRANSFER_UNMATCHED_ABLY_CHANNEL);
 
     const onConnectionStateChange = (stateChange: Ably.ConnectionStateChange) => {
       setConnectionState(stateChange.current);
@@ -389,8 +504,22 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       requestRealtimeRefresh();
     };
 
+    const onUnmatchedMessage = (message: Ably.Message) => {
+      const event = (message.data || {}) as BankTransferUnmatchedRealtimeEvent;
+      const eventId = event.eventId || String(message.id || "");
+      if (eventId && lastUnmatchedRealtimeEventIdRef.current === eventId) {
+        return;
+      }
+      if (eventId) {
+        lastUnmatchedRealtimeEventIdRef.current = eventId;
+      }
+      applyUnmatchedRealtimeEventToDashboard(event);
+      requestRealtimeRefresh();
+    };
+
     realtime.connection.on(onConnectionStateChange);
     void channel.subscribe(BUYORDER_STATUS_ABLY_EVENT_NAME, onMessage);
+    void unmatchedChannel.subscribe(BANKTRANSFER_UNMATCHED_ABLY_EVENT_NAME, onUnmatchedMessage);
 
     return () => {
       if (realtimeRefreshTimerRef.current) {
@@ -399,14 +528,19 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       if (highlightResetTimerRef.current) {
         clearTimeout(highlightResetTimerRef.current);
       }
+      if (unmatchedHighlightResetTimerRef.current) {
+        clearTimeout(unmatchedHighlightResetTimerRef.current);
+      }
       channel.unsubscribe(BUYORDER_STATUS_ABLY_EVENT_NAME, onMessage);
+      unmatchedChannel.unsubscribe(BANKTRANSFER_UNMATCHED_ABLY_EVENT_NAME, onUnmatchedMessage);
       realtime.connection.off(onConnectionStateChange);
       realtime.close();
     };
-  }, [applyRealtimeEventToDashboard, loadDashboard, requestRealtimeRefresh]);
+  }, [applyRealtimeEventToDashboard, applyUnmatchedRealtimeEventToDashboard, loadDashboard, requestRealtimeRefresh]);
 
   const orders = data?.orders ?? EMPTY_ORDERS;
   const stores = data?.stores ?? EMPTY_STORES;
+  const unmatchedTransfers = data?.unmatchedTransfers ?? EMPTY_UNMATCHED_TRANSFERS;
   const selectedStoreSummary = useMemo(() => {
     if (!filters.storecode) {
       return null;
@@ -503,6 +637,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       label: "Loaded rows",
       value: `${NUMBER_FORMATTER.format(orders.length)} / ${NUMBER_FORMATTER.format(data?.orderTotalCount || 0)}`,
     },
+    {
+      label: "Unmatched deposits",
+      value: `${NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}건`,
+    },
   ];
 
   return (
@@ -573,6 +711,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           {lastRealtimeEventAt
                             ? `Last event ${formatDateTime(lastRealtimeEventAt)}`
                             : "Awaiting first live event"}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {lastUnmatchedEventAt
+                            ? `Unmatched ${formatDateTime(lastUnmatchedEventAt)}`
+                            : "Awaiting first unmatched event"}
                         </span>
                       </div>
                       {connectionError ? (
@@ -951,7 +1094,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               </div>
 
               <div className="mt-5 space-y-3">
-                {liveQueueCards.slice(0, 2).map((item) => (
+                {liveQueueCards.slice(0, 3).map((item) => (
                   <div key={item.label} className="console-panel-muted rounded-[24px] p-4">
                     <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
                       {item.label}
@@ -1136,6 +1279,113 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 )}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section className="console-panel overflow-hidden rounded-[30px]">
+          <div className="border-b border-slate-200/80 px-6 py-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                  Ably unmatched feed
+                </p>
+                <h2 className="console-display mt-1 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                  미신청입금 live
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  {NUMBER_FORMATTER.format(unmatchedTransfers.length)} / {NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  {formatKrw(data?.unmatchedTotalAmount || 0)}
+                </span>
+                <span
+                  className={`rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${liveTransportBadgeClassName}`}
+                >
+                  {liveTransportLabel}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto px-4 py-4">
+            {unmatchedTransfers.length === 0 ? (
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
+                No unmatched deposits returned for the current filter.
+              </div>
+            ) : (
+              <div className="flex min-w-full gap-3">
+                {unmatchedTransfers.map((transfer, index) => {
+                  const id = String(transfer._id || `unmatched-${index}`);
+                  const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
+                  const storeLabel =
+                    transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
+                  const transactionDate =
+                    transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
+
+                  return (
+                    <article
+                      key={id}
+                      className={`min-w-[280px] max-w-[320px] rounded-[24px] border px-4 py-4 shadow-sm transition ${
+                        isHighlighted
+                          ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
+                          : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Unmatched deposit
+                          </div>
+                          <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-rose-600">
+                            {formatKrw(transfer.amount || 0)}
+                          </div>
+                        </div>
+                        {isHighlighted ? (
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                            live updated
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-4 space-y-3 text-sm text-slate-600">
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Holder
+                          </div>
+                          <div className="mt-1 font-medium text-slate-950">
+                            {maskName(transfer.transactionName)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Account
+                          </div>
+                          <div className="mt-1 font-medium text-slate-950">
+                            {maskAccountNumber(transfer.bankAccountNumber)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Scope
+                          </div>
+                          <div className="mt-1 font-medium text-slate-950">{storeLabel}</div>
+                        </div>
+                        <div>
+                          <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                            Received
+                          </div>
+                          <div className="mt-1 font-medium text-slate-950">
+                            {formatDateTime(transactionDate)}
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
       </div>

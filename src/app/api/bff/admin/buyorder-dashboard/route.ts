@@ -50,6 +50,12 @@ export async function POST(request: NextRequest) {
   const selectedStorecode = normalizeString(body.selectedStorecode);
   const storesLimit = Math.min(parsePositiveInt(body.storesLimit, 100), 200);
   const storesPage = Math.max(parsePositiveInt(body.storesPage, 1), 1);
+  const unmatchedFilters = asPlainObject(body.unmatchedFilters);
+  const unmatchedLimit = Math.min(parsePositiveInt(unmatchedFilters.limit, 40), 120);
+  const unmatchedPage = Math.max(parsePositiveInt(unmatchedFilters.page, 1), 1);
+  const unmatchedFromDate = normalizeString(unmatchedFilters.fromDate);
+  const unmatchedToDate = normalizeString(unmatchedFilters.toDate);
+  const unmatchedStorecode = normalizeString(unmatchedFilters.storecode || selectedStorecode);
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
 
   const jobs: Array<Promise<{ ok: boolean; status: number; json: any }>> = [
@@ -58,6 +64,15 @@ export async function POST(request: NextRequest) {
     postRemoteJson("/api/store/getAllStoresForBalance", {
       limit: storesLimit,
       page: storesPage,
+    }),
+    postRemoteJson("/api/bankTransfer/getAll", {
+      limit: unmatchedLimit,
+      page: unmatchedPage,
+      transactionType: "deposited",
+      matchStatus: "notSuccess",
+      fromDate: unmatchedFromDate,
+      toDate: unmatchedToDate,
+      storecode: unmatchedStorecode,
     }),
   ];
 
@@ -78,7 +93,8 @@ export async function POST(request: NextRequest) {
   const totalBuyOrdersResponse = results[0];
   const totalClearanceOrdersResponse = results[1];
   const storesResponse = results[2];
-  const selectedStoreResponse = selectedStorecode ? results[3] : null;
+  const unmatchedTransfersResponse = results[3];
+  const selectedStoreResponse = selectedStorecode ? results[4] : null;
   const signedOrdersResponse = hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
@@ -107,6 +123,9 @@ export async function POST(request: NextRequest) {
       processingClearanceOrders: totalClearanceOrdersResponse.json?.result?.orders || [],
       stores: storesResponse.json?.result?.stores || [],
       storeTotalCount: storesResponse.json?.result?.totalCount || 0,
+      unmatchedTransfers: unmatchedTransfersResponse.json?.result?.transfers || [],
+      unmatchedTotalAmount: unmatchedTransfersResponse.json?.result?.totalAmount || 0,
+      unmatchedTotalCount: unmatchedTransfersResponse.json?.result?.totalCount || 0,
       selectedStore: selectedStoreResponse?.json?.result || null,
     },
   });
