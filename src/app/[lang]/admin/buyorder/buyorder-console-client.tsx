@@ -477,11 +477,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [lastUnmatchedEventAt, setLastUnmatchedEventAt] = useState("");
   const [highlightedTradeId, setHighlightedTradeId] = useState("");
   const [highlightedUnmatchedId, setHighlightedUnmatchedId] = useState("");
+  const [copiedTradeId, setCopiedTradeId] = useState("");
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
   const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const highlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmatchedHighlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRealtimeEventIdRef = useRef("");
   const lastUnmatchedRealtimeEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-buyorder-${Math.random().toString(36).slice(2, 10)}`);
@@ -582,6 +584,26 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       void loadDashboard({ silent: true });
     }, 350);
   }, [loadDashboard]);
+
+  const copyTradeId = useCallback(async (tradeId: string) => {
+    const safeTradeId = String(tradeId || "").trim();
+    if (!safeTradeId || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(safeTradeId);
+      setCopiedTradeId(safeTradeId);
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+      copyResetTimerRef.current = setTimeout(() => {
+        setCopiedTradeId("");
+      }, 1800);
+    } catch {
+      // Ignore clipboard failures and keep the table interaction non-blocking.
+    }
+  }, []);
 
   const applyRealtimeEventToDashboard = useCallback((event: BuyOrderStatusRealtimeEvent) => {
     const matchKey = String(event.tradeId || event.orderId || "").trim();
@@ -701,6 +723,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
     return () => clearInterval(interval);
   }, [loadDashboard]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const realtime = new Ably.Realtime({
@@ -1142,10 +1172,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setFilters({
+                    const nextFilters = {
                       ...draftFilters,
-                      page: Math.max(1, draftFilters.page),
-                    });
+                      page: 1,
+                    };
+                    setDraftFilters(nextFilters);
+                    setFilters(nextFilters);
                   }}
                   className="rounded-full bg-slate-950 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
                 >
@@ -1264,42 +1296,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       setDraftFilters((prev) => ({
                         ...prev,
                         toDate: event.target.value,
-                      }))
-                    }
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="space-y-2 text-sm">
-                  <span className="font-medium text-slate-200">Limit</span>
-                  <select
-                    value={draftFilters.limit}
-                    onChange={(event) =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        limit: Number(event.target.value),
-                      }))
-                    }
-                    className={fieldClassName}
-                  >
-                    {[20, 50, 100].map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2 text-sm">
-                  <span className="font-medium text-slate-200">Page</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={draftFilters.page}
-                    onChange={(event) =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        page: Math.max(1, Number(event.target.value || 1)),
                       }))
                     }
                     className={fieldClassName}
@@ -1553,6 +1549,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
                     const sellerBankSummary = getSellerBankSummary(order);
                     const depositProcessing = getDepositProcessingMeta(order);
+                    const tradeId = String(order.tradeId || "").trim();
+                    const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
+                    const buyerLabel = getBuyerLabel(order);
+                    const buyerDepositName = getBuyerDepositName(order);
+                    const shouldShowBuyerLabel = !buyerDepositName || buyerDepositName !== buyerLabel;
 
                     return (
                       <tr
@@ -1568,7 +1569,27 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         }`}
                       >
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="font-semibold text-slate-950">{order.tradeId || "-"}</div>
+                          {tradeId ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void copyTradeId(tradeId);
+                              }}
+                              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left transition hover:border-sky-300 hover:bg-sky-50"
+                              title="클릭해서 tradeId 복사"
+                            >
+                              <span className="font-semibold text-slate-950">{tradeId}</span>
+                              <span
+                                className={`console-mono text-[10px] uppercase tracking-[0.14em] ${
+                                  isCopiedTradeId ? "text-emerald-600" : "text-slate-400"
+                                }`}
+                              >
+                                {isCopiedTradeId ? "copied" : "copy"}
+                              </span>
+                            </button>
+                          ) : (
+                            <div className="font-semibold text-slate-950">-</div>
+                          )}
                           <div className="mt-1 text-xs text-slate-500">
                             {createdAtLabel === "-"
                               ? "-"
@@ -1603,13 +1624,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="font-medium text-slate-950">{getBuyerLabel(order)}</div>
-                          {getBuyerDepositName(order) ? (
-                            <div className="mt-1 text-xs text-slate-600">
-                              입금자명 {getBuyerDepositName(order)}
+                          <div className="truncate text-[15px] font-semibold text-slate-950">
+                            {buyerDepositName || buyerLabel}
+                          </div>
+                          {buyerDepositName && shouldShowBuyerLabel ? (
+                            <div className="mt-1 truncate text-sm font-medium text-slate-600">
+                              {buyerLabel}
                             </div>
                           ) : null}
-                          <div className="mt-1 text-xs text-slate-500">
+                          <div className="console-mono mt-1 text-xs text-slate-500">
                             {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                           </div>
                         </td>
