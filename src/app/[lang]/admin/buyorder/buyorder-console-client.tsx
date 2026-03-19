@@ -154,10 +154,12 @@ const USDT_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 3,
 });
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 const createInputDate = (daysOffset = 0) => {
-  const date = new Date();
-  date.setDate(date.getDate() + daysOffset);
-  return date.toISOString().slice(0, 10);
+  const kstDate = new Date(Date.now() + KST_OFFSET_MS);
+  kstDate.setUTCDate(kstDate.getUTCDate() + daysOffset);
+  return kstDate.toISOString().slice(0, 10);
 };
 
 const createDefaultFilters = (): FilterState => ({
@@ -172,6 +174,21 @@ const createDefaultFilters = (): FilterState => ({
   searchOrderStatusCancelled: false,
   searchOrderStatusCompleted: false,
 });
+
+const areFiltersEqual = (left: FilterState, right: FilterState) => {
+  return (
+    left.storecode === right.storecode
+    && left.limit === right.limit
+    && left.page === right.page
+    && left.fromDate === right.fromDate
+    && left.toDate === right.toDate
+    && left.searchTradeId === right.searchTradeId
+    && left.searchBuyer === right.searchBuyer
+    && left.searchMyOrders === right.searchMyOrders
+    && left.searchOrderStatusCancelled === right.searchOrderStatusCancelled
+    && left.searchOrderStatusCompleted === right.searchOrderStatusCompleted
+  );
+};
 
 const statusMetaMap: Record<string, { label: string; className: string }> = {
   ordered: {
@@ -994,7 +1011,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     const safePage = Math.min(Math.max(1, nextPage), totalOrderPages);
 
     setDraftFilters((prev) => (prev.page === safePage ? prev : { ...prev, page: safePage }));
-    setFilters((prev) => (prev.page === safePage ? prev : { ...prev, page: safePage }));
   }, [totalOrderPages]);
 
   useEffect(() => {
@@ -1011,6 +1027,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [storeSearchOpen]);
+
+  useEffect(() => {
+    setFilters((prev) => (areFiltersEqual(prev, draftFilters) ? prev : draftFilters));
+  }, [draftFilters]);
 
   useEffect(() => {
     if (filters.page <= totalOrderPages) {
@@ -1232,36 +1252,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   필요한 조건만 좁혀서 주문 테이블을 읽기 쉬운 상태로 유지합니다.
                 </p>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextFilters = createDefaultFilters();
-                    setStoreSearchQuery("");
-                    setStoreSearchOpen(false);
-                    setDraftFilters(nextFilters);
-                    setFilters(nextFilters);
-                  }}
-                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-                >
-                  Reset
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextFilters = {
-                      ...draftFilters,
-                      page: 1,
-                    };
-                    setDraftFilters(nextFilters);
-                    setFilters(nextFilters);
-                  }}
-                  className="rounded-full bg-slate-950 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  Apply filters
-                </button>
-              </div>
             </div>
 
             <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
@@ -1431,6 +1421,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       setDraftFilters((prev) => ({
                         ...prev,
                         searchTradeId: event.target.value,
+                        page: 1,
                       }))
                     }
                     placeholder="search tradeId"
@@ -1446,6 +1437,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       setDraftFilters((prev) => ({
                         ...prev,
                         searchBuyer: event.target.value,
+                        page: 1,
                       }))
                     }
                     placeholder="nickname or wallet"
@@ -1459,29 +1451,37 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 	                    {[
 	                      { label: "오늘", offset: 0 },
 	                      { label: "어제", offset: -1 },
-	                    ].map((item) => (
-	                      <button
-	                        key={item.label}
-	                        type="button"
-	                        onClick={() => {
-	                          const date = createInputDate(item.offset);
-	                          setDraftFilters((prev) => ({
-	                            ...prev,
-	                            fromDate: date,
-	                            toDate: date,
-	                            page: 1,
-	                          }));
-	                        }}
-	                        className="rounded-full border border-white/10 bg-white/6 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10"
-	                      >
-	                        {item.label}
-	                      </button>
-	                    ))}
+	                    ].map((item) => {
+	                      const date = createInputDate(item.offset);
+	                      const isSelected = draftFilters.fromDate === date && draftFilters.toDate === date;
+
+	                      return (
+	                        <button
+	                          key={item.label}
+	                          type="button"
+	                          onClick={() => {
+	                            setDraftFilters((prev) => ({
+	                              ...prev,
+	                              fromDate: date,
+	                              toDate: date,
+	                              page: 1,
+	                            }));
+	                          }}
+	                          className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+	                            isSelected
+	                              ? "border-sky-300 bg-sky-300/15 text-sky-100"
+	                              : "border-white/10 bg-white/6 text-slate-200 hover:bg-white/10"
+	                          }`}
+	                        >
+	                          {item.label}
+	                        </button>
+	                      );
+	                    })}
 	                  </div>
 	                </div>
 
 	                <label className="space-y-2 text-sm xl:col-span-2">
-	                  <span className="font-medium text-slate-200">From date</span>
+	                  <span className="font-medium text-slate-200">Date</span>
 	                  <input
 	                    type="date"
                     value={draftFilters.fromDate}
@@ -1489,21 +1489,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       setDraftFilters((prev) => ({
                         ...prev,
                         fromDate: event.target.value,
-                      }))
-                    }
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="space-y-2 text-sm xl:col-span-2">
-                  <span className="font-medium text-slate-200">To date</span>
-                  <input
-                    type="date"
-                    value={draftFilters.toDate}
-                    onChange={(event) =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
                         toDate: event.target.value,
+                        page: 1,
                       }))
                     }
                     className={fieldClassName}
@@ -1536,6 +1523,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       setDraftFilters((prev) => ({
                         ...prev,
                         [item.key]: !item.value,
+                        page: 1,
                       }))
                     }
                     className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
