@@ -195,6 +195,9 @@ const EMPTY_BANKTRANSFER_TODAY_SUMMARY: DashboardResult["banktransferTodaySummar
   updatedAt: "",
 };
 
+const SECTION_LOADING_BADGE_CLASS_NAME =
+  "inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700";
+
 type FilterState = {
   storecode: string;
   limit: number;
@@ -2018,6 +2021,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const currentOrderPage = Math.min(Math.max(1, Number(filters.page) || 1), totalOrderPages);
   const currentOrderRangeStart = orders.length === 0 ? 0 : ((currentOrderPage - 1) * orderLimit) + 1;
   const currentOrderRangeEnd = orders.length === 0 ? 0 : currentOrderRangeStart + orders.length - 1;
+  const showUnmatchedLoadingOverlay = loading && unmatchedTransfers.length > 0;
+  const showOrdersLoadingOverlay = loading && orders.length > 0;
   const visibleOrderPages = useMemo(() => {
     const start = Math.max(1, currentOrderPage - 2);
     const end = Math.min(totalOrderPages, start + 4);
@@ -2642,7 +2647,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래량</div>
-                <div className="mt-2 flex items-end justify-between gap-3">
+                <div className="mt-2 flex items-end justify-end gap-3 text-right">
                   <span className="text-[1.4rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
                     {formatUsdtValue(tradeSummary.totalUsdtAmount)}
                   </span>
@@ -2652,7 +2657,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
               <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래금액</div>
-                <div className="mt-2 flex items-end justify-between gap-3">
+                <div className="mt-2 flex items-end justify-end gap-3 text-right">
                   <span className="text-[1.4rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
                     {formatKrwValue(tradeSummary.totalKrwAmount)}
                   </span>
@@ -2679,7 +2684,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제량</div>
-                <div className="mt-2 flex items-end justify-between gap-2">
+                <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
                     {formatUsdtValue(tradeSummary.totalSettlementAmount)}
                   </span>
@@ -2689,7 +2694,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
               <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제금액</div>
-                <div className="mt-2 flex items-end justify-between gap-2">
+                <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
                     {formatKrwValue(tradeSummary.totalSettlementAmountKRW)}
                   </span>
@@ -2699,7 +2704,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
               <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료량</div>
-                <div className="mt-2 flex items-end justify-between gap-2">
+                <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
                     {formatUsdtValue(tradeSummary.totalFeeAmount)}
                   </span>
@@ -2709,7 +2714,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
               <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료금액</div>
-                <div className="mt-2 flex items-end justify-between gap-2">
+                <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
                     {formatKrwValue(tradeSummary.totalFeeAmountKRW)}
                   </span>
@@ -2729,6 +2734,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                {loading ? (
+                  <span className={SECTION_LOADING_BADGE_CLASS_NAME}>
+                    <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
+                    로딩중
+                  </span>
+                ) : null}
                 <span className="rounded-full bg-slate-100 px-3 py-1">
                   {NUMBER_FORMATTER.format(unmatchedTransfers.length)} / {NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}
                 </span>
@@ -2744,68 +2755,102 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto px-4 py-4">
-            {unmatchedTransfers.length === 0 ? (
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
-                No unmatched deposits returned for the current filter.
-              </div>
-            ) : (
-              <div className="flex min-w-full gap-3">
-                {unmatchedTransfers.map((transfer, index) => {
-                  const id = String(transfer._id || `unmatched-${index}`);
-                  const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
-                  const storeLabel =
-                    transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
-                  const storeLogoSrc = getUnmatchedTransferStoreLogoSrc(transfer, stores);
-                  const transactionDate =
-                    transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
-
-                  return (
-                    <article
-                      key={id}
-                      className={`min-w-[260px] max-w-[300px] rounded-[24px] border px-4 py-3 shadow-sm transition ${
-                        isHighlighted
-                          ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
-                          : "border-slate-200 bg-white"
-                      }`}
+          <div className="relative px-4 py-4">
+            <div className={`overflow-x-auto transition ${showUnmatchedLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
+              {loading && unmatchedTransfers.length === 0 ? (
+                <div className="flex min-w-full gap-3">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={`unmatched-loading-${index}`}
+                      className="min-w-[260px] max-w-[300px] animate-pulse rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold text-slate-900">
-                            {transfer.transactionName || "-"}
-                          </div>
-                          <div className="mt-1 truncate text-sm text-slate-600">
-                            {transfer.bankAccountNumber || "-"}
-                          </div>
+                          <div className="h-4 w-24 rounded-full bg-slate-200" />
+                          <div className="mt-2 h-3 w-32 rounded-full bg-slate-200" />
                         </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-xl font-semibold tracking-[-0.04em] text-rose-600">
-                            {formatKrw(transfer.amount || 0)}
-                          </div>
-                          {isHighlighted ? (
-                            <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                              live updated
-                            </span>
-                          ) : null}
-                        </div>
+                        <div className="h-6 w-20 rounded-full bg-slate-200" />
                       </div>
+                      <div className="mt-5 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-xl bg-slate-200" />
+                          <div className="h-3 w-20 rounded-full bg-slate-200" />
+                        </div>
+                        <div className="h-3 w-24 rounded-full bg-slate-200" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : unmatchedTransfers.length === 0 ? (
+                <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
+                  현재 필터에 해당하는 미신청입금이 없습니다.
+                </div>
+              ) : (
+                <div className="flex min-w-full gap-3">
+                  {unmatchedTransfers.map((transfer, index) => {
+                    const id = String(transfer._id || `unmatched-${index}`);
+                    const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
+                    const storeLabel =
+                      transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
+                    const storeLogoSrc = getUnmatchedTransferStoreLogoSrc(transfer, stores);
+                    const transactionDate =
+                      transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
 
-                      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span
-                            className="h-6 w-6 shrink-0 rounded-xl border border-slate-200 bg-slate-100 bg-cover bg-center"
-                            style={{ backgroundImage: `url(${storeLogoSrc})` }}
-                            aria-hidden="true"
-                          />
-                          <span className="truncate">{storeLabel}</span>
+                    return (
+                      <article
+                        key={id}
+                        className={`min-w-[260px] max-w-[300px] rounded-[24px] border px-4 py-3 shadow-sm transition ${
+                          isHighlighted
+                            ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-slate-900">
+                              {transfer.transactionName || "-"}
+                            </div>
+                            <div className="mt-1 truncate text-sm text-slate-600">
+                              {transfer.bankAccountNumber || "-"}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-xl font-semibold tracking-[-0.04em] text-rose-600">
+                              {formatKrw(transfer.amount || 0)}
+                            </div>
+                            {isHighlighted ? (
+                              <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                                live updated
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                        <span className="shrink-0">{formatDateTime(transactionDate)}</span>
-                      </div>
-                    </article>
-                  );
-                })}
+
+                        <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span
+                              className="h-6 w-6 shrink-0 rounded-xl border border-slate-200 bg-slate-100 bg-cover bg-center"
+                              style={{ backgroundImage: `url(${storeLogoSrc})` }}
+                              aria-hidden="true"
+                            />
+                            <span className="truncate">{storeLabel}</span>
+                          </div>
+                          <span className="shrink-0">{formatDateTime(transactionDate)}</span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {showUnmatchedLoadingOverlay ? (
+              <div className="pointer-events-none absolute inset-4 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/85 backdrop-blur-sm">
+                <div className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
+                  미신청입금 내역 불러오는 중...
+                </div>
               </div>
-            )}
+            ) : null}
           </div>
         </section>
 
@@ -2818,6 +2863,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                {loading ? (
+                  <span className={SECTION_LOADING_BADGE_CLASS_NAME}>
+                    <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
+                    로딩중
+                  </span>
+                ) : null}
                 <span className="rounded-full bg-slate-100 px-3 py-1">
                   Rows {NUMBER_FORMATTER.format(currentOrderRangeStart)}-
                   {NUMBER_FORMATTER.format(currentOrderRangeEnd)} /{" "}
@@ -2852,8 +2903,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             ) : null}
           </div>
 
-          <div className="overflow-x-auto px-2 pb-2">
-            <table className="min-w-[1420px] w-full border-separate border-spacing-0">
+          <div className="relative px-2 pb-2">
+            <div className={`overflow-x-auto transition ${showOrdersLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
+              <table className="min-w-[1420px] w-full border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
                   <th className="border-b border-slate-200 px-4 py-3">Trade / Created</th>
@@ -2885,7 +2937,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 {orders.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
-                      {loading ? "Loading orders..." : "No orders returned for the current filter."}
+                      {loading ? (
+                        <span className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700">
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
+                          주문 목록 불러오는 중...
+                        </span>
+                      ) : "현재 필터에 해당하는 주문이 없습니다."}
                     </td>
                   </tr>
                 ) : (
@@ -3154,7 +3211,16 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   })
                 )}
               </tbody>
-            </table>
+              </table>
+            </div>
+            {showOrdersLoadingOverlay ? (
+              <div className="pointer-events-none absolute inset-x-2 top-0 bottom-2 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/85 backdrop-blur-sm">
+                <div className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
+                  주문 목록 불러오는 중...
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200/80 px-6 py-5">
