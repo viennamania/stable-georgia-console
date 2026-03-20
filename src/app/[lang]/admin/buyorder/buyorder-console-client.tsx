@@ -2085,86 +2085,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           ))}
         </section>
 
-        <section className="grid gap-3 xl:grid-cols-3">
-          <article className="overflow-hidden rounded-[28px] border border-violet-300/25 bg-[radial-gradient(circle_at_top,_rgba(129,140,248,0.26),_rgba(15,23,42,0.96)_58%)] px-5 py-4 text-white shadow-[0_16px_40px_-28px_rgba(129,140,248,0.9)]">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-violet-100/85">오늘 날짜 (KST)</div>
-            <div className="mt-2 text-[1.7rem] font-semibold tracking-[-0.05em] text-violet-50">
-              {todayDateLabelKst}
-            </div>
-            <div className="mt-4 flex items-end justify-between gap-4">
-              <div>
-                <div className="text-[11px] uppercase tracking-[0.16em] text-violet-100/70">오늘 남은 시간</div>
-                <div className="mt-1 font-mono text-[1.85rem] font-semibold leading-none tabular-nums text-violet-50">
-                  {countdownLabel}
-                </div>
-              </div>
-              <span className="inline-flex rounded-full border border-violet-200/30 bg-violet-200/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-50">
-                COUNTDOWN
-              </span>
-            </div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full bg-violet-300 transition-all duration-700"
-                style={{ width: `${remainingDayRatio}%` }}
-              />
-            </div>
-          </article>
-
-          <article className="overflow-hidden rounded-[28px] border border-emerald-400/25 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.22),_rgba(15,23,42,0.95)_60%)] px-5 py-4 text-white shadow-[0_16px_40px_-28px_rgba(16,185,129,0.75)]">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-100/85">오늘 입금 (KST)</div>
-              <span className="inline-flex rounded-full border border-emerald-300/35 bg-emerald-400/18 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-50">
-                LIVE
-              </span>
-            </div>
-            <div className="mt-2 text-[2.05rem] font-semibold leading-none tracking-[-0.05em] tabular-nums text-emerald-50">
-              {formatKrwValue(banktransferTodaySummary.depositedAmount)}
-              <span className="ml-1.5 text-sm font-medium text-emerald-200/90">KRW</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-4 text-xs text-emerald-100/80">
-              <span>누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.depositedCount)}건</span>
-              <span>
-                {banktransferTodaySummary.updatedAt
-                  ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
-                  : "updated -"}
-              </span>
-            </div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full bg-emerald-300 transition-all duration-500"
-                style={{ width: `${depositedRatio}%` }}
-              />
-            </div>
-          </article>
-
-          <article className="overflow-hidden rounded-[28px] border border-rose-400/25 bg-[radial-gradient(circle_at_top,_rgba(244,63,94,0.2),_rgba(15,23,42,0.95)_60%)] px-5 py-4 text-white shadow-[0_16px_40px_-28px_rgba(244,63,94,0.72)]">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-rose-100/85">오늘 출금 (KST)</div>
-              <span className="inline-flex rounded-full border border-rose-300/35 bg-rose-400/18 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-50">
-                LIVE
-              </span>
-            </div>
-            <div className="mt-2 text-[2.05rem] font-semibold leading-none tracking-[-0.05em] tabular-nums text-rose-50">
-              {formatKrwValue(banktransferTodaySummary.withdrawnAmount)}
-              <span className="ml-1.5 text-sm font-medium text-rose-200/90">KRW</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-4 text-xs text-rose-100/80">
-              <span>누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.withdrawnCount)}건</span>
-              <span>
-                {banktransferTodaySummary.updatedAt
-                  ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
-                  : "updated -"}
-              </span>
-            </div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full bg-rose-300 transition-all duration-500"
-                style={{ width: `${withdrawnRatio}%` }}
-              />
-            </div>
-          </article>
-        </section>
-
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_360px]">
           <div className="console-panel rounded-[30px] p-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -2482,95 +2402,188 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </aside>
         </section>
 
-        <section className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
-          <article className="console-panel rounded-[26px] border border-slate-200 px-4 py-4 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
-                  P2P
+        <section className="grid gap-3 xl:grid-cols-[0.92fr_1.04fr_1.04fr]">
+          <article className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(248,250,252,0.96),_rgba(241,245,249,0.92))] px-4 py-4 text-slate-950 shadow-sm">
+            <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">오늘 날짜 (KST)</div>
+            <div className="mt-2 text-[1.5rem] font-semibold tracking-[-0.05em] text-slate-950">
+              {todayDateLabelKst}
+            </div>
+            <div className="mt-4 flex items-end justify-between gap-4">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">오늘 남은 시간</div>
+                <div className="mt-1 font-mono text-[1.65rem] font-semibold leading-none tabular-nums text-slate-950">
+                  {countdownLabel}
                 </div>
-                <div className="min-w-0">
-                  <div className="text-[11px] text-slate-500">P2P 거래수(건)</div>
-                  <div className="text-[2rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                    {NUMBER_FORMATTER.format(tradeSummary.totalCount)}
-                  </div>
+              </div>
+              <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Count
+              </span>
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-violet-400 transition-all duration-700"
+                style={{ width: `${remainingDayRatio}%` }}
+              />
+            </div>
+          </article>
+
+          <article className="overflow-hidden rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,_rgba(236,253,245,0.92),_rgba(255,255,255,0.98))] px-4 py-4 text-slate-950 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700">오늘 입금 (KST)</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.depositedCount)}건
+                </div>
+              </div>
+              <span className="inline-flex rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                Live
+              </span>
+            </div>
+            <div className="mt-3 text-right">
+              <div className="flex justify-end gap-2">
+                <span className="text-[2rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-emerald-700">
+                  {formatKrwValue(banktransferTodaySummary.depositedAmount)}
+                </span>
+                <span className="console-mono pt-1 text-[11px] uppercase tracking-[0.14em] text-emerald-700">KRW</span>
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                {banktransferTodaySummary.updatedAt
+                  ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
+                  : "updated -"}
+              </div>
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-emerald-100">
+              <div
+                className="h-full rounded-full bg-emerald-400 transition-all duration-500"
+                style={{ width: `${depositedRatio}%` }}
+              />
+            </div>
+          </article>
+
+          <article className="overflow-hidden rounded-[24px] border border-rose-200 bg-[linear-gradient(180deg,_rgba(255,241,242,0.9),_rgba(255,255,255,0.98))] px-4 py-4 text-slate-950 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-rose-700">오늘 출금 (KST)</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.withdrawnCount)}건
+                </div>
+              </div>
+              <span className="inline-flex rounded-full border border-rose-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-700">
+                Live
+              </span>
+            </div>
+            <div className="mt-3 text-right">
+              <div className="flex justify-end gap-2">
+                <span className="text-[2rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-rose-700">
+                  {formatKrwValue(banktransferTodaySummary.withdrawnAmount)}
+                </span>
+                <span className="console-mono pt-1 text-[11px] uppercase tracking-[0.14em] text-rose-700">KRW</span>
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                {banktransferTodaySummary.updatedAt
+                  ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
+                  : "updated -"}
+              </div>
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-rose-100">
+              <div
+                className="h-full rounded-full bg-rose-400 transition-all duration-500"
+                style={{ width: `${withdrawnRatio}%` }}
+              />
+            </div>
+          </article>
+        </section>
+
+        <section className="grid gap-3 lg:grid-cols-[0.82fr_1.18fr]">
+          <article className="console-panel rounded-[24px] border border-slate-200 px-4 py-3.5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">P2P</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">P2P 거래수</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Count</div>
+                <div className="mt-1 text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
+                  {NUMBER_FORMATTER.format(tradeSummary.totalCount)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래량</div>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <span className="text-[1.4rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+                    {formatUsdtValue(tradeSummary.totalUsdtAmount)}
+                  </span>
+                  <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
                 </div>
               </div>
 
-              <div className="grid min-w-0 gap-2 sm:min-w-[320px]">
-                <div className="flex items-end justify-between gap-3 border-b border-slate-100 pb-2">
-                  <span className="text-xs text-slate-500">거래량</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[1.9rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                      {formatUsdtValue(tradeSummary.totalUsdtAmount)}
-                    </span>
-                    <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-emerald-600">USDT</span>
-                  </div>
-                </div>
-                <div className="flex items-end justify-between gap-3">
-                  <span className="text-xs text-slate-500">거래금액</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[1.9rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                      {formatKrwValue(tradeSummary.totalKrwAmount)}
-                    </span>
-                    <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-amber-600">KRW</span>
-                  </div>
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래금액</div>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <span className="text-[1.4rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                    {formatKrwValue(tradeSummary.totalKrwAmount)}
+                  </span>
+                  <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
               </div>
             </div>
           </article>
 
-          <article className="console-panel rounded-[26px] border border-slate-200 px-4 py-4 shadow-sm">
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sm font-semibold text-sky-700">
-                    결제
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] text-slate-500">가맹점 결제수(건)</div>
-                    <div className="text-[2rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                      {NUMBER_FORMATTER.format(tradeSummary.totalSettlementCount)}
-                    </div>
-                  </div>
+          <article className="console-panel rounded-[24px] border border-slate-200 px-4 py-3.5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">Settlement</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">가맹점 결제수</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Count</div>
+                <div className="mt-1 text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
+                  {NUMBER_FORMATTER.format(tradeSummary.totalSettlementCount)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제량</div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+                    {formatUsdtValue(tradeSummary.totalSettlementAmount)}
+                  </span>
+                  <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
                 </div>
               </div>
 
-              <div className="grid gap-2 md:grid-cols-2">
-                <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                  <div className="text-[11px] text-slate-500">결제량 / 결제금액</div>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="flex items-end justify-between gap-3">
-                      <span className="text-[1.55rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                        {formatUsdtValue(tradeSummary.totalSettlementAmount)}
-                      </span>
-                      <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-emerald-600">USDT</span>
-                    </div>
-                    <div className="flex items-end justify-between gap-3">
-                      <span className="text-[1.55rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                        {formatKrwValue(tradeSummary.totalSettlementAmountKRW)}
-                      </span>
-                      <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-amber-600">KRW</span>
-                    </div>
-                  </div>
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제금액</div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                    {formatKrwValue(tradeSummary.totalSettlementAmountKRW)}
+                  </span>
+                  <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
+              </div>
 
-                <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                  <div className="text-[11px] text-slate-500">수수료량 / 수수료금액</div>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="flex items-end justify-between gap-3">
-                      <span className="text-[1.55rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                        {formatUsdtValue(tradeSummary.totalFeeAmount)}
-                      </span>
-                      <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-emerald-600">USDT</span>
-                    </div>
-                    <div className="flex items-end justify-between gap-3">
-                      <span className="text-[1.55rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                        {formatKrwValue(tradeSummary.totalFeeAmountKRW)}
-                      </span>
-                      <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-amber-600">KRW</span>
-                    </div>
-                  </div>
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료량</div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+                    {formatUsdtValue(tradeSummary.totalFeeAmount)}
+                  </span>
+                  <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
+                </div>
+              </div>
+
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료금액</div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                    {formatKrwValue(tradeSummary.totalFeeAmountKRW)}
+                  </span>
+                  <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
               </div>
             </div>
