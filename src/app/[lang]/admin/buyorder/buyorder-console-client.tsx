@@ -2533,23 +2533,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
         </section>
 
         <section className="grid gap-3 xl:grid-cols-[0.92fr_1.04fr_1.04fr]">
-          <article className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(248,250,252,0.96),_rgba(241,245,249,0.92))] px-4 py-4 text-slate-950 shadow-sm">
-            <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">오늘 날짜 (KST)</div>
-            <div className="mt-2 text-[1.5rem] font-semibold tracking-[-0.05em] text-slate-950">
+          <article className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(248,250,252,0.96),_rgba(241,245,249,0.92))] px-4 py-3.5 text-slate-950 shadow-sm">
+            <div className="console-mono text-[9px] uppercase tracking-[0.16em] text-slate-500">오늘 날짜 (KST)</div>
+            <div className="mt-1.5 text-[1.3rem] font-semibold tracking-[-0.05em] text-slate-950">
               {todayDateLabelKst}
             </div>
-            <div className="mt-4 flex items-end justify-between gap-4">
+            <div className="mt-3.5 flex items-end justify-between gap-4">
               <div>
-                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">오늘 남은 시간</div>
-                <div className="mt-1 font-mono text-[1.65rem] font-semibold leading-none tabular-nums text-slate-950">
+                <div className="text-[9px] uppercase tracking-[0.14em] text-slate-500">오늘 남은 시간</div>
+                <div className="mt-1 font-mono text-[1.45rem] font-semibold leading-none tabular-nums text-slate-950">
                   {countdownLabel}
                 </div>
               </div>
-              <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              <span className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Count
               </span>
             </div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-200">
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-slate-200">
               <div
                 className="h-full rounded-full bg-violet-400 transition-all duration-700"
                 style={{ width: `${remainingDayRatio}%` }}
@@ -2557,32 +2557,32 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             </div>
           </article>
 
-          <article className="overflow-hidden rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,_rgba(236,253,245,0.92),_rgba(255,255,255,0.98))] px-4 py-4 text-slate-950 shadow-sm">
+          <article className="overflow-hidden rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,_rgba(236,253,245,0.92),_rgba(255,255,255,0.98))] px-4 py-3.5 text-slate-950 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700">오늘 입금 (KST)</div>
-                <div className="mt-1 text-xs text-slate-500">
+                <div className="console-mono text-[9px] uppercase tracking-[0.16em] text-emerald-700">오늘 입금 (KST)</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">
                   누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.depositedCount)}건
                 </div>
               </div>
-              <span className="inline-flex rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+              <span className="inline-flex rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
                 Live
               </span>
             </div>
-            <div className="mt-3 text-right">
+            <div className="mt-2.5 text-right">
               <div className="flex justify-end gap-2">
-                <span className="text-[2rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-emerald-700">
+                <span className="text-[1.7rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-emerald-700">
                   {formatKrwValue(banktransferTodaySummary.depositedAmount)}
                 </span>
-                <span className="console-mono pt-1 text-[11px] uppercase tracking-[0.14em] text-emerald-700">KRW</span>
+                <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-700">KRW</span>
               </div>
-              <div className="mt-2 text-xs text-slate-500">
+              <div className="mt-1.5 text-[11px] text-slate-500">
                 {banktransferTodaySummary.updatedAt
                   ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
                   : "updated -"}
               </div>
             </div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-emerald-100">
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-emerald-100">
               <div
                 className="h-full rounded-full bg-emerald-400 transition-all duration-500"
                 style={{ width: `${depositedRatio}%` }}
@@ -2590,32 +2590,32 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             </div>
           </article>
 
-          <article className="overflow-hidden rounded-[24px] border border-rose-200 bg-[linear-gradient(180deg,_rgba(255,241,242,0.9),_rgba(255,255,255,0.98))] px-4 py-4 text-slate-950 shadow-sm">
+          <article className="overflow-hidden rounded-[24px] border border-rose-200 bg-[linear-gradient(180deg,_rgba(255,241,242,0.9),_rgba(255,255,255,0.98))] px-4 py-3.5 text-slate-950 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-rose-700">오늘 출금 (KST)</div>
-                <div className="mt-1 text-xs text-slate-500">
+                <div className="console-mono text-[9px] uppercase tracking-[0.16em] text-rose-700">오늘 출금 (KST)</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">
                   누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.withdrawnCount)}건
                 </div>
               </div>
-              <span className="inline-flex rounded-full border border-rose-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-700">
+              <span className="inline-flex rounded-full border border-rose-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-rose-700">
                 Live
               </span>
             </div>
-            <div className="mt-3 text-right">
+            <div className="mt-2.5 text-right">
               <div className="flex justify-end gap-2">
-                <span className="text-[2rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-rose-700">
+                <span className="text-[1.7rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-rose-700">
                   {formatKrwValue(banktransferTodaySummary.withdrawnAmount)}
                 </span>
-                <span className="console-mono pt-1 text-[11px] uppercase tracking-[0.14em] text-rose-700">KRW</span>
+                <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-rose-700">KRW</span>
               </div>
-              <div className="mt-2 text-xs text-slate-500">
+              <div className="mt-1.5 text-[11px] text-slate-500">
                 {banktransferTodaySummary.updatedAt
                   ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
                   : "updated -"}
               </div>
             </div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-rose-100">
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-rose-100">
               <div
                 className="h-full rounded-full bg-rose-400 transition-all duration-500"
                 style={{ width: `${withdrawnRatio}%` }}
