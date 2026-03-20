@@ -2962,10 +2962,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           ) : (
                             <div className="font-semibold text-slate-950">-</div>
                           )}
-                          <div className="mt-1 text-xs text-slate-500">
-                            {createdAtLabel === "-"
-                              ? "-"
-                              : `${createdAtLabel} · ${createdTimeAgoLabel}`}
+                          <div className="mt-1 flex flex-col items-start gap-0.5 text-xs">
+                            <span className="text-slate-500">{createdAtLabel}</span>
+                            {createdAtLabel === "-" ? null : (
+                              <span className="text-slate-400">{createdTimeAgoLabel}</span>
+                            )}
                           </div>
                         </td>
                         <td className="w-[156px] border-b border-slate-100 px-4 py-4 align-top">
@@ -3122,30 +3123,28 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               </span>
                             </div>
                           ) : transactionHash ? (
-                            <a
-                              href={getBscscanTxUrl(transactionHash)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-1 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
-                            >
-                              <span className="console-mono">{shortAddress(transactionHash)}</span>
-                              <span>View tx</span>
-                            </a>
+                      <a
+                        href={getBscscanTxUrl(transactionHash)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
+                      >
+                        <span className="console-mono">{shortAddress(transactionHash)}</span>
+                      </a>
                           ) : (
                             <div className="mt-1 text-[11px] text-slate-400">-</div>
                           )}
                         </td>
                         <td className="w-[188px] border-b border-slate-100 px-4 py-4 align-top">
                           {settlementTxHash ? (
-                            <a
-                              href={getBscscanTxUrl(settlementTxHash)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
-                            >
-                              <span className="console-mono">{shortAddress(settlementTxHash)}</span>
-                              <span>View tx</span>
-                            </a>
+                    <a
+                      href={getBscscanTxUrl(settlementTxHash)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
+                    >
+                      <span className="console-mono">{shortAddress(settlementTxHash)}</span>
+                    </a>
                           ) : (
                             <div className="text-[11px] text-slate-400">-</div>
                           )}
