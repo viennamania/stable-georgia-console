@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
   const signedOrdersResponse = hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
+  const signedOrdersResult = signedOrdersResponse?.json?.result || {};
 
   if (hasSignedOrdersBody && signedOrdersResponse && !signedOrdersResponse.ok) {
     return NextResponse.json(
@@ -130,6 +131,18 @@ export async function POST(request: NextRequest) {
         audioOnBuyOrders: totalBuyOrdersResponse.json?.result?.audioOnCount || 0,
         p2pTradeCount: tradeSummaryResponse.json?.result?.totalCount || 0,
         storePaymentCount: tradeSummaryResponse.json?.result?.totalSettlementCount || 0,
+      },
+      tradeSummary: {
+        totalCount: Number(signedOrdersResult.totalCount || tradeSummaryResponse.json?.result?.totalCount || 0),
+        totalUsdtAmount: Number(signedOrdersResult.totalUsdtAmount || 0),
+        totalKrwAmount: Number(signedOrdersResult.totalKrwAmount || 0),
+        totalSettlementCount: Number(signedOrdersResult.totalSettlementCount || tradeSummaryResponse.json?.result?.totalSettlementCount || 0),
+        totalSettlementAmount: Number(signedOrdersResult.totalSettlementAmount || 0),
+        totalSettlementAmountKRW: Number(signedOrdersResult.totalSettlementAmountKRW || 0),
+        totalFeeAmount: Number(signedOrdersResult.totalFeeAmount || 0),
+        totalFeeAmountKRW: Number(signedOrdersResult.totalFeeAmountKRW || 0),
+        totalAgentFeeAmount: Number(signedOrdersResult.totalAgentFeeAmount || 0),
+        totalAgentFeeAmountKRW: Number(signedOrdersResult.totalAgentFeeAmountKRW || 0),
       },
       orders: signedOrdersResponse?.json?.result?.orders || [],
       orderTotalCount: signedOrdersResponse?.json?.result?.totalCount || 0,

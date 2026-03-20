@@ -121,6 +121,18 @@ type DashboardResult = {
     p2pTradeCount: number;
     storePaymentCount: number;
   };
+  tradeSummary: {
+    totalCount: number;
+    totalUsdtAmount: number;
+    totalKrwAmount: number;
+    totalSettlementCount: number;
+    totalSettlementAmount: number;
+    totalSettlementAmountKRW: number;
+    totalFeeAmount: number;
+    totalFeeAmountKRW: number;
+    totalAgentFeeAmount: number;
+    totalAgentFeeAmountKRW: number;
+  };
   orders: BuyOrder[];
   orderTotalCount: number;
   processingBuyOrders: BuyOrder[];
@@ -131,6 +143,19 @@ type DashboardResult = {
   unmatchedTotalAmount: number;
   unmatchedTotalCount: number;
   selectedStore: Record<string, unknown> | null;
+};
+
+const EMPTY_TRADE_SUMMARY: DashboardResult["tradeSummary"] = {
+  totalCount: 0,
+  totalUsdtAmount: 0,
+  totalKrwAmount: 0,
+  totalSettlementCount: 0,
+  totalSettlementAmount: 0,
+  totalSettlementAmountKRW: 0,
+  totalFeeAmount: 0,
+  totalFeeAmountKRW: 0,
+  totalAgentFeeAmount: 0,
+  totalAgentFeeAmountKRW: 0,
 };
 
 type FilterState = {
@@ -1378,6 +1403,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   }, [data?.remoteBackendBaseUrl, lang]);
 
   const isSignedIn = Boolean(activeAccount);
+  const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
   const fieldClassName =
     "h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100";
   const metricCards = [
@@ -1404,18 +1430,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       value: NUMBER_FORMATTER.format(data?.storeTotalCount || 0),
       caption: "검색 가능한 가맹점 수",
       accent: "bg-violet-500",
-    },
-    {
-      label: "P2P 거래수(건)",
-      value: NUMBER_FORMATTER.format(data?.metrics.p2pTradeCount || 0),
-      caption: "total trade count",
-      accent: "bg-emerald-500",
-    },
-    {
-      label: "가맹점 결제수(건)",
-      value: NUMBER_FORMATTER.format(data?.metrics.storePaymentCount || 0),
-      caption: "total settlement count",
-      accent: "bg-amber-500",
     },
   ];
   const selectedScopeLabel = selectedStoreSummary
@@ -1718,6 +1732,72 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               <div className="mt-2 text-right text-sm leading-6 text-slate-600">{item.caption}</div>
             </article>
           ))}
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <article className="console-panel rounded-[30px] border border-slate-200 px-5 py-5 shadow-sm">
+            <div className="flex items-stretch gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-inner">
+                  <span className="text-lg font-semibold">P2P</span>
+                </div>
+                <div className="flex flex-col justify-center">
+                  <span className="text-[11px] text-slate-500">P2P 거래수(건)</span>
+                  <span className="text-2xl font-semibold text-slate-900">
+                    {NUMBER_FORMATTER.format(tradeSummary.totalCount)}
+                  </span>
+                </div>
+              </div>
+              <div className="hidden w-px bg-gradient-to-b from-transparent via-slate-200 to-transparent md:block" />
+              <div className="ml-auto flex flex-col items-end justify-center">
+                <span className="text-xl font-bold text-emerald-600" style={{ fontFamily: "monospace" }}>
+                  {USDT_FORMATTER.format(tradeSummary.totalUsdtAmount)} USDT
+                </span>
+                <span className="text-xl font-bold text-amber-600" style={{ fontFamily: "monospace" }}>
+                  {NUMBER_FORMATTER.format(Math.round(tradeSummary.totalKrwAmount))} KRW
+                </span>
+                <span className="mt-1 text-xs text-slate-500">거래량 / 거래금액</span>
+              </div>
+            </div>
+          </article>
+
+          <article className="console-panel rounded-[30px] border border-slate-200 px-5 py-5 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-inner">
+                  <span className="text-lg font-semibold">결제</span>
+                </div>
+                <div className="flex flex-col justify-center">
+                  <span className="text-[11px] text-slate-500">가맹점 결제수(건)</span>
+                  <span className="text-2xl font-semibold text-slate-900">
+                    {NUMBER_FORMATTER.format(tradeSummary.totalSettlementCount)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="ml-auto grid gap-3 md:grid-cols-2">
+                <div className="flex flex-col items-end md:items-start">
+                  <span className="text-xl font-bold text-emerald-600" style={{ fontFamily: "monospace" }}>
+                    {USDT_FORMATTER.format(tradeSummary.totalSettlementAmount)} USDT
+                  </span>
+                  <span className="text-xl font-bold text-amber-600" style={{ fontFamily: "monospace" }}>
+                    {NUMBER_FORMATTER.format(Math.round(tradeSummary.totalSettlementAmountKRW))} KRW
+                  </span>
+                  <span className="mt-1 text-xs text-slate-500">결제량 / 결제금액</span>
+                </div>
+
+                <div className="flex flex-col items-end md:items-start">
+                  <span className="text-xl font-bold text-emerald-600" style={{ fontFamily: "monospace" }}>
+                    {USDT_FORMATTER.format(tradeSummary.totalFeeAmount)} USDT
+                  </span>
+                  <span className="text-xl font-bold text-amber-600" style={{ fontFamily: "monospace" }}>
+                    {NUMBER_FORMATTER.format(Math.round(tradeSummary.totalFeeAmountKRW))} KRW
+                  </span>
+                  <span className="mt-1 text-xs text-slate-500">수수료량 / 수수료금액</span>
+                </div>
+              </div>
+            </div>
+          </article>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_360px]">
