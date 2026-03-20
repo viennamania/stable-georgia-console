@@ -973,7 +973,7 @@ const getSettlementTxHash = (order: BuyOrder) => {
   return txid && txid !== "0x" ? txid : "";
 };
 
-const getSettlementBscscanUrl = (txHash: string) => {
+const getBscscanTxUrl = (txHash: string) => {
   return `https://bscscan.com/tx/${txHash}`;
 };
 
@@ -1907,6 +1907,19 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       1,
     );
   }, [banktransferTodaySummary.depositedAmount, banktransferTodaySummary.withdrawnAmount]);
+  const pendingUsdtTransferCount = useMemo(() => {
+    return orders.filter((order) => {
+      const status = String(order.status || "").trim();
+      const transactionHash = String(order.transactionHash || "").trim();
+      return status === "paymentConfirmed" && (!transactionHash || transactionHash === "0x");
+    }).length;
+  }, [orders]);
+  const pendingSettlementCount = useMemo(() => {
+    return orders.filter((order) => {
+      const status = String(order.status || "").trim();
+      return status === "paymentConfirmed" && !hasSettlementCompleted(order);
+    }).length;
+  }, [orders]);
   const depositedRatio = useMemo(() => {
     if (banktransferTodaySummary.depositedAmount <= 0) {
       return 0;
@@ -2850,8 +2863,22 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   <th className="border-b border-slate-200 px-4 py-3">Seller</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
                   <th className="w-[228px] border-b border-slate-200 px-4 py-3">입금처리</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">USDT 전송</th>
-                  <th className="w-[300px] border-b border-slate-200 px-4 py-3">가맹점 결제</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <span>USDT 전송</span>
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        {NUMBER_FORMATTER.format(pendingUsdtTransferCount)}
+                      </span>
+                    </div>
+                  </th>
+                  <th className="w-[188px] border-b border-slate-200 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span>가맹점 결제</span>
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        {NUMBER_FORMATTER.format(pendingSettlementCount)}
+                      </span>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -2894,7 +2921,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const transactionHash = String(order.transactionHash || "").trim();
                     const isSettlementCompleted =
                       status === "paymentConfirmed" && hasSettlementCompleted(order);
-                    const settlementMeta = getSettlementMeta(order);
                     const settlement = getSettlementInfo(order);
                     const settlementTxHash = getSettlementTxHash(order);
                     const shouldShowUsdtTransferAmount = status === "paymentConfirmed";
@@ -3096,83 +3122,33 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               </span>
                             </div>
                           ) : transactionHash ? (
-                            <div className="console-mono mt-1 text-[11px] text-slate-500">
-                              {shortAddress(transactionHash)}
-                            </div>
+                            <a
+                              href={getBscscanTxUrl(transactionHash)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
+                            >
+                              <span className="console-mono">{shortAddress(transactionHash)}</span>
+                              <span>View tx</span>
+                            </a>
                           ) : (
                             <div className="mt-1 text-[11px] text-slate-400">-</div>
                           )}
                         </td>
-                        <td className="w-[300px] border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="flex flex-col gap-2">
-                            <span
-                              className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${settlementMeta.className}`}
+                        <td className="w-[188px] border-b border-slate-100 px-4 py-4 align-top">
+                          {settlementTxHash ? (
+                            <a
+                              href={getBscscanTxUrl(settlementTxHash)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
                             >
-                              {settlementMeta.label}
-                            </span>
-                            {settlementMeta.detail ? (
-                              <span className="text-xs text-slate-500">{settlementMeta.detail}</span>
-                            ) : null}
-                            {settlementMeta.actor ? (
-                              <span className="text-xs font-medium text-slate-700">
-                                처리자 {settlementMeta.actor}
-                              </span>
-                            ) : null}
-                            {settlement ? (
-                              <div className="mt-1 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3">
-                                <div className="space-y-2">
-                                  <div className="flex items-end justify-between gap-3">
-                                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">
-                                      정산액
-                                    </div>
-                                    <div className="flex items-baseline gap-2">
-                                      <span className="text-sm font-bold text-emerald-600">
-                                        {formatUsdtValue(settlement.settlementAmount as number)}
-                                      </span>
-                                      <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">
-                                        USDT
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-end justify-between gap-3">
-                                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">
-                                      AG / PG 수수료
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="text-xs font-semibold text-slate-700">
-                                        {formatUsdtValue(settlement.agentFeeAmount as number)} / {formatUsdtValue(settlement.feeAmount as number)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="grid gap-1.5 text-[11px] text-slate-500">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <span>정산 지갑</span>
-                                      <span className="console-mono text-slate-700">
-                                        {shortAddress(settlement.settlementWalletAddress)}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-3">
-                                      <span>AG / PG 지갑</span>
-                                      <span className="console-mono text-slate-700">
-                                        {shortAddress(settlement.agentFeeWalletAddress)} / {shortAddress(settlement.feeWalletAddress)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  {settlementTxHash ? (
-                                    <a
-                                      href={getSettlementBscscanUrl(settlementTxHash)}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
-                                    >
-                                      <span className="console-mono">{shortAddress(settlementTxHash)}</span>
-                                      <span>View tx</span>
-                                    </a>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
+                              <span className="console-mono">{shortAddress(settlementTxHash)}</span>
+                              <span>View tx</span>
+                            </a>
+                          ) : (
+                            <div className="text-[11px] text-slate-400">-</div>
+                          )}
                         </td>
                       </tr>
                     );
