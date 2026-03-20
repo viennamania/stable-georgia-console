@@ -331,9 +331,19 @@ const formatUsdt = (value?: number | null) => {
   return `${USDT_FORMATTER.format(numeric)} USDT`;
 };
 
+const formatUsdtValue = (value?: number | null) => {
+  const numeric = Number(value || 0);
+  return USDT_FORMATTER.format(numeric);
+};
+
 const formatKrw = (value?: number | null) => {
   const numeric = Number(value || 0);
   return `${KRW_FORMATTER.format(numeric)} KRW`;
+};
+
+const formatKrwValue = (value?: number | null) => {
+  const numeric = Number(value || 0);
+  return KRW_FORMATTER.format(numeric);
 };
 
 const maskName = (value?: string | null) => {
@@ -1734,72 +1744,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           ))}
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-          <article className="console-panel rounded-[30px] border border-slate-200 px-5 py-5 shadow-sm">
-            <div className="flex items-stretch gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-inner">
-                  <span className="text-lg font-semibold">P2P</span>
-                </div>
-                <div className="flex flex-col justify-center">
-                  <span className="text-[11px] text-slate-500">P2P 거래수(건)</span>
-                  <span className="text-2xl font-semibold text-slate-900">
-                    {NUMBER_FORMATTER.format(tradeSummary.totalCount)}
-                  </span>
-                </div>
-              </div>
-              <div className="hidden w-px bg-gradient-to-b from-transparent via-slate-200 to-transparent md:block" />
-              <div className="ml-auto flex flex-col items-end justify-center">
-                <span className="text-xl font-bold text-emerald-600" style={{ fontFamily: "monospace" }}>
-                  {USDT_FORMATTER.format(tradeSummary.totalUsdtAmount)} USDT
-                </span>
-                <span className="text-xl font-bold text-amber-600" style={{ fontFamily: "monospace" }}>
-                  {NUMBER_FORMATTER.format(Math.round(tradeSummary.totalKrwAmount))} KRW
-                </span>
-                <span className="mt-1 text-xs text-slate-500">거래량 / 거래금액</span>
-              </div>
-            </div>
-          </article>
-
-          <article className="console-panel rounded-[30px] border border-slate-200 px-5 py-5 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-inner">
-                  <span className="text-lg font-semibold">결제</span>
-                </div>
-                <div className="flex flex-col justify-center">
-                  <span className="text-[11px] text-slate-500">가맹점 결제수(건)</span>
-                  <span className="text-2xl font-semibold text-slate-900">
-                    {NUMBER_FORMATTER.format(tradeSummary.totalSettlementCount)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="ml-auto grid gap-3 md:grid-cols-2">
-                <div className="flex flex-col items-end md:items-start">
-                  <span className="text-xl font-bold text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {USDT_FORMATTER.format(tradeSummary.totalSettlementAmount)} USDT
-                  </span>
-                  <span className="text-xl font-bold text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {NUMBER_FORMATTER.format(Math.round(tradeSummary.totalSettlementAmountKRW))} KRW
-                  </span>
-                  <span className="mt-1 text-xs text-slate-500">결제량 / 결제금액</span>
-                </div>
-
-                <div className="flex flex-col items-end md:items-start">
-                  <span className="text-xl font-bold text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {USDT_FORMATTER.format(tradeSummary.totalFeeAmount)} USDT
-                  </span>
-                  <span className="text-xl font-bold text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {NUMBER_FORMATTER.format(Math.round(tradeSummary.totalFeeAmountKRW))} KRW
-                  </span>
-                  <span className="mt-1 text-xs text-slate-500">수수료량 / 수수료금액</span>
-                </div>
-              </div>
-            </div>
-          </article>
-        </section>
-
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_360px]">
           <div className="console-panel rounded-[30px] p-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -2117,6 +2061,106 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </aside>
         </section>
 
+        <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <article className="console-panel rounded-[30px] border border-slate-200 px-5 py-5 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-inner">
+                  <span className="text-lg font-semibold">P2P</span>
+                </div>
+                <div className="flex flex-col justify-center">
+                  <span className="text-[11px] text-slate-500">P2P 거래수(건)</span>
+                  <span className="text-2xl font-semibold text-slate-900">
+                    {NUMBER_FORMATTER.format(tradeSummary.totalCount)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-2 text-left">
+                <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
+                  <span className="text-[2rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+                    {formatUsdtValue(tradeSummary.totalUsdtAmount)}
+                  </span>
+                  <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-emerald-600">
+                    USDT
+                  </span>
+                </div>
+                <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
+                  <span className="text-[2rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                    {formatKrwValue(tradeSummary.totalKrwAmount)}
+                  </span>
+                  <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-amber-600">
+                    KRW
+                  </span>
+                </div>
+                <span className="pt-1 text-xs text-slate-500">거래량 / 거래금액</span>
+              </div>
+            </div>
+          </article>
+
+          <article className="console-panel rounded-[30px] border border-slate-200 px-5 py-5 shadow-sm">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-inner">
+                  <span className="text-lg font-semibold">결제</span>
+                </div>
+                <div className="flex flex-col justify-center">
+                  <span className="text-[11px] text-slate-500">가맹점 결제수(건)</span>
+                  <span className="text-2xl font-semibold text-slate-900">
+                    {NUMBER_FORMATTER.format(tradeSummary.totalSettlementCount)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                  <span className="text-xs text-slate-500">결제량 / 결제금액</span>
+                  <div className="mt-2 grid gap-2 text-left">
+                    <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
+                      <span className="text-[1.8rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+                        {formatUsdtValue(tradeSummary.totalSettlementAmount)}
+                      </span>
+                      <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-emerald-600">
+                        USDT
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
+                      <span className="text-[1.8rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                        {formatKrwValue(tradeSummary.totalSettlementAmountKRW)}
+                      </span>
+                      <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-amber-600">
+                        KRW
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                  <span className="text-xs text-slate-500">수수료량 / 수수료금액</span>
+                  <div className="mt-2 grid gap-2 text-left">
+                    <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
+                      <span className="text-[1.8rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+                        {formatUsdtValue(tradeSummary.totalFeeAmount)}
+                      </span>
+                      <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-emerald-600">
+                        USDT
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
+                      <span className="text-[1.8rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                        {formatKrwValue(tradeSummary.totalFeeAmountKRW)}
+                      </span>
+                      <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-amber-600">
+                        KRW
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
         <section className="console-panel overflow-hidden rounded-[30px]">
           <div className="border-b border-slate-200/80 px-6 py-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2423,11 +2467,21 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           )}
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 text-right align-top font-medium tabular-nums text-slate-950">
-                          <div className="text-base font-semibold tracking-[-0.02em] text-slate-950">
-                            {formatKrw(order.krwAmount)}
+                          <div className="flex justify-end gap-2">
+                            <span className="text-[1.15rem] font-bold tracking-[-0.03em] text-slate-950">
+                              {formatKrwValue(order.krwAmount)}
+                            </span>
+                            <span className="console-mono pt-1 text-[11px] uppercase tracking-[0.14em] text-amber-600">
+                              KRW
+                            </span>
                           </div>
-                          <div className="mt-1 text-xs font-medium text-slate-500">
-                            {formatUsdt(order.usdtAmount)}
+                          <div className="mt-1.5 flex justify-end gap-2">
+                            <span className="text-[13px] font-semibold tracking-[-0.01em] text-slate-500">
+                              {formatUsdtValue(order.usdtAmount)}
+                            </span>
+                            <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                              USDT
+                            </span>
                           </div>
                         </td>
                         <td className="w-[228px] border-b border-slate-100 px-4 py-4 align-top">
