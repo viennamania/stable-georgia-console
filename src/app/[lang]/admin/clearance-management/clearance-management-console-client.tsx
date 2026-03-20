@@ -557,8 +557,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           String(item.storeName || "").trim().toLowerCase(),
           String(item.companyName || "").trim().toLowerCase(),
         ].some((value) => value.includes(normalizedQuery));
-      })
-      .slice(0, 16);
+      });
   }, [storeSearchQuery, stores]);
 
   const currentOrderPage = Math.max(1, filters.page);

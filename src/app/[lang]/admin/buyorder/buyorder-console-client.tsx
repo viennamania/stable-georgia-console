@@ -1866,7 +1866,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       return leftSelected ? -1 : 1;
     });
 
-    return results.slice(0, 16);
+    return results;
   }, [draftFilters.storecode, storeSearchQuery, stores]);
   const selectedStoreSummary = useMemo(() => {
     if (!filters.storecode) {

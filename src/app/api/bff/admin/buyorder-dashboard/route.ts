@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRemoteBackendBaseUrl, getRemoteJson, postRemoteJson } from "@/lib/server/remote-backend";
+import { fetchAllStoresForBalance } from "@/lib/server/store-list";
 
 export const runtime = "nodejs";
 
@@ -72,9 +73,9 @@ export async function POST(request: NextRequest) {
       searchBuyer: normalizeString(signedOrdersBody.searchBuyer),
       searchOrderStatusCompleted: Boolean(signedOrdersBody.searchOrderStatusCompleted),
     }),
-    postRemoteJson("/api/store/getAllStoresForBalance", {
+    fetchAllStoresForBalance({
       limit: storesLimit,
-      page: storesPage,
+      startPage: storesPage,
     }),
     postRemoteJson("/api/bankTransfer/getAll", {
       limit: unmatchedLimit,
