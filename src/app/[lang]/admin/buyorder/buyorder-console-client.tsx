@@ -1,7 +1,6 @@
 "use client";
 
 import * as Ably from "ably";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConnectButton, useActiveAccount } from "thirdweb/react";
 import { createWallet, inAppWallet } from "thirdweb/wallets";
@@ -1407,11 +1406,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     );
   }, [draftFilters.storecode, filters.storecode, selectedStoreSummary, stores]);
 
-  const remoteAdminUrl = useMemo(() => {
-    const baseUrl = data?.remoteBackendBaseUrl || "https://www.stable.makeup";
-    return `${baseUrl}/${lang}/admin/buyorder`;
-  }, [data?.remoteBackendBaseUrl, lang]);
-
   const isSignedIn = Boolean(activeAccount);
   const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
   const fieldClassName =
@@ -1442,11 +1436,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       accent: "bg-violet-500",
     },
   ];
-  const selectedScopeLabel = selectedStoreSummary
-    ? (selectedStoreSummary as any).storeName
-      || (selectedStoreSummary as any).companyName
-      || "Selected store"
-    : "전체 가맹점 범위";
   const syncStatusLabel = loading
     ? "Loading dashboard"
     : connectionState === "connected"
@@ -1566,36 +1555,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   <div className="max-w-4xl space-y-3">
                     <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
                       Stable Georgia
-                      <br />
-                      Buyorder Read Ops
                     </h1>
-                    <p className="max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">
-                      원격 관리자 API는 로컬 BFF가 흡수하고, 브라우저는 관리자 지갑 서명만 담당합니다.
-                      이 콘솔은 읽기와 추적 중심으로 설계된 운영 화면입니다.
-                    </p>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="console-dark-card rounded-[24px] p-4">
-                      <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                        Remote backend
-                      </div>
-                      <div className="mt-3 break-all text-sm font-medium leading-6 text-white/95">
-                        {data?.remoteBackendBaseUrl || "https://www.stable.makeup"}
-                      </div>
-                      <div className="mt-2 text-xs text-slate-400">BFF proxied target</div>
-                    </div>
-
-                    <div className="console-dark-card rounded-[24px] p-4">
-                      <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                        Current scope
-                      </div>
-                      <div className="mt-3 text-lg font-semibold text-white">
-                        {filters.storecode || "admin"}
-                      </div>
-                      <div className="mt-2 text-xs leading-6 text-slate-400">{selectedScopeLabel}</div>
-                    </div>
-
+                  <div className="max-w-xl">
                     <div className="console-dark-card rounded-[24px] p-4">
                       <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
                         Last sync
@@ -1706,22 +1669,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         ? "Signed mode active"
                         : "Summary-only mode until a wallet is connected"}
                     </span>
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
-                  <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                    Remote admin handoff
-                  </div>
-                  <div className="mt-2 break-all text-sm leading-6 text-white/90">{remoteAdminUrl}</div>
-                  <div className="mt-4">
-                    <Link
-                      href={remoteAdminUrl}
-                      target="_blank"
-                      className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-slate-100"
-                    >
-                      Open original admin
-                    </Link>
                   </div>
                 </div>
               </div>
@@ -2061,98 +2008,93 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </aside>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-          <article className="console-panel rounded-[30px] border border-slate-200 px-5 py-5 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-inner">
-                  <span className="text-lg font-semibold">P2P</span>
+        <section className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+          <article className="console-panel rounded-[26px] border border-slate-200 px-4 py-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
+                  P2P
                 </div>
-                <div className="flex flex-col justify-center">
-                  <span className="text-[11px] text-slate-500">P2P 거래수(건)</span>
-                  <span className="text-2xl font-semibold text-slate-900">
+                <div className="min-w-0">
+                  <div className="text-[11px] text-slate-500">P2P 거래수(건)</div>
+                  <div className="text-[2rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
                     {NUMBER_FORMATTER.format(tradeSummary.totalCount)}
-                  </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid gap-2 text-left">
-                <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
-                  <span className="text-[2rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {formatUsdtValue(tradeSummary.totalUsdtAmount)}
-                  </span>
-                  <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-emerald-600">
-                    USDT
-                  </span>
+              <div className="grid min-w-0 gap-2 sm:min-w-[320px]">
+                <div className="flex items-end justify-between gap-3 border-b border-slate-100 pb-2">
+                  <span className="text-xs text-slate-500">거래량</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[1.9rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+                      {formatUsdtValue(tradeSummary.totalUsdtAmount)}
+                    </span>
+                    <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-emerald-600">USDT</span>
+                  </div>
                 </div>
-                <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
-                  <span className="text-[2rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {formatKrwValue(tradeSummary.totalKrwAmount)}
-                  </span>
-                  <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-amber-600">
-                    KRW
-                  </span>
+                <div className="flex items-end justify-between gap-3">
+                  <span className="text-xs text-slate-500">거래금액</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[1.9rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                      {formatKrwValue(tradeSummary.totalKrwAmount)}
+                    </span>
+                    <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-amber-600">KRW</span>
+                  </div>
                 </div>
-                <span className="pt-1 text-xs text-slate-500">거래량 / 거래금액</span>
               </div>
             </div>
           </article>
 
-          <article className="console-panel rounded-[30px] border border-slate-200 px-5 py-5 shadow-sm">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-inner">
-                  <span className="text-lg font-semibold">결제</span>
-                </div>
-                <div className="flex flex-col justify-center">
-                  <span className="text-[11px] text-slate-500">가맹점 결제수(건)</span>
-                  <span className="text-2xl font-semibold text-slate-900">
-                    {NUMBER_FORMATTER.format(tradeSummary.totalSettlementCount)}
-                  </span>
+          <article className="console-panel rounded-[26px] border border-slate-200 px-4 py-4 shadow-sm">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sm font-semibold text-sky-700">
+                    결제
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] text-slate-500">가맹점 결제수(건)</div>
+                    <div className="text-[2rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
+                      {NUMBER_FORMATTER.format(tradeSummary.totalSettlementCount)}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3">
-                  <span className="text-xs text-slate-500">결제량 / 결제금액</span>
-                  <div className="mt-2 grid gap-2 text-left">
-                    <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
-                      <span className="text-[1.8rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
+                  <div className="text-[11px] text-slate-500">결제량 / 결제금액</div>
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-end justify-between gap-3">
+                      <span className="text-[1.55rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
                         {formatUsdtValue(tradeSummary.totalSettlementAmount)}
                       </span>
-                      <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-emerald-600">
-                        USDT
-                      </span>
+                      <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-emerald-600">USDT</span>
                     </div>
-                    <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
-                      <span className="text-[1.8rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                    <div className="flex items-end justify-between gap-3">
+                      <span className="text-[1.55rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
                         {formatKrwValue(tradeSummary.totalSettlementAmountKRW)}
                       </span>
-                      <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-amber-600">
-                        KRW
-                      </span>
+                      <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-amber-600">KRW</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3">
-                  <span className="text-xs text-slate-500">수수료량 / 수수료금액</span>
-                  <div className="mt-2 grid gap-2 text-left">
-                    <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
-                      <span className="text-[1.8rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
+                <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
+                  <div className="text-[11px] text-slate-500">수수료량 / 수수료금액</div>
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-end justify-between gap-3">
+                      <span className="text-[1.55rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
                         {formatUsdtValue(tradeSummary.totalFeeAmount)}
                       </span>
-                      <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-emerald-600">
-                        USDT
-                      </span>
+                      <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-emerald-600">USDT</span>
                     </div>
-                    <div className="grid grid-cols-[1fr_auto] items-end gap-x-3">
-                      <span className="text-[1.8rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
+                    <div className="flex items-end justify-between gap-3">
+                      <span className="text-[1.55rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
                         {formatKrwValue(tradeSummary.totalFeeAmountKRW)}
                       </span>
-                      <span className="console-mono text-[12px] uppercase tracking-[0.16em] text-amber-600">
-                        KRW
-                      </span>
+                      <span className="console-mono text-[11px] uppercase tracking-[0.16em] text-amber-600">KRW</span>
                     </div>
                   </div>
                 </div>
