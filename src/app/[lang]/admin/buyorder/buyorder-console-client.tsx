@@ -132,6 +132,15 @@ type DashboardResult = {
     totalAgentFeeAmount: number;
     totalAgentFeeAmountKRW: number;
   };
+  banktransferTodaySummary: {
+    dateKst: string;
+    depositedAmount: number;
+    withdrawnAmount: number;
+    depositedCount: number;
+    withdrawnCount: number;
+    totalCount: number;
+    updatedAt: string;
+  };
   orders: BuyOrder[];
   orderTotalCount: number;
   processingBuyOrders: BuyOrder[];
@@ -155,6 +164,16 @@ const EMPTY_TRADE_SUMMARY: DashboardResult["tradeSummary"] = {
   totalFeeAmountKRW: 0,
   totalAgentFeeAmount: 0,
   totalAgentFeeAmountKRW: 0,
+};
+
+const EMPTY_BANKTRANSFER_TODAY_SUMMARY: DashboardResult["banktransferTodaySummary"] = {
+  dateKst: "",
+  depositedAmount: 0,
+  withdrawnAmount: 0,
+  depositedCount: 0,
+  withdrawnCount: 0,
+  totalCount: 0,
+  updatedAt: "",
 };
 
 type FilterState = {
@@ -194,6 +213,8 @@ const USDT_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 3,
 });
 
+const COUNTDOWN_TICK_MS = 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 const createInputDate = (daysOffset = 0) => {
@@ -214,6 +235,33 @@ const createDefaultFilters = (): FilterState => ({
   searchOrderStatusCancelled: false,
   searchOrderStatusCompleted: false,
 });
+
+const getKstDateLabel = (referenceDate: Date) => {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(referenceDate);
+};
+
+const getRemainingKstMs = (referenceMs: number) => {
+  const shifted = new Date(referenceMs + KST_OFFSET_MS);
+  const year = shifted.getUTCFullYear();
+  const month = shifted.getUTCMonth();
+  const day = shifted.getUTCDate();
+  const nextMidnightShiftedMs = Date.UTC(year, month, day + 1, 0, 0, 0, 0);
+  return Math.max(0, nextMidnightShiftedMs - shifted.getTime());
+};
+
+const formatCountdownHms = (totalMs: number) => {
+  const totalSec = Math.max(0, Math.floor(totalMs / 1000));
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
 
 const areFiltersEqual = (left: FilterState, right: FilterState) => {
   return (
@@ -568,6 +616,317 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
   };
 };
 
+const hasSettlementCompleted = (order: BuyOrder) => {
+  const rawOrder = order as Record<string, unknown>;
+
+  if (order.status === "paymentSettled") {
+    return true;
+  }
+
+  const booleanKeys = [
+    "paymentSettled",
+    "settled",
+    "isSettled",
+    "settlementCompleted",
+    "isSettlementCompleted",
+    "settlementConfirmed",
+    "isSettlementConfirmed",
+  ];
+
+  for (const key of booleanKeys) {
+    if (rawOrder[key] === true) {
+      return true;
+    }
+  }
+
+  const statusKeys = [
+    "settlementStatus",
+    "paymentSettlementStatus",
+    "settlementState",
+    "paymentSettlementState",
+  ];
+
+  for (const key of statusKeys) {
+    const value = String(rawOrder[key] || "").trim().toLowerCase();
+    if (["settled", "completed", "complete", "confirmed", "done", "success", "paymentsettled"].includes(value)) {
+      return true;
+    }
+  }
+
+  const timestampKeys = [
+    "paymentSettledAt",
+    "settledAt",
+    "settlementAt",
+    "settlementCompletedAt",
+    "settlementConfirmedAt",
+  ];
+
+  for (const key of timestampKeys) {
+    if (String(rawOrder[key] || "").trim()) {
+      return true;
+    }
+  }
+
+  const nestedKeys = ["settlement", "paymentSettlement", "settlementInfo"];
+
+  for (const key of nestedKeys) {
+    const candidate = rawOrder[key];
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+
+    const nested = candidate as Record<string, unknown>;
+    const statusValue = String(nested.status || nested.state || "").trim().toLowerCase();
+    if (["settled", "completed", "complete", "confirmed", "done", "success", "paymentsettled"].includes(statusValue)) {
+      return true;
+    }
+
+    if (
+      String(nested.settledAt || nested.completedAt || nested.confirmedAt || nested.settlementAt || "").trim()
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const getSettlementActorLabel = (order: BuyOrder) => {
+  const rawOrder = order as Record<string, unknown>;
+  const objectCandidates = [
+    rawOrder.paymentSettledBy,
+    rawOrder.settledBy,
+    rawOrder.settlementConfirmedBy,
+    rawOrder.settlementProcessedBy,
+    rawOrder.paymentSettlementBy,
+    rawOrder.settlement?.["processedBy" as keyof typeof rawOrder.settlement],
+    rawOrder.paymentSettlement?.["processedBy" as keyof typeof rawOrder.paymentSettlement],
+  ];
+
+  for (const candidate of objectCandidates) {
+    const label = getActorDisplayLabel(candidate);
+    if (label) {
+      return label;
+    }
+  }
+
+  const stringKeys = [
+    "paymentSettledByName",
+    "settledByName",
+    "settlementConfirmedByName",
+    "settlementProcessedByName",
+    "paymentSettlementByName",
+    "paymentSettledByWalletAddress",
+    "settledByWalletAddress",
+    "settlementProcessedByWalletAddress",
+  ];
+
+  for (const key of stringKeys) {
+    const next = String(rawOrder[key] || "").trim();
+    if (next) {
+      return key.toLowerCase().includes("wallet") ? shortAddress(next) : next;
+    }
+  }
+
+  const nestedCandidates = [
+    rawOrder.settlement,
+    rawOrder.paymentSettlement,
+    rawOrder.settlementInfo,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+
+    const nested = candidate as Record<string, unknown>;
+    const label =
+      getActorDisplayLabel(nested.processedBy)
+      || getActorDisplayLabel(nested.confirmedBy)
+      || getActorDisplayLabel(nested.settledBy)
+      || String(nested.processedByName || nested.confirmedByName || nested.settledByName || "").trim();
+
+    if (label) {
+      return label;
+    }
+  }
+
+  return "";
+};
+
+const getSettlementTimestamp = (order: BuyOrder) => {
+  const rawOrder = order as Record<string, unknown>;
+  const directKeys = [
+    "paymentSettledAt",
+    "settledAt",
+    "settlementAt",
+    "settlementCompletedAt",
+    "settlementConfirmedAt",
+  ];
+
+  for (const key of directKeys) {
+    const next = String(rawOrder[key] || "").trim();
+    if (next) {
+      return next;
+    }
+  }
+
+  const nestedCandidates = [
+    rawOrder.settlement,
+    rawOrder.paymentSettlement,
+    rawOrder.settlementInfo,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+
+    const nested = candidate as Record<string, unknown>;
+    const next = String(
+      nested.settledAt
+      || nested.completedAt
+      || nested.confirmedAt
+      || nested.settlementAt
+      || "",
+    ).trim();
+
+    if (next) {
+      return next;
+    }
+  }
+
+  return "";
+};
+
+const getSettlementStateLabel = (order: BuyOrder) => {
+  const rawOrder = order as Record<string, unknown>;
+  const statusKeys = [
+    "settlementStatus",
+    "paymentSettlementStatus",
+    "settlementState",
+    "paymentSettlementState",
+  ];
+
+  for (const key of statusKeys) {
+    const value = String(rawOrder[key] || "").trim().toLowerCase();
+    if (!value) {
+      continue;
+    }
+
+    if (["settled", "completed", "complete", "confirmed", "done", "success", "paymentsettled"].includes(value)) {
+      return "결제완료";
+    }
+    if (["pending", "waiting", "queued"].includes(value)) {
+      return "대기중";
+    }
+    if (["processing", "progress", "inprogress", "running"].includes(value)) {
+      return "처리중";
+    }
+    if (["failed", "error", "rejected"].includes(value)) {
+      return "실패";
+    }
+    if (["cancelled", "canceled"].includes(value)) {
+      return "취소";
+    }
+  }
+
+  const nestedCandidates = [
+    rawOrder.settlement,
+    rawOrder.paymentSettlement,
+    rawOrder.settlementInfo,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+
+    const nested = candidate as Record<string, unknown>;
+    const value = String(nested.status || nested.state || "").trim().toLowerCase();
+    if (!value) {
+      continue;
+    }
+
+    if (["settled", "completed", "complete", "confirmed", "done", "success", "paymentsettled"].includes(value)) {
+      return "결제완료";
+    }
+    if (["pending", "waiting", "queued"].includes(value)) {
+      return "대기중";
+    }
+    if (["processing", "progress", "inprogress", "running"].includes(value)) {
+      return "처리중";
+    }
+    if (["failed", "error", "rejected"].includes(value)) {
+      return "실패";
+    }
+    if (["cancelled", "canceled"].includes(value)) {
+      return "취소";
+    }
+  }
+
+  return "";
+};
+
+const getSettlementMeta = (order: BuyOrder) => {
+  const actor = getSettlementActorLabel(order);
+  const timestamp = getSettlementTimestamp(order);
+  const stateLabel = getSettlementStateLabel(order);
+  const completed = hasSettlementCompleted(order);
+
+  if (completed) {
+    return {
+      label: "결제완료",
+      className: "bg-sky-100 text-sky-700",
+      detail: timestamp ? formatDateTime(timestamp) : stateLabel || "가맹점 결제 완료",
+      actor,
+    };
+  }
+
+  if (stateLabel === "처리중") {
+    return {
+      label: "처리중",
+      className: "bg-violet-100 text-violet-700",
+      detail: timestamp ? formatDateTime(timestamp) : "가맹점 결제 처리중",
+      actor,
+    };
+  }
+
+  if (stateLabel === "실패") {
+    return {
+      label: "실패",
+      className: "bg-rose-100 text-rose-700",
+      detail: timestamp ? formatDateTime(timestamp) : "가맹점 결제 실패",
+      actor,
+    };
+  }
+
+  if (stateLabel === "취소") {
+    return {
+      label: "취소",
+      className: "bg-slate-100 text-slate-700",
+      detail: timestamp ? formatDateTime(timestamp) : "가맹점 결제 취소",
+      actor,
+    };
+  }
+
+  if (order.status === "paymentConfirmed" || stateLabel === "대기중") {
+    return {
+      label: "대기중",
+      className: "bg-slate-100 text-slate-700",
+      detail: timestamp ? formatDateTime(timestamp) : "가맹점 결제 대기",
+      actor,
+    };
+  }
+
+  return {
+    label: "-",
+    className: "bg-slate-100 text-slate-500",
+    detail: "",
+    actor,
+  };
+};
+
 const getBuyerLabel = (order: BuyOrder) => {
   return (
     order.buyer?.nickname
@@ -675,6 +1034,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [highlightedTradeId, setHighlightedTradeId] = useState("");
   const [highlightedUnmatchedId, setHighlightedUnmatchedId] = useState("");
   const [copiedTradeId, setCopiedTradeId] = useState("");
+  const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
   const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1277,6 +1637,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   }, [loadDashboard]);
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdownNowMs(Date.now());
+    }, COUNTDOWN_TICK_MS);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (copyResetTimerRef.current) {
         clearTimeout(copyResetTimerRef.current);
@@ -1408,6 +1776,32 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
   const isSignedIn = Boolean(activeAccount);
   const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
+  const banktransferTodaySummary = data?.banktransferTodaySummary || EMPTY_BANKTRANSFER_TODAY_SUMMARY;
+  const todayDateLabelKst = useMemo(() => getKstDateLabel(new Date(countdownNowMs)), [countdownNowMs]);
+  const remainingMsToday = useMemo(() => getRemainingKstMs(countdownNowMs), [countdownNowMs]);
+  const countdownLabel = useMemo(() => formatCountdownHms(remainingMsToday), [remainingMsToday]);
+  const remainingDayRatio = useMemo(() => {
+    return Math.max(0, Math.min(100, (remainingMsToday / ONE_DAY_MS) * 100));
+  }, [remainingMsToday]);
+  const banktransferBarBaseAmount = useMemo(() => {
+    return Math.max(
+      banktransferTodaySummary.depositedAmount,
+      banktransferTodaySummary.withdrawnAmount,
+      1,
+    );
+  }, [banktransferTodaySummary.depositedAmount, banktransferTodaySummary.withdrawnAmount]);
+  const depositedRatio = useMemo(() => {
+    if (banktransferTodaySummary.depositedAmount <= 0) {
+      return 0;
+    }
+    return Math.max(12, Math.min(100, (banktransferTodaySummary.depositedAmount / banktransferBarBaseAmount) * 100));
+  }, [banktransferBarBaseAmount, banktransferTodaySummary.depositedAmount]);
+  const withdrawnRatio = useMemo(() => {
+    if (banktransferTodaySummary.withdrawnAmount <= 0) {
+      return 0;
+    }
+    return Math.max(12, Math.min(100, (banktransferTodaySummary.withdrawnAmount / banktransferBarBaseAmount) * 100));
+  }, [banktransferBarBaseAmount, banktransferTodaySummary.withdrawnAmount]);
   const fieldClassName =
     "h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100";
   const metricCards = [
@@ -1689,6 +2083,86 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               <div className="mt-2 text-right text-sm leading-6 text-slate-600">{item.caption}</div>
             </article>
           ))}
+        </section>
+
+        <section className="grid gap-3 xl:grid-cols-3">
+          <article className="overflow-hidden rounded-[28px] border border-violet-300/25 bg-[radial-gradient(circle_at_top,_rgba(129,140,248,0.26),_rgba(15,23,42,0.96)_58%)] px-5 py-4 text-white shadow-[0_16px_40px_-28px_rgba(129,140,248,0.9)]">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-violet-100/85">오늘 날짜 (KST)</div>
+            <div className="mt-2 text-[1.7rem] font-semibold tracking-[-0.05em] text-violet-50">
+              {todayDateLabelKst}
+            </div>
+            <div className="mt-4 flex items-end justify-between gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.16em] text-violet-100/70">오늘 남은 시간</div>
+                <div className="mt-1 font-mono text-[1.85rem] font-semibold leading-none tabular-nums text-violet-50">
+                  {countdownLabel}
+                </div>
+              </div>
+              <span className="inline-flex rounded-full border border-violet-200/30 bg-violet-200/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-50">
+                COUNTDOWN
+              </span>
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/15">
+              <div
+                className="h-full rounded-full bg-violet-300 transition-all duration-700"
+                style={{ width: `${remainingDayRatio}%` }}
+              />
+            </div>
+          </article>
+
+          <article className="overflow-hidden rounded-[28px] border border-emerald-400/25 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.22),_rgba(15,23,42,0.95)_60%)] px-5 py-4 text-white shadow-[0_16px_40px_-28px_rgba(16,185,129,0.75)]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-100/85">오늘 입금 (KST)</div>
+              <span className="inline-flex rounded-full border border-emerald-300/35 bg-emerald-400/18 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-50">
+                LIVE
+              </span>
+            </div>
+            <div className="mt-2 text-[2.05rem] font-semibold leading-none tracking-[-0.05em] tabular-nums text-emerald-50">
+              {formatKrwValue(banktransferTodaySummary.depositedAmount)}
+              <span className="ml-1.5 text-sm font-medium text-emerald-200/90">KRW</span>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-4 text-xs text-emerald-100/80">
+              <span>누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.depositedCount)}건</span>
+              <span>
+                {banktransferTodaySummary.updatedAt
+                  ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
+                  : "updated -"}
+              </span>
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/15">
+              <div
+                className="h-full rounded-full bg-emerald-300 transition-all duration-500"
+                style={{ width: `${depositedRatio}%` }}
+              />
+            </div>
+          </article>
+
+          <article className="overflow-hidden rounded-[28px] border border-rose-400/25 bg-[radial-gradient(circle_at_top,_rgba(244,63,94,0.2),_rgba(15,23,42,0.95)_60%)] px-5 py-4 text-white shadow-[0_16px_40px_-28px_rgba(244,63,94,0.72)]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-rose-100/85">오늘 출금 (KST)</div>
+              <span className="inline-flex rounded-full border border-rose-300/35 bg-rose-400/18 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-50">
+                LIVE
+              </span>
+            </div>
+            <div className="mt-2 text-[2.05rem] font-semibold leading-none tracking-[-0.05em] tabular-nums text-rose-50">
+              {formatKrwValue(banktransferTodaySummary.withdrawnAmount)}
+              <span className="ml-1.5 text-sm font-medium text-rose-200/90">KRW</span>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-4 text-xs text-rose-100/80">
+              <span>누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.withdrawnCount)}건</span>
+              <span>
+                {banktransferTodaySummary.updatedAt
+                  ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
+                  : "updated -"}
+              </span>
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/15">
+              <div
+                className="h-full rounded-full bg-rose-300 transition-all duration-500"
+                style={{ width: `${withdrawnRatio}%` }}
+              />
+            </div>
+          </article>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_360px]">
@@ -2236,7 +2710,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </div>
 
           <div className="overflow-x-auto px-2 pb-2">
-            <table className="min-w-[1240px] w-full border-separate border-spacing-0">
+            <table className="min-w-[1420px] w-full border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
                   <th className="border-b border-slate-200 px-4 py-3">Trade / Created</th>
@@ -2247,12 +2721,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
                   <th className="w-[228px] border-b border-slate-200 px-4 py-3">입금처리</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">USDT 전송</th>
+                  <th className="w-[208px] border-b border-slate-200 px-4 py-3">가맹점 결제</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
                       {loading ? "Loading orders..." : "No orders returned for the current filter."}
                     </td>
                   </tr>
@@ -2287,6 +2762,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isCancellingThisOrder = Boolean(cancellingTradeId && rowMatchKey === cancellingTradeId);
                     const shouldHighlightSellerBankInfo = status === "paymentRequested";
                     const transactionHash = String(order.transactionHash || "").trim();
+                    const isSettlementCompleted =
+                      status === "paymentConfirmed" && hasSettlementCompleted(order);
+                    const settlementMeta = getSettlementMeta(order);
                     const shouldShowUsdtTransferAmount = status === "paymentConfirmed";
                     const isUsdtTransferPending =
                       status === "paymentConfirmed" && (!transactionHash || transactionHash === "0x");
@@ -2334,11 +2812,18 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         </td>
                         <td className="w-[156px] border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col items-start gap-2">
-                            <span
-                              className={`inline-flex w-[108px] justify-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}
-                            >
-                              {statusMeta.label}
-                            </span>
+                            <div className="flex flex-col items-start gap-1">
+                              <span
+                                className={`inline-flex w-[108px] justify-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}
+                              >
+                                {statusMeta.label}
+                              </span>
+                              {isSettlementCompleted ? (
+                                <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">
+                                  결제완료
+                                </span>
+                              ) : null}
+                            </div>
                             {canCancelOrder ? (
                               <button
                                 type="button"
@@ -2463,8 +2948,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 text-right align-top">
                           {shouldShowUsdtTransferAmount ? (
-                            <div className="text-base font-semibold tabular-nums tracking-[-0.02em] text-slate-950">
-                              {formatUsdt(order.usdtAmount)}
+                            <div className="flex justify-end gap-2">
+                              <span className="text-[1.15rem] font-bold tracking-[-0.03em] text-emerald-600">
+                                {formatUsdtValue(order.usdtAmount)}
+                              </span>
+                              <span className="console-mono pt-1 text-[11px] uppercase tracking-[0.14em] text-emerald-600">
+                                USDT
+                              </span>
                             </div>
                           ) : null}
                           {isUsdtTransferPending ? (
@@ -2480,6 +2970,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           ) : (
                             <div className="mt-1 text-[11px] text-slate-400">-</div>
                           )}
+                        </td>
+                        <td className="w-[208px] border-b border-slate-100 px-4 py-4 align-top">
+                          <div className="flex flex-col gap-2">
+                            <span
+                              className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${settlementMeta.className}`}
+                            >
+                              {settlementMeta.label}
+                            </span>
+                            {settlementMeta.detail ? (
+                              <span className="text-xs text-slate-500">{settlementMeta.detail}</span>
+                            ) : null}
+                            {settlementMeta.actor ? (
+                              <span className="text-xs font-medium text-slate-700">
+                                처리자 {settlementMeta.actor}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );

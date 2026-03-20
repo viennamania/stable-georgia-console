@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRemoteBackendBaseUrl, postRemoteJson } from "@/lib/server/remote-backend";
+import { getRemoteBackendBaseUrl, getRemoteJson, postRemoteJson } from "@/lib/server/remote-backend";
 
 export const runtime = "nodejs";
 
@@ -85,6 +85,9 @@ export async function POST(request: NextRequest) {
       toDate: unmatchedToDate,
       storecode: unmatchedStorecode,
     }),
+    getRemoteJson("/api/realtime/banktransfer/summary", {
+      public: "1",
+    }),
   ];
 
   if (selectedStorecode) {
@@ -106,7 +109,8 @@ export async function POST(request: NextRequest) {
   const tradeSummaryResponse = results[2];
   const storesResponse = results[3];
   const unmatchedTransfersResponse = results[4];
-  const selectedStoreResponse = selectedStorecode ? results[5] : null;
+  const banktransferSummaryResponse = results[5];
+  const selectedStoreResponse = selectedStorecode ? results[6] : null;
   const signedOrdersResponse = hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
@@ -143,6 +147,15 @@ export async function POST(request: NextRequest) {
         totalFeeAmountKRW: Number(signedOrdersResult.totalFeeAmountKRW || 0),
         totalAgentFeeAmount: Number(signedOrdersResult.totalAgentFeeAmount || 0),
         totalAgentFeeAmountKRW: Number(signedOrdersResult.totalAgentFeeAmountKRW || 0),
+      },
+      banktransferTodaySummary: {
+        dateKst: String(banktransferSummaryResponse.json?.summary?.dateKst || ""),
+        depositedAmount: Number(banktransferSummaryResponse.json?.summary?.depositedAmount || 0),
+        withdrawnAmount: Number(banktransferSummaryResponse.json?.summary?.withdrawnAmount || 0),
+        depositedCount: Number(banktransferSummaryResponse.json?.summary?.depositedCount || 0),
+        withdrawnCount: Number(banktransferSummaryResponse.json?.summary?.withdrawnCount || 0),
+        totalCount: Number(banktransferSummaryResponse.json?.summary?.totalCount || 0),
+        updatedAt: String(banktransferSummaryResponse.json?.summary?.updatedAt || ""),
       },
       orders: signedOrdersResponse?.json?.result?.orders || [],
       orderTotalCount: signedOrdersResponse?.json?.result?.totalCount || 0,
