@@ -2858,11 +2858,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
                   <th className="border-b border-slate-200 px-4 py-3">Trade / Created</th>
                   <th className="w-[156px] border-b border-slate-200 px-4 py-3">Status</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Store</th>
+                  <th className="w-[196px] border-b border-slate-200 px-4 py-3">Store</th>
                   <th className="border-b border-slate-200 px-4 py-3">Buyer</th>
                   <th className="border-b border-slate-200 px-4 py-3">Seller</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
-                  <th className="w-[228px] border-b border-slate-200 px-4 py-3">입금처리</th>
+                  <th className="w-[208px] border-b border-slate-200 px-4 py-3">입금처리</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <span>USDT 전송</span>
@@ -2940,7 +2940,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               : "bg-slate-50/60"
                         }`}
                       >
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="w-[196px] border-b border-slate-100 px-4 py-4 align-top">
                           {tradeId ? (
                             <button
                               type="button"
@@ -3070,7 +3070,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             </span>
                           </div>
                         </td>
-                        <td className="w-[228px] border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="w-[208px] border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col gap-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <span
