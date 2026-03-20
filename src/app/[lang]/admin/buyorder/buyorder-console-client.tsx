@@ -2115,20 +2115,20 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   </div>
                 </div>
 
-                <div className="console-dark-card rounded-[28px] p-5">
-                  <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                <div className="console-dark-card rounded-[28px] p-4">
+                  <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
                     Live command deck
                   </div>
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-3 grid grid-cols-2 gap-2.5">
                     {liveQueueCards.map((item) => (
                       <div
                         key={item.label}
-                        className="rounded-[20px] border border-white/10 bg-white/6 px-4 py-4"
+                        className="rounded-[18px] border border-white/10 bg-white/6 px-3 py-3"
                       >
-                        <div className="console-mono text-[11px] uppercase tracking-[0.14em] text-slate-400">
+                        <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
                           {item.label}
                         </div>
-                        <div className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-white">
+                        <div className="console-display mt-1.5 text-[1.6rem] font-semibold tracking-[-0.05em] text-white">
                           {item.value}
                         </div>
                       </div>
@@ -2534,18 +2534,18 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
         <section className="grid gap-3 xl:grid-cols-[0.92fr_1.04fr_1.04fr]">
           <article className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(248,250,252,0.96),_rgba(241,245,249,0.92))] px-4 py-3.5 text-slate-950 shadow-sm">
-            <div className="console-mono text-[9px] uppercase tracking-[0.16em] text-slate-500">오늘 날짜 (KST)</div>
-            <div className="mt-1.5 text-[1.3rem] font-semibold tracking-[-0.05em] text-slate-950">
+            <div className="console-mono text-[8px] uppercase tracking-[0.16em] text-slate-500">오늘 날짜 (KST)</div>
+            <div className="mt-1.5 text-[1.15rem] font-semibold tracking-[-0.05em] text-slate-950">
               {todayDateLabelKst}
             </div>
             <div className="mt-3.5 flex items-end justify-between gap-4">
               <div>
-                <div className="text-[9px] uppercase tracking-[0.14em] text-slate-500">오늘 남은 시간</div>
-                <div className="mt-1 font-mono text-[1.45rem] font-semibold leading-none tabular-nums text-slate-950">
+                <div className="text-[8px] uppercase tracking-[0.14em] text-slate-500">오늘 남은 시간</div>
+                <div className="mt-1 font-mono text-[1.25rem] font-semibold leading-none tabular-nums text-slate-950">
                   {countdownLabel}
                 </div>
               </div>
-              <span className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              <span className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Count
               </span>
             </div>
@@ -2560,23 +2560,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           <article className="overflow-hidden rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,_rgba(236,253,245,0.92),_rgba(255,255,255,0.98))] px-4 py-3.5 text-slate-950 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="console-mono text-[9px] uppercase tracking-[0.16em] text-emerald-700">오늘 입금 (KST)</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">
+                <div className="console-mono text-[8px] uppercase tracking-[0.16em] text-emerald-700">오늘 입금 (KST)</div>
+                <div className="mt-0.5 text-[10px] text-slate-500">
                   누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.depositedCount)}건
                 </div>
               </div>
-              <span className="inline-flex rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+              <span className="inline-flex rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
                 Live
               </span>
             </div>
             <div className="mt-2.5 text-right">
               <div className="flex justify-end gap-2">
-                <span className="text-[1.7rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-emerald-700">
+                <span className="text-[1.45rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-emerald-700">
                   {formatKrwValue(banktransferTodaySummary.depositedAmount)}
                 </span>
-                <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-700">KRW</span>
+                <span className="console-mono pt-0.5 text-[9px] uppercase tracking-[0.14em] text-emerald-700">KRW</span>
               </div>
-              <div className="mt-1.5 text-[11px] text-slate-500">
+              <div className="mt-1.5 text-[10px] text-slate-500">
                 {banktransferTodaySummary.updatedAt
                   ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
                   : "updated -"}
@@ -2593,23 +2593,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           <article className="overflow-hidden rounded-[24px] border border-rose-200 bg-[linear-gradient(180deg,_rgba(255,241,242,0.9),_rgba(255,255,255,0.98))] px-4 py-3.5 text-slate-950 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="console-mono text-[9px] uppercase tracking-[0.16em] text-rose-700">오늘 출금 (KST)</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">
+                <div className="console-mono text-[8px] uppercase tracking-[0.16em] text-rose-700">오늘 출금 (KST)</div>
+                <div className="mt-0.5 text-[10px] text-slate-500">
                   누적 {NUMBER_FORMATTER.format(banktransferTodaySummary.withdrawnCount)}건
                 </div>
               </div>
-              <span className="inline-flex rounded-full border border-rose-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-rose-700">
+              <span className="inline-flex rounded-full border border-rose-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-rose-700">
                 Live
               </span>
             </div>
             <div className="mt-2.5 text-right">
               <div className="flex justify-end gap-2">
-                <span className="text-[1.7rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-rose-700">
+                <span className="text-[1.45rem] font-bold leading-none tracking-[-0.05em] tabular-nums text-rose-700">
                   {formatKrwValue(banktransferTodaySummary.withdrawnAmount)}
                 </span>
-                <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-rose-700">KRW</span>
+                <span className="console-mono pt-0.5 text-[9px] uppercase tracking-[0.14em] text-rose-700">KRW</span>
               </div>
-              <div className="mt-1.5 text-[11px] text-slate-500">
+              <div className="mt-1.5 text-[10px] text-slate-500">
                 {banktransferTodaySummary.updatedAt
                   ? `updated ${formatTimeAgo(banktransferTodaySummary.updatedAt)}`
                   : "updated -"}
@@ -2724,7 +2724,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           <div className="border-b border-slate-200/80 px-6 py-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                <h2 className="console-display text-2xl font-semibold tracking-[-0.05em] text-slate-950">
                   미신청입금 live
                 </h2>
               </div>
@@ -2813,8 +2813,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           <div className="border-b border-slate-200/80 px-6 py-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                  Buyorder stream
+                <h2 className="console-display text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                  구매주문
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
