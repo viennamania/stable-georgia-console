@@ -24,6 +24,24 @@ type BankInfo = {
   realAccountNumber?: string;
 };
 
+type SettlementInfo = {
+  txid?: string;
+  status?: string;
+  createdAt?: string;
+  settledAt?: string;
+  settlementAt?: string;
+  settlementAmount?: number | string;
+  settlementAmountKRW?: number | string;
+  settlementWalletAddress?: string;
+  settlementWalletBalance?: number | string;
+  feeAmount?: number | string;
+  feeAmountKRW?: number | string;
+  feeWalletAddress?: string;
+  agentFeeAmount?: number | string;
+  agentFeeAmountKRW?: number | string;
+  agentFeeWalletAddress?: string;
+};
+
 type BuyOrder = {
   _id?: string;
   tradeId?: string;
@@ -41,6 +59,7 @@ type BuyOrder = {
   matchedByAdmin?: boolean | null;
   userType?: string;
   paymentMethod?: string;
+  settlement?: SettlementInfo | null;
   escrowWallet?: {
     transactionHash?: string;
   } | null;
@@ -325,6 +344,10 @@ const shortAddress = (value?: string | null) => {
     return safe;
   }
   return `${safe.slice(0, 6)}...${safe.slice(-4)}`;
+};
+
+const getOrderMatchKey = (order?: BuyOrder | null) => {
+  return String(order?.tradeId || order?._id || "").trim();
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -927,6 +950,33 @@ const getSettlementMeta = (order: BuyOrder) => {
   };
 };
 
+const getSettlementInfo = (order: BuyOrder): SettlementInfo | null => {
+  const candidates = [
+    order.settlement,
+    (order as Record<string, unknown>).paymentSettlement,
+    (order as Record<string, unknown>).settlementInfo,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+    return candidate as SettlementInfo;
+  }
+
+  return null;
+};
+
+const getSettlementTxHash = (order: BuyOrder) => {
+  const settlement = getSettlementInfo(order);
+  const txid = String(settlement?.txid || "").trim();
+  return txid && txid !== "0x" ? txid : "";
+};
+
+const getSettlementBscscanUrl = (txHash: string) => {
+  return `https://bscscan.com/tx/${txHash}`;
+};
+
 const getBuyerLabel = (order: BuyOrder) => {
   return (
     order.buyer?.nickname
@@ -1061,6 +1111,18 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
     return (Number(targetConfirmOrder.krwAmount) || 0) === selectedDepositTotal;
   }, [selectedDepositIds.length, selectedDepositTotal, targetConfirmOrder]);
+  const currentConfirmOrderStatus = String(targetConfirmOrder?.status || "").trim();
+  const currentCancelOrderStatus = String(targetCancelOrder?.status || "").trim();
+  const confirmOrderStatusMeta = statusMetaMap[currentConfirmOrderStatus] || {
+    label: currentConfirmOrderStatus || "-",
+    className: "border border-slate-200 bg-slate-100 text-slate-700",
+  };
+  const cancelOrderStatusMeta = statusMetaMap[currentCancelOrderStatus] || {
+    label: currentCancelOrderStatus || "-",
+    className: "border border-slate-200 bg-slate-100 text-slate-700",
+  };
+  const canSubmitConfirmModal = currentConfirmOrderStatus === "paymentRequested";
+  const canSubmitCancelModal = currentCancelOrderStatus === "accepted" || currentCancelOrderStatus === "paymentRequested";
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -1327,6 +1389,50 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (!data || !targetConfirmOrder) {
+      return;
+    }
+
+    const matchKey = getOrderMatchKey(targetConfirmOrder);
+    if (!matchKey) {
+      return;
+    }
+
+    const candidates = [
+      ...(data.orders || []),
+      ...(data.processingBuyOrders || []),
+      ...(data.processingClearanceOrders || []),
+    ];
+    const nextOrder = candidates.find((order) => getOrderMatchKey(order) === matchKey);
+
+    if (nextOrder && nextOrder !== targetConfirmOrder) {
+      setTargetConfirmOrder(nextOrder);
+    }
+  }, [data, targetConfirmOrder]);
+
+  useEffect(() => {
+    if (!data || !targetCancelOrder) {
+      return;
+    }
+
+    const matchKey = getOrderMatchKey(targetCancelOrder);
+    if (!matchKey) {
+      return;
+    }
+
+    const candidates = [
+      ...(data.orders || []),
+      ...(data.processingBuyOrders || []),
+      ...(data.processingClearanceOrders || []),
+    ];
+    const nextOrder = candidates.find((order) => getOrderMatchKey(order) === matchKey);
+
+    if (nextOrder && nextOrder !== targetCancelOrder) {
+      setTargetCancelOrder(nextOrder);
+    }
+  }, [data, targetCancelOrder]);
+
   const fetchDepositsForOrder = useCallback(async (order: BuyOrder | null) => {
     if (!order) {
       return;
@@ -1422,7 +1528,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       return;
     }
 
-    const matchKey = String(targetConfirmOrder.tradeId || targetConfirmOrder._id || "").trim();
+    if (String(targetConfirmOrder.status || "").trim() !== "paymentRequested") {
+      setDepositModalError("주문 상태가 변경되어 더 이상 완료 처리할 수 없습니다.");
+      return;
+    }
+
+    const matchKey = getOrderMatchKey(targetConfirmOrder);
     const storecode = String(targetConfirmOrder.storecode || targetConfirmOrder.store?.storecode || "").trim();
     const orderId = String(targetConfirmOrder._id || "").trim();
 
@@ -1541,7 +1652,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       return;
     }
 
-    const matchKey = String(targetCancelOrder.tradeId || targetCancelOrder._id || "").trim();
+    const currentStatus = String(targetCancelOrder.status || "").trim();
+    if (currentStatus !== "accepted" && currentStatus !== "paymentRequested") {
+      setCancelModalError("주문 상태가 변경되어 더 이상 취소할 수 없습니다.");
+      return;
+    }
+
+    const matchKey = getOrderMatchKey(targetCancelOrder);
     const orderId = String(targetCancelOrder._id || "").trim();
     const walletAddress = String(activeAccount.address || "").trim().toLowerCase();
     const hasEscrowWallet = Boolean(String(targetCancelOrder.escrowWallet?.transactionHash || "").trim());
@@ -2734,7 +2851,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
                   <th className="w-[228px] border-b border-slate-200 px-4 py-3">입금처리</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">USDT 전송</th>
-                  <th className="w-[208px] border-b border-slate-200 px-4 py-3">가맹점 결제</th>
+                  <th className="w-[300px] border-b border-slate-200 px-4 py-3">가맹점 결제</th>
                 </tr>
               </thead>
               <tbody>
@@ -2778,6 +2895,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isSettlementCompleted =
                       status === "paymentConfirmed" && hasSettlementCompleted(order);
                     const settlementMeta = getSettlementMeta(order);
+                    const settlement = getSettlementInfo(order);
+                    const settlementTxHash = getSettlementTxHash(order);
                     const shouldShowUsdtTransferAmount = status === "paymentConfirmed";
                     const isUsdtTransferPending =
                       status === "paymentConfirmed" && (!transactionHash || transactionHash === "0x");
@@ -2846,8 +2965,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                 disabled={isCancellingThisOrder || cancelModalSubmitting}
                                 className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
                                   isCancellingThisOrder || cancelModalSubmitting
-                                    ? "cursor-not-allowed border border-rose-200 bg-rose-100 text-rose-700 opacity-70"
-                                    : "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                    ? "cursor-not-allowed border border-rose-200 bg-rose-50 text-rose-500 opacity-60"
+                                    : "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
                                 }`}
                               >
                                 {isCancellingThisOrder ? "거래취소중..." : "거래취소하기"}
@@ -2939,10 +3058,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                     void openDepositModalForOrder(order);
                                   }}
                                   disabled={isConfirmingThisOrder || depositModalSubmitting}
-                                  className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
+                                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
                                     isConfirmingThisOrder || depositModalSubmitting
-                                      ? "cursor-not-allowed border border-emerald-200 bg-emerald-100 text-emerald-700 opacity-70"
-                                      : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                      ? "cursor-not-allowed border border-emerald-500 bg-emerald-400 text-white opacity-60"
+                                      : "border border-emerald-600 bg-emerald-600 text-white shadow-[0_10px_24px_-12px_rgba(5,150,105,0.95)] hover:border-emerald-500 hover:bg-emerald-500"
                                   }`}
                                 >
                                   {isConfirmingThisOrder ? "거래완료중..." : "거래완료하기"}
@@ -2984,7 +3103,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             <div className="mt-1 text-[11px] text-slate-400">-</div>
                           )}
                         </td>
-                        <td className="w-[208px] border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="w-[300px] border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col gap-2">
                             <span
                               className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${settlementMeta.className}`}
@@ -2998,6 +3117,60 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               <span className="text-xs font-medium text-slate-700">
                                 처리자 {settlementMeta.actor}
                               </span>
+                            ) : null}
+                            {settlement ? (
+                              <div className="mt-1 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3">
+                                <div className="space-y-2">
+                                  <div className="flex items-end justify-between gap-3">
+                                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                                      정산액
+                                    </div>
+                                    <div className="flex items-baseline gap-2">
+                                      <span className="text-sm font-bold text-emerald-600">
+                                        {formatUsdtValue(settlement.settlementAmount as number)}
+                                      </span>
+                                      <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">
+                                        USDT
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-end justify-between gap-3">
+                                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                                      AG / PG 수수료
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-xs font-semibold text-slate-700">
+                                        {formatUsdtValue(settlement.agentFeeAmount as number)} / {formatUsdtValue(settlement.feeAmount as number)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-1.5 text-[11px] text-slate-500">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span>정산 지갑</span>
+                                      <span className="console-mono text-slate-700">
+                                        {shortAddress(settlement.settlementWalletAddress)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span>AG / PG 지갑</span>
+                                      <span className="console-mono text-slate-700">
+                                        {shortAddress(settlement.agentFeeWalletAddress)} / {shortAddress(settlement.feeWalletAddress)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {settlementTxHash ? (
+                                    <a
+                                      href={getSettlementBscscanUrl(settlementTxHash)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
+                                    >
+                                      <span className="console-mono">{shortAddress(settlementTxHash)}</span>
+                                      <span>View tx</span>
+                                    </a>
+                                  ) : null}
+                                </div>
+                              </div>
                             ) : null}
                           </div>
                         </td>
@@ -3125,6 +3298,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                  <span className={`rounded-full px-3 py-1.5 font-semibold ${confirmOrderStatusMeta.className}`}>
+                    현재 상태 {confirmOrderStatusMeta.label}
+                  </span>
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700">
                     선택 {NUMBER_FORMATTER.format(selectedDepositIds.length)}건
                   </span>
@@ -3146,6 +3322,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       선택 없이 완료하면 기본 sentinel 값으로 처리됩니다.
                     </span>
                   )}
+                  {!canSubmitConfirmModal ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-700">
+                      상태가 변경되어 완료 처리 불가
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
@@ -3243,9 +3424,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     onClick={() => {
                       void handleConfirmPaymentFromConsole();
                     }}
-                    disabled={depositModalSubmitting || depositModalLoading}
+                    disabled={depositModalSubmitting || depositModalLoading || !canSubmitConfirmModal}
                     className={`rounded-full px-5 py-2 text-sm font-semibold text-white transition ${
-                      depositModalSubmitting || depositModalLoading
+                      depositModalSubmitting || depositModalLoading || !canSubmitConfirmModal
                         ? "cursor-not-allowed bg-emerald-300"
                         : "bg-emerald-600 hover:bg-emerald-700"
                     }`}
@@ -3311,6 +3492,17 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     </div>
                   </div>
                 </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                  <span className={`rounded-full px-3 py-1.5 font-semibold ${cancelOrderStatusMeta.className}`}>
+                    현재 상태 {cancelOrderStatusMeta.label}
+                  </span>
+                  {!canSubmitCancelModal ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-700">
+                      상태가 변경되어 거래취소 불가
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
               <div className="px-6 py-5">
@@ -3346,9 +3538,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     onClick={() => {
                       void handleCancelTradeFromConsole();
                     }}
-                    disabled={cancelModalSubmitting}
+                    disabled={cancelModalSubmitting || !canSubmitCancelModal}
                     className={`rounded-full px-5 py-2 text-sm font-semibold text-white transition ${
-                      cancelModalSubmitting
+                      cancelModalSubmitting || !canSubmitCancelModal
                         ? "cursor-not-allowed bg-rose-300"
                         : "bg-rose-600 hover:bg-rose-700"
                     }`}
