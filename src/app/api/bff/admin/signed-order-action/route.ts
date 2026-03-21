@@ -7,6 +7,8 @@ const ALLOWED_ROUTES = new Set([
   "/api/order/buyOrderConfirmPaymentWithEscrow",
   "/api/order/buyOrderConfirmPaymentWithoutEscrow",
   "/api/order/cancelTradeBySeller",
+  "/api/order/buyOrderDepositCompleted",
+  "/api/order/cancelClearanceOrderByAdmin",
 ]);
 
 const normalizeString = (value: unknown) => {
