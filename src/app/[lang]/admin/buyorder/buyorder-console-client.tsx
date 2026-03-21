@@ -2908,12 +2908,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               <table className="min-w-[1420px] w-full border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                  <th className="border-b border-slate-200 px-4 py-3">Trade / Created</th>
-                  <th className="w-[156px] border-b border-slate-200 px-4 py-3">Status</th>
-                  <th className="w-[196px] border-b border-slate-200 px-4 py-3">Store</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Buyer</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Seller</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
+                  <th className="border-b border-slate-200 px-4 py-3">거래번호</th>
+                  <th className="w-[156px] border-b border-slate-200 px-4 py-3">상태</th>
+                  <th className="w-[196px] border-b border-slate-200 px-4 py-3">가맹점</th>
+                  <th className="border-b border-slate-200 px-4 py-3">구매자</th>
+                  <th className="border-b border-slate-200 px-4 py-3">판매자</th>
+                  <th className="border-b border-slate-200 px-4 py-3 text-right">구매금액 / 구매량</th>
                   <th className="w-[208px] border-b border-slate-200 px-4 py-3">입금처리</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
