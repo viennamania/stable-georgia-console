@@ -42,6 +42,23 @@ const normalizeBankTransferTransactionType = (value: unknown) => {
   return normalized;
 };
 
+const getBankTransferEventTimestamp = (event: any) => {
+  const candidates = [
+    event?.processingDate,
+    event?.transactionDate,
+    event?.publishedAt,
+  ];
+
+  for (const value of candidates) {
+    const timestamp = Date.parse(String(value || "").trim());
+    if (!Number.isNaN(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return 0;
+};
+
 const resolveRemoteError = (payload: any, fallback: string) => {
   return normalizeString(payload?.error)
     || normalizeString(payload?.message)
@@ -59,10 +76,10 @@ export async function POST(request: NextRequest) {
   }
 
   const signedOrdersBody = asPlainObject(body.signedOrdersBody);
-  const selectedStorecode = normalizeString(body.selectedStorecode);
   const storesLimit = Math.min(parsePositiveInt(body.storesLimit, 200), 300);
   const storesPage = Math.max(parsePositiveInt(body.storesPage, 1), 1);
   const withdrawalLimit = Math.min(parsePositiveInt(body.withdrawalLimit, 24), 80);
+  const withdrawalSnapshotFetchLimit = Math.max(withdrawalLimit * 4, 96);
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
 
   const jobs: Array<Promise<{ ok: boolean; status: number; json: any }>> = [
@@ -72,17 +89,9 @@ export async function POST(request: NextRequest) {
     }),
     getRemoteJson("/api/realtime/banktransfer/events", {
       public: "1",
-      limit: String(withdrawalLimit),
+      limit: String(withdrawalSnapshotFetchLimit),
     }),
   ];
-
-  if (selectedStorecode) {
-    jobs.push(
-      postRemoteJson("/api/store/getOneStore", {
-        storecode: selectedStorecode,
-      }),
-    );
-  }
 
   if (hasSignedOrdersBody) {
     jobs.push(postRemoteJson("/api/order/getAllBuyOrders", signedOrdersBody));
@@ -91,7 +100,6 @@ export async function POST(request: NextRequest) {
   const results = await Promise.all(jobs);
   const storesResponse = results[0];
   const withdrawalEventsResponse = results[1];
-  const selectedStoreResponse = selectedStorecode ? results[2] : null;
   const signedOrdersResponse = hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
@@ -106,12 +114,12 @@ export async function POST(request: NextRequest) {
     : {};
 
   const withdrawalEvents = Array.isArray(withdrawalEventsResponse.json?.events)
-    ? withdrawalEventsResponse.json.events.filter((event: any) => {
-        return (
-          normalizeBankTransferTransactionType(event?.transactionType) === "withdrawn"
-          && (!selectedStorecode || normalizeString(event?.storecode) === selectedStorecode)
-        );
-      }).slice(0, withdrawalLimit)
+    ? withdrawalEventsResponse.json.events
+      .filter((event: any) => {
+        return normalizeBankTransferTransactionType(event?.transactionType) === "withdrawn";
+      })
+      .sort((left: any, right: any) => getBankTransferEventTimestamp(right) - getBankTransferEventTimestamp(left))
+      .slice(0, withdrawalLimit)
     : [];
 
   return NextResponse.json({
@@ -122,7 +130,6 @@ export async function POST(request: NextRequest) {
       storeTotalCount: storesResponse.json?.result?.totalCount || 0,
       storesError,
       ordersError,
-      selectedStore: selectedStoreResponse?.json?.result || null,
       orders: signedOrdersResult.orders || [],
       totalCount: Number(signedOrdersResult.totalCount || 0),
       totalClearanceCount: Number(

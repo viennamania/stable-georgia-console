@@ -100,7 +100,6 @@ type ClearanceBaseResult = {
   stores: StoreItem[];
   storeTotalCount: number;
   storesError?: string;
-  selectedStore: StoreItem | null;
   withdrawalEvents: BankTransferDashboardEvent[];
   withdrawalNextCursor: string | null;
 };
@@ -117,7 +116,6 @@ type ClearanceOrdersResult = {
 type ClearanceDashboardResult = ClearanceBaseResult & ClearanceOrdersResult;
 
 type FilterState = {
-  storecode: string;
   limit: number;
   page: number;
   fromDate: string;
@@ -148,7 +146,6 @@ const EMPTY_CLEARANCE_DASHBOARD: ClearanceDashboardResult = {
   stores: EMPTY_STORES,
   storeTotalCount: 0,
   storesError: "",
-  selectedStore: null,
   withdrawalEvents: EMPTY_WITHDRAWALS,
   withdrawalNextCursor: null,
   ordersError: "",
@@ -196,7 +193,6 @@ const createInputDate = (daysOffset = 0) => {
 };
 
 const createDefaultFilters = (): FilterState => ({
-  storecode: "",
   limit: 30,
   page: 1,
   fromDate: createInputDate(0),
@@ -204,14 +200,11 @@ const createDefaultFilters = (): FilterState => ({
   searchMyOrders: false,
 });
 
-const createBaseLoadSignature = (storecode: string) => {
-  return String(storecode || "").trim();
-};
+const createBaseLoadSignature = () => "all";
 
 const createOrdersLoadSignature = (filters: FilterState, walletAddress?: string | null) => {
   return [
     String(walletAddress || "").trim().toLowerCase(),
-    filters.storecode,
     String(filters.limit),
     String(filters.page),
     filters.fromDate,
@@ -602,8 +595,6 @@ const getWithdrawalRealtimeStatusMeta = (event?: BankTransferDashboardEvent | nu
 export default function ClearanceManagementConsoleClient({ lang }: { lang: string }) {
   const activeAccount = useActiveAccount();
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
-  const [storeSearchQuery, setStoreSearchQuery] = useState("");
-  const [storeSearchOpen, setStoreSearchOpen] = useState(false);
   const [data, setData] = useState<ClearanceDashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -624,20 +615,19 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const inflightOrdersLoadRef = useRef(false);
   const queuedSilentOrdersRefreshRef = useRef(false);
   const ordersRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const storeSearchRef = useRef<HTMLDivElement | null>(null);
   const lastBuyorderEventIdRef = useRef("");
   const lastWithdrawalEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-clearance-${Math.random().toString(36).slice(2, 10)}`);
   const desiredBaseLoadSignatureRef = useRef("");
   const desiredOrdersLoadSignatureRef = useRef("");
 
-  desiredBaseLoadSignatureRef.current = createBaseLoadSignature(filters.storecode);
+  desiredBaseLoadSignatureRef.current = createBaseLoadSignature();
   desiredOrdersLoadSignatureRef.current = createOrdersLoadSignature(filters, activeAccount?.address);
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const loadSignature = createBaseLoadSignature(filters.storecode);
+      const loadSignature = createBaseLoadSignature();
 
       if (inflightLoadRef.current) {
         if (silent) {
@@ -661,7 +651,6 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           },
           cache: "no-store",
           body: JSON.stringify({
-            selectedStorecode: filters.storecode,
             storesLimit: 200,
             storesPage: 1,
             withdrawalLimit: 24,
@@ -688,18 +677,33 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           stores: Array.isArray(result?.stores) ? result.stores : EMPTY_STORES,
           storeTotalCount: Number(result?.storeTotalCount || 0),
           storesError: normalizeText(result?.storesError),
-          selectedStore: result?.selectedStore || null,
           withdrawalEvents: Array.isArray(result?.withdrawalEvents) ? result.withdrawalEvents : EMPTY_WITHDRAWALS,
           withdrawalNextCursor: typeof result?.withdrawalNextCursor === "string" ? result.withdrawalNextCursor : null,
         }));
         setWithdrawalRealtimeItems(
           Array.isArray(result?.withdrawalEvents)
-            ? result.withdrawalEvents.map((event: BankTransferDashboardEvent) => ({
+            ? result.withdrawalEvents
+              .map((event: BankTransferDashboardEvent) => ({
                 id: String(event.eventId || event.traceId || Math.random().toString(36).slice(2)),
                 data: event,
                 receivedAt: new Date().toISOString(),
                 highlightUntil: 0,
               }))
+              .sort((left, right) => {
+                const rightTimestamp = Math.max(
+                  toSafeTimestamp(right.data.processingDate),
+                  toSafeTimestamp(right.data.transactionDate),
+                  toSafeTimestamp(right.data.publishedAt),
+                  toSafeTimestamp(right.receivedAt),
+                );
+                const leftTimestamp = Math.max(
+                  toSafeTimestamp(left.data.processingDate),
+                  toSafeTimestamp(left.data.transactionDate),
+                  toSafeTimestamp(left.data.publishedAt),
+                  toSafeTimestamp(left.receivedAt),
+                );
+                return rightTimestamp - leftTimestamp;
+              })
             : [],
         );
         setError("");
@@ -719,7 +723,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
         }
       }
     },
-    [filters.storecode],
+    [],
   );
 
   const loadOrdersDashboard = useCallback(
@@ -773,7 +777,6 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
             storecode: "admin",
             requesterWalletAddress: activeAccount.address,
             body: {
-              storecode: filters.storecode,
               limit: filters.limit,
               page: filters.page,
               walletAddress: activeAccount.address,
@@ -909,17 +912,6 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   }, []);
 
   useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
-      if (storeSearchRef.current && !storeSearchRef.current.contains(event.target as Node)) {
-        setStoreSearchOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, []);
-
-  useEffect(() => {
     const realtime = new Ably.Realtime({
       authUrl: `/api/bff/realtime/ably-token?stream=ops-admin&clientId=${ablyClientIdRef.current}`,
     });
@@ -947,11 +939,6 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
         lastBuyorderEventIdRef.current = eventId;
       }
 
-      const storecode = String(event.store?.code || "").trim();
-      if (filters.storecode && storecode !== filters.storecode) {
-        return;
-      }
-
       requestRealtimeRefresh();
     };
 
@@ -967,7 +954,6 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
 
       if (
         normalizeBankTransferTransactionType(event.transactionType) !== "withdrawn"
-        || (filters.storecode && String(event.storecode || "").trim() !== filters.storecode)
       ) {
         return;
       }
@@ -1019,20 +1005,14 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
       realtime.connection.off(onConnectionStateChange);
       realtime.close();
     };
-  }, [filters.storecode, requestRealtimeRefresh]);
+  }, [requestRealtimeRefresh]);
 
   const stores = data?.stores || EMPTY_STORES;
   const storesError = normalizeText(data?.storesError);
   const ordersError = normalizeText(data?.ordersError);
   const orders = data?.orders || EMPTY_ORDERS;
-  const selectedStore = useMemo(() => {
-    if (!filters.storecode) {
-      return null;
-    }
-    return stores.find((item) => String(item.storecode || "").trim() === filters.storecode) || data?.selectedStore || null;
-  }, [data?.selectedStore, filters.storecode, stores]);
-  const selectedStoreLabel = getStoreDisplayName(selectedStore) || filters.storecode || "전체 가맹점";
-  const storeScopeLabel = filters.storecode || "all stores";
+  const storeCoverageLabel = "전체 가맹점";
+  const storeCoverageCaption = `${NUMBER_FORMATTER.format(data?.storeTotalCount || 0)}개 등록 가맹점`;
   const withdrawalRealtimeEventCount = withdrawalRealtimeItems.length;
   const withdrawalRealtimeAmountTotal = withdrawalRealtimeItems.reduce((sum, item) => {
     return sum + Number(item.data.amount || 0);
@@ -1049,75 +1029,6 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
       : connectionState === "connecting" || connectionState === "initialized"
         ? "bg-amber-400"
         : "bg-rose-500";
-  const filteredStoreOptions = useMemo(() => {
-    const normalizedQuery = storeSearchQuery.trim().toLowerCase();
-    return stores
-      .filter((item) => {
-        if (!normalizedQuery) {
-          return true;
-        }
-        return [
-          String(item.storecode || "").trim().toLowerCase(),
-          String(item.storeName || "").trim().toLowerCase(),
-          String(item.companyName || "").trim().toLowerCase(),
-        ].some((value) => value.includes(normalizedQuery));
-      });
-  }, [storeSearchQuery, stores]);
-
-  const applySelectedStorecode = useCallback(
-    (storecode: string, store?: StoreItem | null) => {
-      const normalizedStorecode = String(storecode || "").trim();
-      const shouldResetStoreData = normalizedStorecode !== filters.storecode;
-
-      setFilters((prev) => (
-        prev.storecode === normalizedStorecode && prev.page === 1
-          ? prev
-          : {
-              ...prev,
-              storecode: normalizedStorecode,
-              page: 1,
-            }
-      ));
-
-      if (!shouldResetStoreData) {
-        return;
-      }
-
-      setData((current) => {
-        if (!current) {
-          return current;
-        }
-
-        const nextSelectedStore =
-          normalizedStorecode
-            ? store
-              || current.stores.find((item) => String(item.storecode || "").trim() === normalizedStorecode)
-              || null
-            : null;
-
-        return {
-          ...current,
-          selectedStore: nextSelectedStore,
-          orders: EMPTY_ORDERS,
-          totalCount: 0,
-          totalClearanceCount: 0,
-          totalClearanceAmount: 0,
-          totalClearanceAmountKRW: 0,
-          withdrawalEvents: EMPTY_WITHDRAWALS,
-        };
-      });
-      setWithdrawalRealtimeItems([]);
-      setLoading(true);
-      setRefreshing(false);
-      setOrdersLoading(true);
-      setOrdersRefreshing(false);
-      setError("");
-      setConnectionError("");
-      setActionModalState(null);
-      setActionModalError("");
-    },
-    [filters.storecode],
-  );
 
   const patchOrderInDashboard = useCallback(
     (orderId: string, updater: (order: ClearanceOrder) => ClearanceOrder) => {
@@ -1331,18 +1242,19 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                   Clearance Management
                 </h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                  청산 주문 목록과 출금 webhook 흐름을 한 화면에서 확인합니다. 선택한 가맹점 기준으로
-                  주문 목록은 `buyorder.status.changed`, 출금 live는 `banktransfer.updated`를 구독합니다.
+                  청산 주문 목록과 출금 webhook 흐름을 한 화면에서 확인합니다. 현재 화면은 전체 가맹점
+                  기준으로 동작하며 주문 목록은 `buyorder.status.changed`, 출금 live는
+                  `banktransfer.updated`를 구독합니다.
                 </p>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="console-dark-card rounded-[24px] p-4">
                   <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                    Selected store
+                    Coverage
                   </div>
-                  <div className="mt-2 text-lg font-semibold text-white">{selectedStoreLabel}</div>
-                  <div className="mt-1 text-xs text-slate-400">{storeScopeLabel}</div>
+                  <div className="mt-2 text-lg font-semibold text-white">{storeCoverageLabel}</div>
+                  <div className="mt-1 text-xs text-slate-400">{storeCoverageCaption}</div>
                 </div>
                 <div className="console-dark-card rounded-[24px] p-4">
                   <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
@@ -1361,7 +1273,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                     {activeAccount?.address || "관리자 지갑 미연결"}
                   </div>
                   <div className="mt-1 text-xs text-slate-400">
-                    연결 전에는 가맹점 목록만 보고, 주문 목록은 서명 후 조회됩니다.
+                    연결 전에는 live와 가맹점 메타만 보고, 주문 목록은 서명 후 조회됩니다.
                   </div>
                 </div>
               </div>
@@ -1419,159 +1331,8 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           </div>
 
           <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
-            <div className="grid gap-3 xl:grid-cols-12">
-              <div className="space-y-2 text-sm xl:col-span-5">
-                <span className="font-medium text-slate-200">가맹점 선택</span>
-                <div ref={storeSearchRef} className="relative">
-                  <input
-                    value={storeSearchQuery}
-                    onFocus={() => setStoreSearchOpen(true)}
-                    onChange={(event) => {
-                      setStoreSearchOpen(true);
-                      setStoreSearchQuery(event.target.value);
-                    }}
-                    placeholder="storecode / 가맹점명 검색"
-                    className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                  />
-                  {!storeSearchOpen && !storeSearchQuery && selectedStore ? (
-                    <div className="pointer-events-none absolute inset-x-4 inset-y-0 flex items-center gap-3">
-                      <img
-                        src={getStoreLogoSrc(selectedStore)}
-                        alt={getStoreDisplayName(selectedStore) || filters.storecode}
-                        className="h-7 w-7 rounded-full border border-slate-200 bg-white object-cover"
-                      />
-                      <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
-                        {getStoreDisplayName(selectedStore) || filters.storecode}
-                      </div>
-                      <div className="console-mono truncate text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                        {filters.storecode}
-                      </div>
-                    </div>
-                  ) : null}
-                  {storeSearchOpen ? (
-                    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
-                      <div className="max-h-80 overflow-y-auto p-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            applySelectedStorecode("");
-                            setStoreSearchQuery("");
-                            setStoreSearchOpen(false);
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
-                            filters.storecode
-                              ? "text-slate-700 hover:bg-slate-50"
-                              : "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
-                          }`}
-                        >
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                            All
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold text-slate-900">전체</div>
-                            <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                              all stores
-                            </div>
-                          </div>
-                          {!filters.storecode ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
-                              <svg
-                                aria-hidden="true"
-                                viewBox="0 0 16 16"
-                                className="h-3 w-3"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
-                              </svg>
-                              Selected
-                            </span>
-                          ) : null}
-                        </button>
-
-                        {filteredStoreOptions.length ? (
-                          filteredStoreOptions.map((item) => {
-                            const storecode = String(item.storecode || "").trim();
-                            const active = storecode === filters.storecode;
-
-                            return (
-                              <button
-                                key={storecode || getStoreDisplayName(item)}
-                                type="button"
-                                onClick={() => {
-                                  applySelectedStorecode(storecode, item);
-                                  setStoreSearchQuery("");
-                                  setStoreSearchOpen(false);
-                                }}
-                                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
-                                  active
-                                    ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
-                                    : "text-slate-700 hover:bg-slate-50"
-                                }`}
-                              >
-                                <img
-                                  src={getStoreLogoSrc(item)}
-                                  alt={getStoreDisplayName(item) || storecode || "Store"}
-                                  className="h-10 w-10 rounded-2xl border border-slate-200 bg-white object-cover"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-semibold text-slate-900">
-                                    {getStoreDisplayName(item) || storecode || "Unnamed store"}
-                                  </div>
-                                  <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                                    {storecode || "storecode unavailable"}
-                                  </div>
-                                </div>
-                                {active ? (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
-                                    <svg
-                                      aria-hidden="true"
-                                      viewBox="0 0 16 16"
-                                      className="h-3 w-3"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    >
-                                      <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
-                                    </svg>
-                                    Selected
-                                  </span>
-                                ) : null}
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div
-                            className={`rounded-2xl border px-4 py-6 text-center text-sm ${
-                              storesError
-                                ? "border-rose-200 bg-rose-50 text-rose-700"
-                                : "border-dashed border-slate-200 bg-slate-50 text-slate-500"
-                            }`}
-                          >
-                            {loading
-                              ? "가맹점 목록 불러오는 중..."
-                              : storesError
-                                ? `가맹점 목록을 불러오지 못했습니다. ${storesError}`
-                                : "검색 조건에 맞는 가맹점이 없습니다."}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <div className={`text-xs ${storesError ? "text-rose-300" : "text-slate-400"}`}>
-                  {storesError
-                    ? `가맹점 목록 동기화 실패: ${storesError}`
-                    : "가맹점 선택은 즉시 반영됩니다."}
-                </div>
-              </div>
-
-              <label className="space-y-2 text-sm xl:col-span-2">
+            <div className="grid gap-3 lg:grid-cols-3">
+              <label className="space-y-2 text-sm">
                 <span className="font-medium text-slate-200">날짜</span>
                 <input
                   type="date"
@@ -1588,7 +1349,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                 />
               </label>
 
-              <div className="space-y-2 text-sm xl:col-span-2">
+              <div className="space-y-2 text-sm">
                 <span className="font-medium text-slate-200">빠른 날짜</span>
                 <div className="flex h-12 items-center gap-2">
                   {[
@@ -1623,7 +1384,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                 </div>
               </div>
 
-              <div className="space-y-2 text-sm xl:col-span-3">
+              <div className="space-y-2 text-sm">
                 <span className="font-medium text-slate-200">옵션</span>
                 <div className="flex h-12 items-center gap-2">
                   <button
@@ -1646,6 +1407,11 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                 </div>
                 <div className="text-xs text-slate-400">날짜와 옵션 변경은 즉시 반영됩니다.</div>
               </div>
+            </div>
+            <div className={`mt-3 text-xs ${storesError ? "text-rose-300" : "text-slate-400"}`}>
+              {storesError
+                ? `가맹점 메타 동기화 실패: ${storesError}`
+                : "가맹점 메타는 로고와 계좌 매칭 보강에 사용됩니다."}
             </div>
           </div>
         </section>
@@ -1705,7 +1471,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                   <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
-                    필터 {selectedStoreLabel}
+                    범위 {storeCoverageLabel}
                   </span>
                   <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
                     최근 {latestWithdrawalRealtimeAt ? formatRealtimeRelative(latestWithdrawalRealtimeAt, withdrawalRealtimeNowMs) : "-"}
@@ -1757,7 +1523,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           <div className="px-6 py-5">
             {withdrawalRealtimeEventCount === 0 ? (
               <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
-                현재 조건에 맞는 통장출금 webhook 이벤트가 없습니다.
+                아직 표시할 통장출금 webhook 이벤트가 없습니다.
               </div>
             ) : (
               <div className="-mx-1 overflow-x-auto px-1 pb-1">
