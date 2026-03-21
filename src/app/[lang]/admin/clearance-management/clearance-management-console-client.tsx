@@ -99,6 +99,7 @@ type ClearanceDashboardResult = {
   remoteBackendBaseUrl: string;
   stores: StoreItem[];
   storeTotalCount: number;
+  storesError?: string;
   selectedStore: StoreItem | null;
   orders: ClearanceOrder[];
   totalCount: number;
@@ -386,39 +387,36 @@ const getDepositCompletedActorLabel = (buyer?: ClearanceOrder["buyer"] | null) =
   return actor?.nickname || shortAddress(actor?.walletAddress);
 };
 
-const getDepositCompletedActorMeta = (buyer?: ClearanceOrder["buyer"] | null) => {
+const isSystemDepositCompletedActor = (buyer?: ClearanceOrder["buyer"] | null) => {
   const actor = buyer?.depositCompletedBy;
   const nickname = normalizeText(actor?.nickname).toLowerCase();
   const role = normalizeText(actor?.role).toLowerCase();
 
   if (!actor) {
-    return null;
+    return false;
   }
 
-  if (role === "system" || nickname === "withdrawal webhook") {
-    return {
-      label: "시스템 처리",
-      className: "border border-amber-200 bg-amber-50 text-amber-700",
-    };
-  }
-
-  return {
-    label: "관리자 처리",
-    className: "border border-sky-200 bg-sky-50 text-sky-700",
-  };
+  return role === "system" || nickname === "withdrawal webhook";
 };
 
 const getWithdrawalProcessingModeMeta = (order: ClearanceOrder) => {
-  if (order.autoConfirmPayment === true) {
+  const isCompleted = order.buyer?.depositCompleted === true;
+  const isSystemProcessed = isCompleted
+    ? isSystemDepositCompletedActor(order.buyer)
+    : order.autoConfirmPayment === true;
+
+  if (isSystemProcessed) {
     return {
-      label: "자동처리",
-      className: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+      label: "시스템 처리",
+      className: "border border-amber-200 bg-amber-50 text-amber-700",
+      isManual: false,
     };
   }
 
   return {
     label: "수동처리",
     className: "border border-rose-200 bg-rose-50 text-rose-700",
+    isManual: true,
   };
 };
 
@@ -710,6 +708,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   }, [filters.storecode, requestRealtimeRefresh]);
 
   const stores = data?.stores || EMPTY_STORES;
+  const storesError = normalizeText(data?.storesError);
   const orders = data?.orders || EMPTY_ORDERS;
   const selectedStore = useMemo(() => {
     if (!filters.storecode) {
@@ -1211,15 +1210,29 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                             );
                           })
                         ) : (
-                          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                            {loading ? "가맹점 목록 불러오는 중..." : "검색 조건에 맞는 가맹점이 없습니다."}
+                          <div
+                            className={`rounded-2xl border px-4 py-6 text-center text-sm ${
+                              storesError
+                                ? "border-rose-200 bg-rose-50 text-rose-700"
+                                : "border-dashed border-slate-200 bg-slate-50 text-slate-500"
+                            }`}
+                          >
+                            {loading
+                              ? "가맹점 목록 불러오는 중..."
+                              : storesError
+                                ? `가맹점 목록을 불러오지 못했습니다. ${storesError}`
+                                : "검색 조건에 맞는 가맹점이 없습니다."}
                           </div>
                         )}
                       </div>
                     </div>
                   ) : null}
                 </div>
-                <div className="text-xs text-slate-400">가맹점 선택은 즉시 반영됩니다.</div>
+                <div className={`text-xs ${storesError ? "text-rose-300" : "text-slate-400"}`}>
+                  {storesError
+                    ? `가맹점 목록 동기화 실패: ${storesError}`
+                    : "가맹점 선택은 즉시 반영됩니다."}
+                </div>
               </div>
 
               <label className="space-y-2 text-sm xl:col-span-2">
@@ -1435,17 +1448,17 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
             ) : null}
           </div>
 
-          <div className="overflow-x-auto px-2 pb-2">
-            <table className="min-w-[1560px] w-full border-separate border-spacing-0">
+          <div className="px-2 pb-2">
+            <table className="w-full table-fixed border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                  <th className="border-b border-slate-200 px-4 py-3">Trade / Created</th>
-                  <th className="w-[150px] border-b border-slate-200 px-4 py-3">Status</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Buyer</th>
-                  <th className="border-b border-slate-200 px-4 py-3">Seller / 입금계좌</th>
-                  <th className="border-b border-slate-200 px-4 py-3 text-right">Amount</th>
-                  <th className="w-[160px] border-b border-slate-200 px-4 py-3">출금상태</th>
-                  <th className="w-[170px] border-b border-slate-200 px-4 py-3">USDT 전송</th>
+                  <th className="w-[20%] border-b border-slate-200 px-3 py-3">Trade / Created</th>
+                  <th className="w-[10%] border-b border-slate-200 px-3 py-3">Status</th>
+                  <th className="w-[16%] border-b border-slate-200 px-3 py-3">Buyer</th>
+                  <th className="w-[18%] border-b border-slate-200 px-3 py-3">Seller / 입금계좌</th>
+                  <th className="w-[12%] border-b border-slate-200 px-3 py-3 text-right">Amount</th>
+                  <th className="w-[15%] border-b border-slate-200 px-3 py-3">출금상태</th>
+                  <th className="w-[9%] border-b border-slate-200 px-3 py-3">USDT 전송</th>
                 </tr>
               </thead>
               <tbody>
@@ -1468,7 +1481,6 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                     const createdAtLabel = formatDateTime(order.createdAt);
                     const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
                     const transactionHash = String(order.transactionHash || "").trim();
-                    const depositCompletedActorMeta = getDepositCompletedActorMeta(order.buyer);
                     const depositCompletedActorLabel = getDepositCompletedActorLabel(order.buyer);
                     const isWithdrawalCompleted = order.buyer?.depositCompleted === true;
                     const isCancelled = String(order.status || "").trim() === "cancelled";
@@ -1480,59 +1492,59 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                         key={order._id || order.tradeId}
                         className={index % 2 === 0 ? "bg-white text-sm text-slate-700" : "bg-slate-50/60 text-sm text-slate-700"}
                       >
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="border-b border-slate-100 px-3 py-4 align-top">
                           <div className="flex items-start gap-3">
                             <img
                               src={getStoreLogoSrc(order.store)}
                               alt={getStoreDisplayName(order.store) || order.storecode || "Store"}
-                              className="h-12 w-12 rounded-2xl border border-slate-200 bg-white object-cover"
+                              className="h-10 w-10 shrink-0 rounded-2xl border border-slate-200 bg-white object-cover"
                             />
-                            <div className="min-w-0">
+                            <div className="min-w-0 break-words">
                               <div className="flex flex-wrap items-center gap-2">
-                                <div className="font-semibold text-slate-950">
+                                <div className="min-w-0 break-words font-semibold text-slate-950">
                                   {getStoreDisplayName(order.store) || order.storecode || "-"}
                                 </div>
                                 <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${creationMeta.className}`}>
                                   {creationMeta.label}
                                 </span>
                               </div>
-                              <div className="mt-2 font-semibold text-slate-900">
+                              <div className="mt-2 break-all font-semibold text-slate-900">
                                 {order.tradeId || "-"}
                               </div>
-                              <div className="mt-1 text-xs text-slate-500">
+                              <div className="mt-1 break-words text-xs text-slate-500">
                                 {createdAtLabel === "-" ? "-" : `${createdAtLabel} · ${createdTimeAgoLabel}`}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="border-b border-slate-100 px-3 py-4 align-top">
                           <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}>
                             {statusMeta.label}
                           </span>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="space-y-1.5">
-                            <div className="font-medium text-slate-950">{buyerLabel}</div>
-                            <div className="text-xs text-slate-600">{buyerBankSummary.secondary}</div>
-                            <div className="text-xs text-slate-500">{buyerBankSummary.primary}</div>
-                            <div className="console-mono text-xs text-slate-500">
+                        <td className="border-b border-slate-100 px-3 py-4 align-top">
+                          <div className="space-y-1.5 break-words">
+                            <div className="break-words font-medium text-slate-950">{buyerLabel}</div>
+                            <div className="break-all text-xs text-slate-600">{buyerBankSummary.secondary}</div>
+                            <div className="break-words text-xs text-slate-500">{buyerBankSummary.primary}</div>
+                            <div className="console-mono break-all text-xs text-slate-500">
                               {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                             </div>
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="space-y-1.5">
-                            <div className="font-medium text-slate-950">
+                        <td className="border-b border-slate-100 px-3 py-4 align-top">
+                          <div className="space-y-1.5 break-words">
+                            <div className="break-words font-medium text-slate-950">
                               {order.seller?.nickname || shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)}
                             </div>
-                            <div className="text-xs text-slate-600">{sellerBankSummary.primary}</div>
-                            <div className="text-xs text-slate-500">{sellerBankSummary.secondary}</div>
-                            <div className="console-mono text-xs text-slate-500">
+                            <div className="break-words text-xs text-slate-600">{sellerBankSummary.primary}</div>
+                            <div className="break-all text-xs text-slate-500">{sellerBankSummary.secondary}</div>
+                            <div className="console-mono break-all text-xs text-slate-500">
                               {shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)}
                             </div>
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 text-right align-top">
+                        <td className="border-b border-slate-100 px-3 py-4 text-right align-top">
                           <div className="text-[1.05rem] font-semibold tracking-[-0.03em] text-slate-950">
                             {formatKrwValue(order.krwAmount)} KRW
                           </div>
@@ -1543,8 +1555,8 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                             입금액 {formatKrwValue(order.paymentAmount)} KRW
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="flex min-h-[136px] w-[180px] flex-col items-start gap-2">
+                        <td className="border-b border-slate-100 px-3 py-4 align-top">
+                          <div className="flex min-h-[136px] min-w-0 flex-col items-start gap-2 break-words">
                             <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${withdrawalStatusMeta.className}`}>
                               {withdrawalStatusMeta.label}
                             </span>
@@ -1554,14 +1566,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
 
                             {isWithdrawalCompleted ? (
                               <div className="space-y-1 text-xs text-slate-500">
-                                {depositCompletedActorMeta ? (
-                                  <div>
-                                    <span className={`inline-flex rounded-full px-2.5 py-1 font-semibold ${depositCompletedActorMeta.className}`}>
-                                      {depositCompletedActorMeta.label}
-                                    </span>
-                                  </div>
-                                ) : null}
-                                {depositCompletedActorLabel && depositCompletedActorLabel !== "-" ? (
+                                {processingModeMeta.isManual && depositCompletedActorLabel && depositCompletedActorLabel !== "-" ? (
                                   <div>처리자 {depositCompletedActorLabel}</div>
                                 ) : null}
                                 {order.buyer?.depositCompletedAt ? (
@@ -1569,7 +1574,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                                 ) : null}
                               </div>
                             ) : isCancelled ? (
-                              <div className="text-xs text-slate-500">
+                              <div className="break-words text-xs text-slate-500">
                                 취소된 주문으로 출금이 완료되지 않았습니다.
                               </div>
                             ) : (
@@ -1606,23 +1611,23 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                             )}
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="border-b border-slate-100 px-3 py-4 align-top">
                           {transactionHash && transactionHash !== "0x" ? (
-                            <div>
+                            <div className="min-w-0 break-words">
                               <div className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                                 전송완료
                               </div>
-                              <div className="console-mono mt-2 text-xs text-slate-500">{shortAddress(transactionHash)}</div>
-                              <div className="mt-1 text-xs text-slate-500">
+                              <div className="console-mono mt-2 break-all text-xs text-slate-500">{shortAddress(transactionHash)}</div>
+                              <div className="mt-1 break-words text-xs text-slate-500">
                                 {formatDateTime(order.paymentConfirmedAt || order.updatedAt)}
                               </div>
                             </div>
                           ) : (
-                            <div>
+                            <div className="min-w-0 break-words">
                               <div className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
                                 전송대기
                               </div>
-                              <div className="mt-2 text-xs text-slate-500">
+                              <div className="mt-2 break-words text-xs text-slate-500">
                                 출금완료 처리 후 반영됩니다.
                               </div>
                             </div>

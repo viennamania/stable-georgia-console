@@ -95,6 +95,9 @@ export async function POST(request: NextRequest) {
   const signedOrdersResponse = selectedStorecode && hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
+  const storesError = storesResponse.ok
+    ? ""
+    : resolveRemoteError(storesResponse.json, "Failed to load store list");
 
   if (selectedStorecode && hasSignedOrdersBody && signedOrdersResponse && !signedOrdersResponse.ok) {
     return NextResponse.json(
@@ -120,6 +123,7 @@ export async function POST(request: NextRequest) {
       remoteBackendBaseUrl: getRemoteBackendBaseUrl(),
       stores: storesResponse.json?.result?.stores || [],
       storeTotalCount: storesResponse.json?.result?.totalCount || 0,
+      storesError,
       selectedStore: selectedStoreResponse?.json?.result || null,
       orders: signedOrdersResponse?.json?.result?.orders || [],
       totalCount: signedOrdersResponse?.json?.result?.totalCount || 0,
