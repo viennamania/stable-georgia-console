@@ -94,22 +94,27 @@ type ClearanceOrder = {
   store?: StoreItem | null;
 };
 
-type ClearanceDashboardResult = {
+type ClearanceBaseResult = {
   fetchedAt: string;
   remoteBackendBaseUrl: string;
   stores: StoreItem[];
   storeTotalCount: number;
   storesError?: string;
-  ordersError?: string;
   selectedStore: StoreItem | null;
+  withdrawalEvents: BankTransferDashboardEvent[];
+  withdrawalNextCursor: string | null;
+};
+
+type ClearanceOrdersResult = {
+  ordersError?: string;
   orders: ClearanceOrder[];
   totalCount: number;
   totalClearanceCount: number;
   totalClearanceAmount: number;
   totalClearanceAmountKRW: number;
-  withdrawalEvents: BankTransferDashboardEvent[];
-  withdrawalNextCursor: string | null;
 };
+
+type ClearanceDashboardResult = ClearanceBaseResult & ClearanceOrdersResult;
 
 type FilterState = {
   storecode: string;
@@ -137,6 +142,22 @@ type ClearanceActionModalState = {
 const EMPTY_STORES: StoreItem[] = [];
 const EMPTY_ORDERS: ClearanceOrder[] = [];
 const EMPTY_WITHDRAWALS: BankTransferDashboardEvent[] = [];
+const EMPTY_CLEARANCE_DASHBOARD: ClearanceDashboardResult = {
+  fetchedAt: "",
+  remoteBackendBaseUrl: "",
+  stores: EMPTY_STORES,
+  storeTotalCount: 0,
+  storesError: "",
+  selectedStore: null,
+  withdrawalEvents: EMPTY_WITHDRAWALS,
+  withdrawalNextCursor: null,
+  ordersError: "",
+  orders: EMPTY_ORDERS,
+  totalCount: 0,
+  totalClearanceCount: 0,
+  totalClearanceAmount: 0,
+  totalClearanceAmountKRW: 0,
+};
 const BUY_ORDER_DEPOSIT_COMPLETED_SIGNING_PREFIX = "admin-buyorder-deposit-completed-v1";
 const CANCEL_CLEARANCE_ORDER_SIGNING_PREFIX = "admin-cancel-clearance-order-v1";
 const WITHDRAWAL_WEBHOOK_CLEARANCE_CREATED_BY_ROUTE =
@@ -183,8 +204,13 @@ const createDefaultFilters = (): FilterState => ({
   searchMyOrders: false,
 });
 
-const createLoadSignature = (filters: FilterState) => {
+const createBaseLoadSignature = (storecode: string) => {
+  return String(storecode || "").trim();
+};
+
+const createOrdersLoadSignature = (filters: FilterState, walletAddress?: string | null) => {
   return [
+    String(walletAddress || "").trim().toLowerCase(),
     filters.storecode,
     String(filters.limit),
     String(filters.page),
@@ -581,6 +607,8 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const [data, setData] = useState<ClearanceDashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [withdrawalRealtimeItems, setWithdrawalRealtimeItems] = useState<WithdrawalRealtimeItem[]>([]);
   const [connectionState, setConnectionState] = useState<Ably.ConnectionState>("initialized");
@@ -593,22 +621,28 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
 
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
-  const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inflightOrdersLoadRef = useRef(false);
+  const queuedSilentOrdersRefreshRef = useRef(false);
+  const ordersRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storeSearchRef = useRef<HTMLDivElement | null>(null);
   const lastBuyorderEventIdRef = useRef("");
   const lastWithdrawalEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-clearance-${Math.random().toString(36).slice(2, 10)}`);
-  const desiredLoadSignatureRef = useRef("");
+  const desiredBaseLoadSignatureRef = useRef("");
+  const desiredOrdersLoadSignatureRef = useRef("");
 
-  desiredLoadSignatureRef.current = createLoadSignature(filters);
+  desiredBaseLoadSignatureRef.current = createBaseLoadSignature(filters.storecode);
+  desiredOrdersLoadSignatureRef.current = createOrdersLoadSignature(filters, activeAccount?.address);
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const loadSignature = createLoadSignature(filters);
+      const loadSignature = createBaseLoadSignature(filters.storecode);
 
       if (inflightLoadRef.current) {
-        queuedSilentRefreshRef.current = true;
+        if (silent) {
+          queuedSilentRefreshRef.current = true;
+        }
         return;
       }
 
@@ -619,11 +653,119 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
         setLoading(true);
       }
 
-    try {
-      let signedOrdersBody: Record<string, unknown> | null = null;
-      let ordersError = "";
+      try {
+        const response = await fetch("/api/bff/admin/clearance-dashboard", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          body: JSON.stringify({
+            selectedStorecode: filters.storecode,
+            storesLimit: 200,
+            storesPage: 1,
+            withdrawalLimit: 24,
+          }),
+        });
 
-      if (activeAccount) {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || "Failed to load clearance dashboard");
+        }
+
+        if (desiredBaseLoadSignatureRef.current !== loadSignature) {
+          if (silent) {
+            queuedSilentRefreshRef.current = true;
+          }
+          return;
+        }
+
+        const result = payload.result as ClearanceBaseResult;
+        setData((current) => ({
+          ...(current || EMPTY_CLEARANCE_DASHBOARD),
+          fetchedAt: result?.fetchedAt || "",
+          remoteBackendBaseUrl: result?.remoteBackendBaseUrl || "",
+          stores: Array.isArray(result?.stores) ? result.stores : EMPTY_STORES,
+          storeTotalCount: Number(result?.storeTotalCount || 0),
+          storesError: normalizeText(result?.storesError),
+          selectedStore: result?.selectedStore || null,
+          withdrawalEvents: Array.isArray(result?.withdrawalEvents) ? result.withdrawalEvents : EMPTY_WITHDRAWALS,
+          withdrawalNextCursor: typeof result?.withdrawalNextCursor === "string" ? result.withdrawalNextCursor : null,
+        }));
+        setWithdrawalRealtimeItems(
+          Array.isArray(result?.withdrawalEvents)
+            ? result.withdrawalEvents.map((event: BankTransferDashboardEvent) => ({
+                id: String(event.eventId || event.traceId || Math.random().toString(36).slice(2)),
+                data: event,
+                receivedAt: new Date().toISOString(),
+                highlightUntil: 0,
+              }))
+            : [],
+        );
+        setError("");
+      } catch (loadError) {
+        if (desiredBaseLoadSignatureRef.current === loadSignature) {
+          setError(loadError instanceof Error ? loadError.message : "Failed to load clearance dashboard");
+        }
+      } finally {
+        inflightLoadRef.current = false;
+        setLoading(false);
+        setRefreshing(false);
+        if (queuedSilentRefreshRef.current) {
+          queuedSilentRefreshRef.current = false;
+          queueMicrotask(() => {
+            void loadDashboard({ silent: true });
+          });
+        }
+      }
+    },
+    [filters.storecode],
+  );
+
+  const loadOrdersDashboard = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = Boolean(options?.silent);
+      const loadSignature = createOrdersLoadSignature(filters, activeAccount?.address);
+
+      if (inflightOrdersLoadRef.current) {
+        if (silent) {
+          queuedSilentOrdersRefreshRef.current = true;
+        }
+        return;
+      }
+
+      inflightOrdersLoadRef.current = true;
+      if (silent) {
+        setOrdersRefreshing(true);
+      } else {
+        setOrdersLoading(true);
+      }
+
+      try {
+        if (!activeAccount) {
+          if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
+            if (silent) {
+              queuedSilentOrdersRefreshRef.current = true;
+            }
+            return;
+          }
+
+          setData((current) => ({
+            ...(current || EMPTY_CLEARANCE_DASHBOARD),
+            ordersError: "",
+            orders: EMPTY_ORDERS,
+            totalCount: 0,
+            totalClearanceCount: 0,
+            totalClearanceAmount: 0,
+            totalClearanceAmountKRW: 0,
+          }));
+          setError("");
+          return;
+        }
+
+        let signedOrdersBody: Record<string, unknown> | null = null;
+        let nextOrdersError = "";
+
         try {
           signedOrdersBody = await createCenterStoreAdminSignedBody({
             account: activeAccount,
@@ -642,13 +784,33 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
             },
           });
         } catch (signError) {
-          ordersError = signError instanceof Error
+          nextOrdersError = signError instanceof Error
             ? signError.message
             : "주문 조회 서명을 준비하지 못했습니다.";
         }
-      }
 
-        const response = await fetch("/api/bff/admin/clearance-dashboard", {
+        if (!signedOrdersBody) {
+          if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
+            if (silent) {
+              queuedSilentOrdersRefreshRef.current = true;
+            }
+            return;
+          }
+
+          setData((current) => ({
+            ...(current || EMPTY_CLEARANCE_DASHBOARD),
+            ordersError: nextOrdersError,
+            orders: EMPTY_ORDERS,
+            totalCount: 0,
+            totalClearanceCount: 0,
+            totalClearanceAmount: 0,
+            totalClearanceAmountKRW: 0,
+          }));
+          setError("");
+          return;
+        }
+
+        const response = await fetch("/api/bff/admin/clearance-orders", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -656,53 +818,46 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           cache: "no-store",
           body: JSON.stringify({
             signedOrdersBody,
-            selectedStorecode: filters.storecode,
-            storesLimit: 200,
-            storesPage: 1,
-            withdrawalLimit: 24,
           }),
         });
 
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(payload?.error || "Failed to load clearance dashboard");
+          throw new Error(payload?.error || "Failed to load clearance orders");
         }
 
-        if (desiredLoadSignatureRef.current !== loadSignature) {
-          queuedSilentRefreshRef.current = true;
+        if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
+          if (silent) {
+            queuedSilentOrdersRefreshRef.current = true;
+          }
           return;
         }
 
-        const result = payload.result as ClearanceDashboardResult;
-        const mergedOrdersError = ordersError || normalizeText(result?.ordersError);
+        const result = payload.result as ClearanceOrdersResult;
+        const mergedOrdersError = nextOrdersError || normalizeText(result?.ordersError);
 
-        setData({
-          ...result,
+        setData((current) => ({
+          ...(current || EMPTY_CLEARANCE_DASHBOARD),
           ordersError: mergedOrdersError,
-        });
-        setWithdrawalRealtimeItems(
-          Array.isArray(result?.withdrawalEvents)
-            ? result.withdrawalEvents.map((event: BankTransferDashboardEvent) => ({
-                id: String(event.eventId || event.traceId || Math.random().toString(36).slice(2)),
-                data: event,
-                receivedAt: new Date().toISOString(),
-                highlightUntil: 0,
-              }))
-            : [],
-        );
-        setError(mergedOrdersError);
+          orders: Array.isArray(result?.orders) ? result.orders : EMPTY_ORDERS,
+          totalCount: Number(result?.totalCount || 0),
+          totalClearanceCount: Number(result?.totalClearanceCount || 0),
+          totalClearanceAmount: Number(result?.totalClearanceAmount || 0),
+          totalClearanceAmountKRW: Number(result?.totalClearanceAmountKRW || 0),
+        }));
+        setError("");
       } catch (loadError) {
-        if (desiredLoadSignatureRef.current === loadSignature) {
-          setError(loadError instanceof Error ? loadError.message : "Failed to load clearance dashboard");
+        if (desiredOrdersLoadSignatureRef.current === loadSignature) {
+          setError(loadError instanceof Error ? loadError.message : "Failed to load clearance orders");
         }
       } finally {
-        inflightLoadRef.current = false;
-        setLoading(false);
-        setRefreshing(false);
-        if (queuedSilentRefreshRef.current) {
-          queuedSilentRefreshRef.current = false;
+        inflightOrdersLoadRef.current = false;
+        setOrdersLoading(false);
+        setOrdersRefreshing(false);
+        if (queuedSilentOrdersRefreshRef.current) {
+          queuedSilentOrdersRefreshRef.current = false;
           queueMicrotask(() => {
-            void loadDashboard({ silent: true });
+            void loadOrdersDashboard({ silent: true });
           });
         }
       }
@@ -711,19 +866,23 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   );
 
   const requestRealtimeRefresh = useCallback(() => {
-    if (realtimeRefreshTimerRef.current) {
-      clearTimeout(realtimeRefreshTimerRef.current);
+    if (ordersRefreshTimerRef.current) {
+      clearTimeout(ordersRefreshTimerRef.current);
     }
 
-    realtimeRefreshTimerRef.current = setTimeout(() => {
-      realtimeRefreshTimerRef.current = null;
-      void loadDashboard({ silent: true });
+    ordersRefreshTimerRef.current = setTimeout(() => {
+      ordersRefreshTimerRef.current = null;
+      void loadOrdersDashboard({ silent: true });
     }, 350);
-  }, [loadDashboard]);
+  }, [loadOrdersDashboard]);
 
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    void loadOrdersDashboard();
+  }, [loadOrdersDashboard]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -732,6 +891,14 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
 
     return () => clearInterval(interval);
   }, [loadDashboard]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadOrdersDashboard({ silent: true });
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [loadOrdersDashboard]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -844,8 +1011,8 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
     void banktransferChannel.subscribe(BANKTRANSFER_ABLY_EVENT_NAME, onBanktransferMessage);
 
     return () => {
-      if (realtimeRefreshTimerRef.current) {
-        clearTimeout(realtimeRefreshTimerRef.current);
+      if (ordersRefreshTimerRef.current) {
+        clearTimeout(ordersRefreshTimerRef.current);
       }
       buyorderChannel.unsubscribe(BUYORDER_STATUS_ABLY_EVENT_NAME, onBuyorderMessage);
       banktransferChannel.unsubscribe(BANKTRANSFER_ABLY_EVENT_NAME, onBanktransferMessage);
@@ -940,6 +1107,10 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
         };
       });
       setWithdrawalRealtimeItems([]);
+      setLoading(true);
+      setRefreshing(false);
+      setOrdersLoading(true);
+      setOrdersRefreshing(false);
       setError("");
       setConnectionError("");
       setActionModalState(null);
@@ -1107,7 +1278,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
       }
 
       closeActionModal();
-      void loadDashboard({ silent: true });
+      void loadOrdersDashboard({ silent: true });
     } catch (actionError) {
       setActionModalError(
         actionError instanceof Error ? actionError.message : "청산 처리에 실패했습니다.",
@@ -1121,7 +1292,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
     actionModalState,
     canSubmitActionModal,
     closeActionModal,
-    loadDashboard,
+    loadOrdersDashboard,
     patchOrderInDashboard,
   ]);
 
@@ -1130,6 +1301,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const totalOrderPages = Math.max(1, Math.ceil(totalOrderCount / Math.max(1, filters.limit)));
   const currentOrderRangeStart = totalOrderCount === 0 ? 0 : (currentOrderPage - 1) * filters.limit + 1;
   const currentOrderRangeEnd = totalOrderCount === 0 ? 0 : Math.min(totalOrderCount, currentOrderPage * filters.limit);
+  const showOrdersLoadingState = ordersLoading && totalOrderCount === 0 && orders.length === 0 && !ordersError;
   const actionModalBuyerBankSummary = actionModalState ? getBuyerBankSummary(actionModalState.order) : null;
   const actionModalSellerBankSummary = actionModalState ? getSellerBankSummary(actionModalState.order) : null;
   const actionModalWithdrawalStatusMeta = actionModalState
@@ -1482,23 +1654,23 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           {[
             {
               label: "전체 주문",
-              value: NUMBER_FORMATTER.format(data?.totalCount || 0),
-              caption: "현재 필터 기준 청산 주문 수",
+              value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(data?.totalCount || 0),
+              caption: showOrdersLoadingState ? "주문 집계 불러오는 중" : "현재 필터 기준 청산 주문 수",
             },
             {
               label: "출금완료",
-              value: NUMBER_FORMATTER.format(data?.totalClearanceCount || 0),
-              caption: "paymentConfirmed 기준 완료 건수",
+              value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(data?.totalClearanceCount || 0),
+              caption: showOrdersLoadingState ? "주문 집계 불러오는 중" : "paymentConfirmed 기준 완료 건수",
             },
             {
               label: "청산량",
-              value: `${formatUsdtValue(data?.totalClearanceAmount || 0)} USDT`,
-              caption: "완료된 청산 물량",
+              value: showOrdersLoadingState ? "..." : `${formatUsdtValue(data?.totalClearanceAmount || 0)} USDT`,
+              caption: showOrdersLoadingState ? "주문 집계 불러오는 중" : "완료된 청산 물량",
             },
             {
               label: "청산금액",
-              value: `${formatKrwValue(data?.totalClearanceAmountKRW || 0)} KRW`,
-              caption: "완료된 청산 금액",
+              value: showOrdersLoadingState ? "..." : `${formatKrwValue(data?.totalClearanceAmountKRW || 0)} KRW`,
+              caption: showOrdersLoadingState ? "주문 집계 불러오는 중" : "완료된 청산 금액",
             },
           ].map((item) => (
             <article key={item.label} className="console-panel rounded-[28px] p-5">
@@ -1776,6 +1948,11 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                {ordersLoading || ordersRefreshing ? (
+                  <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-700">
+                    {ordersLoading ? "주문 로딩중" : "주문 새로고침중"}
+                  </span>
+                ) : null}
                 <span className="rounded-full bg-slate-100 px-3 py-1">
                   Rows {NUMBER_FORMATTER.format(currentOrderRangeStart)}-{NUMBER_FORMATTER.format(currentOrderRangeEnd)} / {NUMBER_FORMATTER.format(totalOrderCount)}
                 </span>
@@ -1811,7 +1988,11 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                 {orders.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
-                      {loading ? "Loading clearance orders..." : "No clearance orders returned for the current filter."}
+                      {!activeAccount
+                        ? "관리자 지갑 연결 후 Clearance stream 을 조회할 수 있습니다."
+                        : ordersLoading
+                          ? "Loading clearance orders..."
+                          : "No clearance orders returned for the current filter."}
                     </td>
                   </tr>
                 ) : (
