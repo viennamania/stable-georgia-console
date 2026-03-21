@@ -95,19 +95,15 @@ export async function POST(request: NextRequest) {
   const signedOrdersResponse = hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
-  const signedOrdersResult = signedOrdersResponse?.json?.result || {};
   const storesError = storesResponse.ok
     ? ""
     : resolveRemoteError(storesResponse.json, "Failed to load store list");
-
-  if (hasSignedOrdersBody && signedOrdersResponse && !signedOrdersResponse.ok) {
-    return NextResponse.json(
-      {
-        error: resolveRemoteError(signedOrdersResponse.json, "Failed to load clearance orders"),
-      },
-      { status: signedOrdersResponse.status || 502 },
-    );
-  }
+  const ordersError = hasSignedOrdersBody && signedOrdersResponse && !signedOrdersResponse.ok
+    ? resolveRemoteError(signedOrdersResponse.json, "Failed to load clearance orders")
+    : "";
+  const signedOrdersResult = signedOrdersResponse?.ok
+    ? signedOrdersResponse.json?.result || {}
+    : {};
 
   const withdrawalEvents = Array.isArray(withdrawalEventsResponse.json?.events)
     ? withdrawalEventsResponse.json.events.filter((event: any) => {
@@ -125,6 +121,7 @@ export async function POST(request: NextRequest) {
       stores: storesResponse.json?.result?.stores || [],
       storeTotalCount: storesResponse.json?.result?.totalCount || 0,
       storesError,
+      ordersError,
       selectedStore: selectedStoreResponse?.json?.result || null,
       orders: signedOrdersResult.orders || [],
       totalCount: Number(signedOrdersResult.totalCount || 0),

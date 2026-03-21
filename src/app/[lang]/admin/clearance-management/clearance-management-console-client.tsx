@@ -100,6 +100,7 @@ type ClearanceDashboardResult = {
   stores: StoreItem[];
   storeTotalCount: number;
   storesError?: string;
+  ordersError?: string;
   selectedStore: StoreItem | null;
   orders: ClearanceOrder[];
   totalCount: number;
@@ -619,25 +620,34 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
         setLoading(true);
       }
 
-      try {
-        const signedOrdersBody = activeAccount
-          ? await createCenterStoreAdminSignedBody({
-              account: activeAccount,
-              route: "/api/order/getAllBuyOrders",
-              storecode: "admin",
-              requesterWalletAddress: activeAccount.address,
-              body: {
-                storecode: filters.storecode,
-                limit: filters.limit,
-                page: filters.page,
-                walletAddress: activeAccount.address,
-                searchMyOrders: filters.searchMyOrders,
-                privateSale: true,
-                fromDate: filters.fromDate,
-                toDate: filters.toDate,
-              },
-            })
-          : null;
+    try {
+      let signedOrdersBody: Record<string, unknown> | null = null;
+      let ordersError = "";
+
+      if (activeAccount) {
+        try {
+          signedOrdersBody = await createCenterStoreAdminSignedBody({
+            account: activeAccount,
+            route: "/api/order/getAllBuyOrders",
+            storecode: "admin",
+            requesterWalletAddress: activeAccount.address,
+            body: {
+              storecode: filters.storecode,
+              limit: filters.limit,
+              page: filters.page,
+              walletAddress: activeAccount.address,
+              searchMyOrders: filters.searchMyOrders,
+              privateSale: true,
+              fromDate: filters.fromDate,
+              toDate: filters.toDate,
+            },
+          });
+        } catch (signError) {
+          ordersError = signError instanceof Error
+            ? signError.message
+            : "주문 조회 서명을 준비하지 못했습니다.";
+        }
+      }
 
         const response = await fetch("/api/bff/admin/clearance-dashboard", {
           method: "POST",
@@ -664,10 +674,16 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           return;
         }
 
-        setData(payload.result as ClearanceDashboardResult);
+        const result = payload.result as ClearanceDashboardResult;
+        const mergedOrdersError = ordersError || normalizeText(result?.ordersError);
+
+        setData({
+          ...result,
+          ordersError: mergedOrdersError,
+        });
         setWithdrawalRealtimeItems(
-          Array.isArray(payload.result?.withdrawalEvents)
-            ? payload.result.withdrawalEvents.map((event: BankTransferDashboardEvent) => ({
+          Array.isArray(result?.withdrawalEvents)
+            ? result.withdrawalEvents.map((event: BankTransferDashboardEvent) => ({
                 id: String(event.eventId || event.traceId || Math.random().toString(36).slice(2)),
                 data: event,
                 receivedAt: new Date().toISOString(),
@@ -675,7 +691,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
               }))
             : [],
         );
-        setError("");
+        setError(mergedOrdersError);
       } catch (loadError) {
         if (desiredLoadSignatureRef.current === loadSignature) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load clearance dashboard");
@@ -841,6 +857,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
 
   const stores = data?.stores || EMPTY_STORES;
   const storesError = normalizeText(data?.storesError);
+  const ordersError = normalizeText(data?.ordersError);
   const orders = data?.orders || EMPTY_ORDERS;
   const selectedStore = useMemo(() => {
     if (!filters.storecode) {
@@ -1771,9 +1788,9 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           </div>
 
           <div className="space-y-4 px-6 py-5">
-            {error ? (
+            {error || ordersError ? (
               <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {error}
+                {error || ordersError}
               </div>
             ) : null}
           </div>
