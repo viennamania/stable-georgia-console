@@ -183,9 +183,8 @@ const createDefaultFilters = (): FilterState => ({
   searchMyOrders: false,
 });
 
-const createLoadSignature = (filters: FilterState, walletAddress?: string | null) => {
+const createLoadSignature = (filters: FilterState) => {
   return [
-    String(walletAddress || "").trim().toLowerCase(),
     filters.storecode,
     String(filters.limit),
     String(filters.page),
@@ -601,12 +600,12 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const ablyClientIdRef = useRef(`console-clearance-${Math.random().toString(36).slice(2, 10)}`);
   const desiredLoadSignatureRef = useRef("");
 
-  desiredLoadSignatureRef.current = createLoadSignature(filters, activeAccount?.address);
+  desiredLoadSignatureRef.current = createLoadSignature(filters);
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const loadSignature = createLoadSignature(filters, activeAccount?.address);
+      const loadSignature = createLoadSignature(filters);
 
       if (inflightLoadRef.current) {
         queuedSilentRefreshRef.current = true;
