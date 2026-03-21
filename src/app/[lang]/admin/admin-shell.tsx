@@ -83,8 +83,9 @@ export default function AdminShell({
                             {item.eyebrow}
                           </div>
                           {active ? (
-                            <span className="rounded-full border border-sky-200/30 bg-white/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-50">
-                              현재 화면
+                            <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-sky-200/30 bg-white/12 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-sky-50">
+                              <span className="h-1.5 w-1.5 rounded-full bg-sky-200" aria-hidden="true" />
+                              선택됨
                             </span>
                           ) : null}
                         </div>
