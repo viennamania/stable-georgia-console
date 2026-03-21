@@ -465,7 +465,6 @@ const getWithdrawalStatusMeta = (order: ClearanceOrder) => {
 export default function ClearanceManagementConsoleClient({ lang }: { lang: string }) {
   const activeAccount = useActiveAccount();
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
-  const [draftFilters, setDraftFilters] = useState<FilterState>(() => createDefaultFilters());
   const [storeSearchQuery, setStoreSearchQuery] = useState("");
   const [storeSearchOpen, setStoreSearchOpen] = useState(false);
   const [data, setData] = useState<ClearanceDashboardResult | null>(null);
@@ -736,21 +735,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const applySelectedStorecode = useCallback(
     (storecode: string, store?: StoreItem | null) => {
       const normalizedStorecode = String(storecode || "").trim();
-      if (!normalizedStorecode) {
-        return;
-      }
-
       const shouldResetStoreData = normalizedStorecode !== filters.storecode;
-
-      setDraftFilters((prev) => (
-        prev.storecode === normalizedStorecode && prev.page === 1
-          ? prev
-          : {
-              ...prev,
-              storecode: normalizedStorecode,
-              page: 1,
-            }
-      ));
 
       setFilters((prev) => (
         prev.storecode === normalizedStorecode && prev.page === 1
@@ -772,9 +757,11 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
         }
 
         const nextSelectedStore =
-          store
-          || current.stores.find((item) => String(item.storecode || "").trim() === normalizedStorecode)
-          || null;
+          normalizedStorecode
+            ? store
+              || current.stores.find((item) => String(item.storecode || "").trim() === normalizedStorecode)
+              || null
+            : null;
 
         return {
           ...current,
@@ -1111,44 +1098,123 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                     placeholder="storecode / 가맹점명 검색"
                     className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
                   />
+                  {!storeSearchOpen && !storeSearchQuery && selectedStore ? (
+                    <div className="pointer-events-none absolute inset-x-4 inset-y-0 flex items-center gap-3">
+                      <img
+                        src={getStoreLogoSrc(selectedStore)}
+                        alt={getStoreDisplayName(selectedStore) || filters.storecode}
+                        className="h-7 w-7 rounded-full border border-slate-200 bg-white object-cover"
+                      />
+                      <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+                        {getStoreDisplayName(selectedStore) || filters.storecode}
+                      </div>
+                      <div className="console-mono truncate text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                        {filters.storecode}
+                      </div>
+                    </div>
+                  ) : null}
                   {storeSearchOpen ? (
-                    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
+                    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
                       <div className="max-h-80 overflow-y-auto p-2">
-                        {filteredStoreOptions.map((item) => {
-                          const storecode = String(item.storecode || "").trim();
-                          const active = storecode === draftFilters.storecode;
+                        <button
+                          type="button"
+                          onClick={() => {
+                            applySelectedStorecode("");
+                            setStoreSearchQuery("");
+                            setStoreSearchOpen(false);
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                            filters.storecode
+                              ? "text-slate-700 hover:bg-slate-50"
+                              : "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
+                          }`}
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            All
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-slate-900">전체</div>
+                            <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                              all stores
+                            </div>
+                          </div>
+                          {!filters.storecode ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 16 16"
+                                className="h-3 w-3"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+                              </svg>
+                              Selected
+                            </span>
+                          ) : null}
+                        </button>
 
-                          return (
-                            <button
-                              key={storecode || getStoreDisplayName(item)}
-                              type="button"
-                              onClick={() => {
-                                applySelectedStorecode(storecode, item);
-                                setStoreSearchQuery("");
-                                setStoreSearchOpen(false);
-                              }}
-                              className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
-                                active
-                                  ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
-                                  : "text-slate-700 hover:bg-slate-50"
-                              }`}
-                            >
-                              <img
-                                src={getStoreLogoSrc(item)}
-                                alt={getStoreDisplayName(item) || storecode || "Store"}
-                                className="h-10 w-10 rounded-2xl border border-slate-200 bg-white object-cover"
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm font-semibold text-slate-900">
-                                  {getStoreDisplayName(item) || storecode}
+                        {filteredStoreOptions.length ? (
+                          filteredStoreOptions.map((item) => {
+                            const storecode = String(item.storecode || "").trim();
+                            const active = storecode === filters.storecode;
+
+                            return (
+                              <button
+                                key={storecode || getStoreDisplayName(item)}
+                                type="button"
+                                onClick={() => {
+                                  applySelectedStorecode(storecode, item);
+                                  setStoreSearchQuery("");
+                                  setStoreSearchOpen(false);
+                                }}
+                                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                                  active
+                                    ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
+                                    : "text-slate-700 hover:bg-slate-50"
+                                }`}
+                              >
+                                <img
+                                  src={getStoreLogoSrc(item)}
+                                  alt={getStoreDisplayName(item) || storecode || "Store"}
+                                  className="h-10 w-10 rounded-2xl border border-slate-200 bg-white object-cover"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-semibold text-slate-900">
+                                    {getStoreDisplayName(item) || storecode || "Unnamed store"}
+                                  </div>
+                                  <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                                    {storecode || "storecode unavailable"}
+                                  </div>
                                 </div>
-                                <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                                  {storecode}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
+                                {active ? (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                                    <svg
+                                      aria-hidden="true"
+                                      viewBox="0 0 16 16"
+                                      className="h-3 w-3"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+                                    </svg>
+                                    Selected
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                            {loading ? "가맹점 목록 불러오는 중..." : "검색 조건에 맞는 가맹점이 없습니다."}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : null}
@@ -1157,29 +1223,14 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
               </div>
 
               <label className="space-y-2 text-sm xl:col-span-2">
-                <span className="font-medium text-slate-200">From</span>
+                <span className="font-medium text-slate-200">날짜</span>
                 <input
                   type="date"
-                  value={draftFilters.fromDate}
+                  value={filters.fromDate}
                   onChange={(event) => {
-                    setDraftFilters((prev) => ({
+                    setFilters((prev) => ({
                       ...prev,
                       fromDate: event.target.value,
-                      page: 1,
-                    }));
-                  }}
-                  className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-2 text-sm xl:col-span-2">
-                <span className="font-medium text-slate-200">To</span>
-                <input
-                  type="date"
-                  value={draftFilters.toDate}
-                  onChange={(event) => {
-                    setDraftFilters((prev) => ({
-                      ...prev,
                       toDate: event.target.value,
                       page: 1,
                     }));
@@ -1188,36 +1239,63 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                 />
               </label>
 
+              <div className="space-y-2 text-sm xl:col-span-2">
+                <span className="font-medium text-slate-200">빠른 날짜</span>
+                <div className="flex h-12 items-center gap-2">
+                  {[
+                    { label: "오늘", offset: 0 },
+                    { label: "어제", offset: -1 },
+                  ].map((item) => {
+                    const date = createInputDate(item.offset);
+                    const active = filters.fromDate === date && filters.toDate === date;
+
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => {
+                          setFilters((prev) => ({
+                            ...prev,
+                            fromDate: date,
+                            toDate: date,
+                            page: 1,
+                          }));
+                        }}
+                        className={`rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+                          active
+                            ? "border-sky-300 bg-sky-300/15 text-sky-100"
+                            : "border-white/10 bg-white/6 text-slate-200 hover:bg-white/10"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="space-y-2 text-sm xl:col-span-3">
                 <span className="font-medium text-slate-200">옵션</span>
                 <div className="flex h-12 items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      setDraftFilters((prev) => ({
+                      setFilters((prev) => ({
                         ...prev,
                         searchMyOrders: !prev.searchMyOrders,
                         page: 1,
                       }));
                     }}
                     className={`rounded-full border px-3.5 py-2 text-sm font-medium transition ${
-                      draftFilters.searchMyOrders
+                      filters.searchMyOrders
                         ? "border-sky-300 bg-sky-300/15 text-sky-100"
                         : "border-white/10 bg-white/6 text-slate-200 hover:bg-white/10"
                     }`}
                   >
                     내 주문
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFilters(draftFilters);
-                    }}
-                    className="rounded-full border border-emerald-400/30 bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
-                  >
-                    기간/옵션 적용
-                  </button>
                 </div>
+                <div className="text-xs text-slate-400">날짜와 옵션 변경은 즉시 반영됩니다.</div>
               </div>
             </div>
           </div>
