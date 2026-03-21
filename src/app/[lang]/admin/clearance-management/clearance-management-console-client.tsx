@@ -122,6 +122,7 @@ type FilterState = {
 type WithdrawalRealtimeItem = {
   id: string;
   data: BankTransferDashboardEvent;
+  receivedAt: string;
   highlightUntil: number;
 };
 
@@ -164,6 +165,7 @@ const USDT_FORMATTER = new Intl.NumberFormat("en-US", {
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const WITHDRAWAL_HIGHLIGHT_MS = 4500;
+const WITHDRAWAL_CLOCK_TICK_MS = 5000;
 
 const createInputDate = (daysOffset = 0) => {
   const kstDate = new Date(Date.now() + KST_OFFSET_MS);
@@ -235,6 +237,55 @@ const formatAdminActionDateTime = (value?: string | null) => {
   return parsed.toLocaleString("ko-KR");
 };
 
+const toSafeTimestamp = (value?: string | null) => {
+  if (!value) {
+    return 0;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const formatRealtimeDateTime = (value?: string | null) => {
+  const timestamp = toSafeTimestamp(value);
+  if (!timestamp) {
+    return "-";
+  }
+  return new Date(timestamp).toLocaleString("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
+
+const formatRealtimeRelative = (value: string | null | undefined, nowMs: number) => {
+  const timestamp = toSafeTimestamp(value);
+  if (!timestamp) {
+    return "-";
+  }
+
+  const diffMs = Math.max(0, nowMs - timestamp);
+  const diffSeconds = Math.floor(diffMs / 1000);
+
+  if (diffSeconds < 60) {
+    return `${diffSeconds}초 전`;
+  }
+
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) {
+    return `${diffMinutes}분 전`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}시간 전`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}일 전`;
+};
+
 const formatTimeAgo = (value?: string | null) => {
   if (!value) {
     return "-";
@@ -297,6 +348,52 @@ const getStoreDisplayName = (store?: StoreItem | null) => {
 
 const getStoreLogoSrc = (store?: StoreItem | null) => {
   return String(store?.storeLogo || "").trim() || "/logo.png";
+};
+
+const getStoreBankInfoCandidates = (store?: StoreItem | null) => {
+  const seen = new Set<string>();
+  const candidates = [
+    store?.bankInfo,
+    store?.bankInfoAAA,
+    store?.bankInfoBBB,
+    store?.bankInfoCCC,
+    store?.bankInfoDDD,
+  ].filter(Boolean) as BankInfo[];
+
+  return candidates.filter((item) => {
+    const key = [
+      normalizeText(item.bankName),
+      normalizeText(item.accountHolder),
+      normalizeAccountNumber(item.realAccountNumber || item.accountNumber),
+    ].join("|");
+
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+};
+
+const getStoreConfiguredBankInfoByAccountNumber = (
+  store: StoreItem | null | undefined,
+  bankAccountNumber?: string | null,
+) => {
+  const normalizedTarget = normalizeAccountNumber(bankAccountNumber);
+  if (!normalizedTarget) {
+    return null;
+  }
+
+  return (
+    getStoreBankInfoCandidates(store).find((item) => {
+      const normalizedAccountNumber = normalizeAccountNumber(item.accountNumber);
+      const normalizedRealAccountNumber = normalizeAccountNumber(item.realAccountNumber);
+      return (
+        normalizedAccountNumber === normalizedTarget
+        || normalizedRealAccountNumber === normalizedTarget
+      );
+    }) || null
+  );
 };
 
 const getStoreBankInfo = (order: ClearanceOrder) => {
@@ -460,6 +557,22 @@ const getWithdrawalStatusMeta = (order: ClearanceOrder) => {
   };
 };
 
+const getWithdrawalRealtimeStatusMeta = (event?: BankTransferDashboardEvent | null) => {
+  const normalizedStatus = normalizeText(event?.status).toLowerCase();
+
+  if (normalizedStatus === "stored") {
+    return {
+      label: "저장완료",
+      className: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    };
+  }
+
+  return {
+    label: "오류",
+    className: "border border-amber-200 bg-amber-50 text-amber-700",
+  };
+};
+
 export default function ClearanceManagementConsoleClient({ lang }: { lang: string }) {
   const activeAccount = useActiveAccount();
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
@@ -472,6 +585,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const [withdrawalRealtimeItems, setWithdrawalRealtimeItems] = useState<WithdrawalRealtimeItem[]>([]);
   const [connectionState, setConnectionState] = useState<Ably.ConnectionState>("initialized");
   const [connectionError, setConnectionError] = useState("");
+  const [withdrawalRealtimeNowMs, setWithdrawalRealtimeNowMs] = useState(() => Date.now());
   const [actionModalState, setActionModalState] = useState<ClearanceActionModalState | null>(null);
   const [actionModalSubmitting, setActionModalSubmitting] = useState(false);
   const [actionModalError, setActionModalError] = useState("");
@@ -506,25 +620,24 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
       }
 
       try {
-        const signedOrdersBody =
-          activeAccount && filters.storecode
-            ? await createCenterStoreAdminSignedBody({
-                account: activeAccount,
-                route: "/api/order/getAllCollectOrdersForSeller",
+        const signedOrdersBody = activeAccount
+          ? await createCenterStoreAdminSignedBody({
+              account: activeAccount,
+              route: "/api/order/getAllBuyOrders",
+              storecode: "admin",
+              requesterWalletAddress: activeAccount.address,
+              body: {
                 storecode: filters.storecode,
-                requesterWalletAddress: activeAccount.address,
-                body: {
-                  storecode: filters.storecode,
-                  limit: filters.limit,
-                  page: filters.page,
-                  walletAddress: activeAccount.address,
-                  searchMyOrders: filters.searchMyOrders,
-                  privateSale: true,
-                  fromDate: filters.fromDate,
-                  toDate: filters.toDate,
-                },
-              })
-            : null;
+                limit: filters.limit,
+                page: filters.page,
+                walletAddress: activeAccount.address,
+                searchMyOrders: filters.searchMyOrders,
+                privateSale: true,
+                fromDate: filters.fromDate,
+                toDate: filters.toDate,
+              },
+            })
+          : null;
 
         const response = await fetch("/api/bff/admin/clearance-dashboard", {
           method: "POST",
@@ -557,6 +670,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
             ? payload.result.withdrawalEvents.map((event: BankTransferDashboardEvent) => ({
                 id: String(event.eventId || event.traceId || Math.random().toString(36).slice(2)),
                 data: event,
+                receivedAt: new Date().toISOString(),
                 highlightUntil: 0,
               }))
             : [],
@@ -605,6 +719,14 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   }, [loadDashboard]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      setWithdrawalRealtimeNowMs(Date.now());
+    }, WITHDRAWAL_CLOCK_TICK_MS);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (storeSearchRef.current && !storeSearchRef.current.contains(event.target as Node)) {
         setStoreSearchOpen(false);
@@ -616,10 +738,6 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   }, []);
 
   useEffect(() => {
-    if (!filters.storecode) {
-      return;
-    }
-
     const realtime = new Ably.Realtime({
       authUrl: `/api/bff/realtime/ably-token?stream=ops-admin&clientId=${ablyClientIdRef.current}`,
     });
@@ -648,9 +766,11 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
       }
 
       const storecode = String(event.store?.code || "").trim();
-      if (storecode && storecode === filters.storecode) {
-        requestRealtimeRefresh();
+      if (filters.storecode && storecode !== filters.storecode) {
+        return;
       }
+
+      requestRealtimeRefresh();
     };
 
     const onBanktransferMessage = (message: Ably.Message) => {
@@ -665,26 +785,38 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
 
       if (
         normalizeBankTransferTransactionType(event.transactionType) !== "withdrawn"
-        || String(event.storecode || "").trim() !== filters.storecode
+        || (filters.storecode && String(event.storecode || "").trim() !== filters.storecode)
       ) {
         return;
       }
 
       setWithdrawalRealtimeItems((current) => {
+        const receivedAt = new Date().toISOString();
         const nextId = eventId || `${event.traceId || "withdraw"}-${event.publishedAt || Date.now()}`;
         const nextMap = new Map(current.map((item) => [item.id, item]));
+        const existing = nextMap.get(nextId);
         nextMap.set(nextId, {
           id: nextId,
           data: event,
+          receivedAt: existing?.receivedAt || receivedAt,
           highlightUntil: Date.now() + WITHDRAWAL_HIGHLIGHT_MS,
         });
 
         return Array.from(nextMap.values())
           .sort((left, right) => {
-            return (
-              Date.parse(String(right.data.processingDate || right.data.transactionDate || right.data.publishedAt || 0))
-              - Date.parse(String(left.data.processingDate || left.data.transactionDate || left.data.publishedAt || 0))
+            const rightTimestamp = Math.max(
+              toSafeTimestamp(right.data.processingDate),
+              toSafeTimestamp(right.data.transactionDate),
+              toSafeTimestamp(right.data.publishedAt),
+              toSafeTimestamp(right.receivedAt),
             );
+            const leftTimestamp = Math.max(
+              toSafeTimestamp(left.data.processingDate),
+              toSafeTimestamp(left.data.transactionDate),
+              toSafeTimestamp(left.data.publishedAt),
+              toSafeTimestamp(left.receivedAt),
+            );
+            return rightTimestamp - leftTimestamp;
           })
           .slice(0, 24);
       });
@@ -716,6 +848,24 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
     }
     return stores.find((item) => String(item.storecode || "").trim() === filters.storecode) || data?.selectedStore || null;
   }, [data?.selectedStore, filters.storecode, stores]);
+  const selectedStoreLabel = getStoreDisplayName(selectedStore) || filters.storecode || "전체 가맹점";
+  const storeScopeLabel = filters.storecode || "all stores";
+  const withdrawalRealtimeEventCount = withdrawalRealtimeItems.length;
+  const withdrawalRealtimeAmountTotal = withdrawalRealtimeItems.reduce((sum, item) => {
+    return sum + Number(item.data.amount || 0);
+  }, 0);
+  const latestWithdrawalRealtimeAt =
+    withdrawalRealtimeItems[0]?.data.processingDate
+    || withdrawalRealtimeItems[0]?.data.transactionDate
+    || withdrawalRealtimeItems[0]?.data.publishedAt
+    || withdrawalRealtimeItems[0]?.receivedAt
+    || null;
+  const connectionIndicatorClassName =
+    connectionState === "connected"
+      ? "bg-emerald-500"
+      : connectionState === "connecting" || connectionState === "initialized"
+        ? "bg-amber-400"
+        : "bg-rose-500";
   const filteredStoreOptions = useMemo(() => {
     const normalizedQuery = storeSearchQuery.trim().toLowerCase();
     return stores
@@ -1003,10 +1153,8 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                   <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
                     Selected store
                   </div>
-                  <div className="mt-2 text-lg font-semibold text-white">
-                    {getStoreDisplayName(selectedStore) || "가맹점 선택 필요"}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-400">{filters.storecode || "storecode not selected"}</div>
+                  <div className="mt-2 text-lg font-semibold text-white">{selectedStoreLabel}</div>
+                  <div className="mt-1 text-xs text-slate-400">{storeScopeLabel}</div>
                 </div>
                 <div className="console-dark-card rounded-[24px] p-4">
                   <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
@@ -1351,73 +1499,255 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
 
         <section className="console-panel overflow-hidden rounded-[30px]">
           <div className="border-b border-slate-200/80 px-6 py-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                  webhook 통장출금 LIVE
-                </h2>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">
+                    Live
+                  </div>
+                  <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                    webhook 통장출금 LIVE
+                  </h2>
+                  <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-700">
+                    Ably
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {BANKTRANSFER_ABLY_EVENT_NAME}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                    필터 {selectedStoreLabel}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                    최근 {latestWithdrawalRealtimeAt ? formatRealtimeRelative(latestWithdrawalRealtimeAt, withdrawalRealtimeNowMs) : "-"}
+                  </span>
+                  {refreshing ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                      silent refresh
+                    </span>
+                  ) : null}
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                <span className="rounded-full bg-slate-100 px-3 py-1">
-                  {filters.storecode || "store not selected"}
-                </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1">{connectionState}</span>
+
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                  <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                    Connection
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    <span className={`inline-block h-2.5 w-2.5 rounded-full ${connectionIndicatorClassName}`} />
+                    {connectionState}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                  <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                    Events
+                  </div>
+                  <div className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
+                    {NUMBER_FORMATTER.format(withdrawalRealtimeEventCount)}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                  <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                    Withdrawn
+                  </div>
+                  <div className="mt-1 text-sm font-semibold tabular-nums text-rose-600">
+                    {formatKrwValue(withdrawalRealtimeAmountTotal)} KRW
+                  </div>
+                </div>
               </div>
             </div>
+
+            {connectionError ? (
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                연결 오류: {connectionError}
+              </div>
+            ) : null}
           </div>
 
-          <div className="overflow-x-auto px-6 py-5">
-            <div className="flex min-w-full gap-3">
-              {(withdrawalRealtimeItems.length === 0 ? [] : withdrawalRealtimeItems).map((item) => {
-                const isHighlighted = item.highlightUntil > Date.now();
-                const event = item.data;
-                const receiverLabel = event.receiver?.accountHolder || event.receiver?.nickname || "-";
+          <div className="px-6 py-5">
+            {withdrawalRealtimeEventCount === 0 ? (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
+                현재 조건에 맞는 통장출금 webhook 이벤트가 없습니다.
+              </div>
+            ) : (
+              <div className="-mx-1 overflow-x-auto px-1 pb-1">
+                <div className="flex min-w-full items-stretch gap-3">
+                  {withdrawalRealtimeItems.map((item) => {
+                    const event = item.data;
+                    const isHighlighted = item.highlightUntil > withdrawalRealtimeNowMs;
+                    const publishedAt =
+                      event.processingDate || event.transactionDate || event.publishedAt || item.receivedAt;
+                    const matchedStore =
+                      stores.find((store) => {
+                        return String(store.storecode || "").trim() === String(event.storecode || "").trim();
+                      }) || null;
+                    const configuredFromBankInfo = getStoreConfiguredBankInfoByAccountNumber(
+                      matchedStore,
+                      event.bankAccountNumber,
+                    );
+                    const isConfiguredAccountMatched = Boolean(configuredFromBankInfo);
+                    const normalizedWebhookName = normalizeText(event.transactionName);
+                    const normalizedConfiguredHolder = normalizeText(configuredFromBankInfo?.accountHolder);
+                    const isConfiguredHolderMatched =
+                      Boolean(normalizedWebhookName)
+                      && Boolean(normalizedConfiguredHolder)
+                      && normalizedWebhookName === normalizedConfiguredHolder;
+                    const receiverAccountHolder =
+                      normalizeText(event.receiver?.accountHolder) || normalizeText(event.receiver?.nickname) || "-";
+                    const receiverBankName = normalizeText(event.receiver?.bankName) || "-";
+                    const receiverAccountNumber =
+                      normalizeAccountNumber(event.receiver?.accountNumber) || "-";
+                    const eventStoreName =
+                      normalizeText(event.store?.name)
+                      || getStoreDisplayName(matchedStore)
+                      || normalizeText(event.storecode)
+                      || "미매칭";
+                    const eventStoreLogo = normalizeText(event.store?.logo) || getStoreLogoSrc(matchedStore);
+                    const eventStatusMeta = getWithdrawalRealtimeStatusMeta(event);
 
-                return (
-                  <article
-                    key={item.id}
-                    className={`w-[292px] shrink-0 rounded-[24px] border px-4 py-4 transition ${
-                      isHighlighted
-                        ? "border-emerald-200 bg-emerald-50/80 shadow-[0_12px_30px_-18px_rgba(16,185,129,0.65)]"
-                        : "border-slate-200 bg-white"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-xs uppercase tracking-[0.14em] text-slate-400">출금</div>
-                        <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-rose-600">
-                          {formatKrwValue(event.amount)} KRW
+                    return (
+                      <article
+                        key={item.id}
+                        className={`w-[322px] min-w-[322px] shrink-0 rounded-[26px] border px-4 py-4 transition-all ${
+                          isHighlighted
+                            ? "border-sky-300 bg-sky-50 shadow-[0_14px_30px_-20px_rgba(14,165,233,0.75)]"
+                            : "border-slate-200 bg-white shadow-sm"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold tracking-[0.14em] text-rose-700">
+                                출금
+                              </span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${eventStatusMeta.className}`}>
+                                {eventStatusMeta.label}
+                              </span>
+                              {isHighlighted ? (
+                                <span className="rounded-full border border-sky-300 bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                                  NEW
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-rose-600">
+                              {formatKrwValue(event.amount)} KRW
+                            </div>
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              {formatRealtimeDateTime(publishedAt)}
+                            </div>
+                          </div>
+
+                          <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-1.5">
+                            <img
+                              src={eventStoreLogo}
+                              alt={eventStoreName}
+                              className="h-9 w-9 rounded-full border border-slate-200 bg-white object-cover"
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate text-[11px] font-semibold text-slate-900">
+                                {eventStoreName}
+                              </div>
+                              <div className="truncate text-[10px] text-slate-500">
+                                {event.storecode || "-"}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
-                        {formatTimeAgo(event.processingDate || event.transactionDate || event.publishedAt)}
-                      </span>
-                    </div>
 
-                    <div className="mt-4 space-y-2 text-sm text-slate-600">
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                        <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수취인</div>
-                        <div className="mt-1 font-semibold text-slate-900">{receiverLabel}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {event.receiver?.bankName || "-"} · {normalizeAccountNumber(event.receiver?.accountNumber) || "-"}
+                        <div className="mt-3 space-y-2">
+                          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                송금인 통장
+                              </span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                  isConfiguredAccountMatched
+                                    ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : "border border-amber-200 bg-amber-50 text-amber-700"
+                                }`}
+                              >
+                                {isConfiguredAccountMatched ? "계좌 일치" : "계좌 미일치"}
+                              </span>
+                              {isConfiguredAccountMatched ? (
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    isConfiguredHolderMatched
+                                      ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                                      : "border border-slate-200 bg-slate-50 text-slate-600"
+                                  }`}
+                                >
+                                  {isConfiguredHolderMatched ? "예금주 일치" : "예금주 상이"}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {isConfiguredAccountMatched ? (
+                              <div className="mt-1.5 space-y-1">
+                                <div className="text-xs font-semibold text-slate-900">
+                                  {normalizeText(configuredFromBankInfo?.bankName) || "-"}
+                                </div>
+                                <div className="text-[11px] text-slate-600">
+                                  {(normalizeText(configuredFromBankInfo?.accountHolder) || "-")
+                                    + " · "
+                                    + (normalizeAccountNumber(
+                                      configuredFromBankInfo?.realAccountNumber || configuredFromBankInfo?.accountNumber,
+                                    ) || "-")}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-1.5 text-[11px] text-slate-500">
+                                해당 가맹점의 송금인 통장을 찾지 못했습니다.
+                              </div>
+                            )}
+
+                            <div className="mt-2 text-[11px] text-slate-500">
+                              거래명 {normalizedWebhookName || "-"}
+                            </div>
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              계좌 {normalizeAccountNumber(event.bankAccountNumber) || "-"}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">수취인 통장</div>
+                            <div className="mt-1 text-xs font-semibold text-slate-900">{receiverBankName}</div>
+                            <div className="mt-1 text-[11px] text-slate-600">
+                              {receiverAccountHolder} · {receiverAccountNumber}
+                            </div>
+                            {normalizeText(event.receiver?.walletAddress) ? (
+                              <div className="console-mono mt-1 text-[10px] text-slate-500">
+                                {shortAddress(event.receiver?.walletAddress)}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                        <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">원본 거래명</div>
-                        <div className="mt-1 font-medium text-slate-900">{event.transactionName || "-"}</div>
-                        <div className="mt-1 text-xs text-slate-500">{formatDateTime(event.processingDate || event.transactionDate)}</div>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
 
-              {withdrawalRealtimeItems.length === 0 ? (
-                <div className="w-full rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
-                  선택한 가맹점의 출금 live 이벤트가 아직 없습니다.
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px]">
+                          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600">
+                            TID {event.tradeId || "-"}
+                          </span>
+                          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600">
+                            매칭 {event.match || "-"}
+                          </span>
+                          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600">
+                            {formatRealtimeRelative(publishedAt, withdrawalRealtimeNowMs)}
+                          </span>
+                        </div>
+
+                        {normalizeText(event.errorMessage) ? (
+                          <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                            {event.errorMessage}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
                 </div>
-              ) : null}
-            </div>
+              </div>
+            )}
           </div>
         </section>
 

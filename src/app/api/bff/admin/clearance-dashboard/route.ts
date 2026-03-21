@@ -84,22 +84,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (selectedStorecode && hasSignedOrdersBody) {
-    jobs.push(postRemoteJson("/api/order/getAllCollectOrdersForSeller", signedOrdersBody));
+  if (hasSignedOrdersBody) {
+    jobs.push(postRemoteJson("/api/order/getAllBuyOrders", signedOrdersBody));
   }
 
   const results = await Promise.all(jobs);
   const storesResponse = results[0];
   const withdrawalEventsResponse = results[1];
   const selectedStoreResponse = selectedStorecode ? results[2] : null;
-  const signedOrdersResponse = selectedStorecode && hasSignedOrdersBody
+  const signedOrdersResponse = hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
+  const signedOrdersResult = signedOrdersResponse?.json?.result || {};
   const storesError = storesResponse.ok
     ? ""
     : resolveRemoteError(storesResponse.json, "Failed to load store list");
 
-  if (selectedStorecode && hasSignedOrdersBody && signedOrdersResponse && !signedOrdersResponse.ok) {
+  if (hasSignedOrdersBody && signedOrdersResponse && !signedOrdersResponse.ok) {
     return NextResponse.json(
       {
         error: resolveRemoteError(signedOrdersResponse.json, "Failed to load clearance orders"),
@@ -125,11 +126,25 @@ export async function POST(request: NextRequest) {
       storeTotalCount: storesResponse.json?.result?.totalCount || 0,
       storesError,
       selectedStore: selectedStoreResponse?.json?.result || null,
-      orders: signedOrdersResponse?.json?.result?.orders || [],
-      totalCount: signedOrdersResponse?.json?.result?.totalCount || 0,
-      totalClearanceCount: signedOrdersResponse?.json?.result?.totalClearanceCount || 0,
-      totalClearanceAmount: signedOrdersResponse?.json?.result?.totalClearanceAmount || 0,
-      totalClearanceAmountKRW: signedOrdersResponse?.json?.result?.totalClearanceAmountKRW || 0,
+      orders: signedOrdersResult.orders || [],
+      totalCount: Number(signedOrdersResult.totalCount || 0),
+      totalClearanceCount: Number(
+        signedOrdersResult.totalSettlementCount
+          ?? signedOrdersResult.totalClearanceCount
+          ?? 0,
+      ),
+      totalClearanceAmount: Number(
+        signedOrdersResult.totalSettlementAmount
+          ?? signedOrdersResult.totalClearanceAmount
+          ?? signedOrdersResult.totalUsdtAmount
+          ?? 0,
+      ),
+      totalClearanceAmountKRW: Number(
+        signedOrdersResult.totalSettlementAmountKRW
+          ?? signedOrdersResult.totalClearanceAmountKRW
+          ?? signedOrdersResult.totalKrwAmount
+          ?? 0,
+      ),
       withdrawalEvents,
       withdrawalNextCursor: typeof withdrawalEventsResponse.json?.nextCursor === "string"
         ? withdrawalEventsResponse.json.nextCursor

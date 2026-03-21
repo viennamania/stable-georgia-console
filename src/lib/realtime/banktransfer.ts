@@ -17,6 +17,7 @@ export type BankTransferDashboardEvent = {
   status?: string | null;
   storecode?: string | null;
   match?: string | null;
+  errorMessage?: string | null;
   receiver?: {
     nickname?: string | null;
     walletAddress?: string | null;
