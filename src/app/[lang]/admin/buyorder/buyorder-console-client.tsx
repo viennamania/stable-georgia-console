@@ -2988,13 +2988,12 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
           <div className="relative px-2 pb-2">
             <div className={`overflow-x-auto transition ${showOrdersLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
-              <table className="min-w-[1420px] w-full border-separate border-spacing-0">
+              <table className="min-w-[1320px] w-full border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
                   <th className="border-b border-slate-200 px-4 py-3">거래번호</th>
                   <th className="w-[156px] border-b border-slate-200 px-4 py-3">상태</th>
-                  <th className="w-[196px] border-b border-slate-200 px-4 py-3">가맹점</th>
-                  <th className="border-b border-slate-200 px-4 py-3">구매자</th>
+                  <th className="w-[280px] border-b border-slate-200 px-4 py-3">구매자 / 가맹점</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">구매금액 / 구매량</th>
                   <th className="w-[220px] border-b border-slate-200 px-4 py-3">판매자</th>
                   <th className="w-[208px] border-b border-slate-200 px-4 py-3">입금처리</th>
@@ -3019,7 +3018,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               <tbody>
                 {orders.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
                       {loading ? (
                         <span className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700">
                           <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
@@ -3168,27 +3167,32 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             ) : null}
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={storeLogoSrc}
-                              alt={storeLabel}
-                              className="h-10 w-10 rounded-2xl border border-slate-200 bg-slate-100 object-cover"
-                            />
-                            <div className="min-w-0">
-                              <div className="truncate font-medium text-slate-950">{storeLabel}</div>
+                        <td className="w-[280px] border-b border-slate-100 px-4 py-4 align-top">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[15px] font-semibold text-slate-950">
+                                {buyerDepositName || buyerLabel}
+                              </div>
+                              {buyerDepositName && shouldShowBuyerLabel ? (
+                                <div className="mt-1 truncate text-sm font-medium text-slate-600">
+                                  {buyerLabel}
+                                </div>
+                              ) : null}
+                            </div>
+                            <div className="flex min-w-0 max-w-[112px] items-center gap-2 text-right">
+                              <img
+                                src={storeLogoSrc}
+                                alt={storeLabel}
+                                className="h-8 w-8 shrink-0 rounded-xl border border-slate-200 bg-slate-100 object-cover"
+                              />
+                              <div className="min-w-0">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                                  가맹점
+                                </div>
+                                <div className="truncate text-sm font-medium text-slate-700">{storeLabel}</div>
+                              </div>
                             </div>
                           </div>
-                        </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="truncate text-[15px] font-semibold text-slate-950">
-                            {buyerDepositName || buyerLabel}
-                          </div>
-                          {buyerDepositName && shouldShowBuyerLabel ? (
-                            <div className="mt-1 truncate text-sm font-medium text-slate-600">
-                              {buyerLabel}
-                            </div>
-                          ) : null}
                           <div className="console-mono mt-1 text-xs text-slate-500">
                             {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                           </div>
