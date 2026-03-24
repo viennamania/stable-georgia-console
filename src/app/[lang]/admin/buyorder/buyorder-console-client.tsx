@@ -230,6 +230,11 @@ const KRW_FORMATTER = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 0,
 });
 
+const RATE_FORMATTER = new Intl.NumberFormat("ko-KR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 const USDT_FORMATTER = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 3,
   maximumFractionDigits: 3,
@@ -431,6 +436,14 @@ const formatKrw = (value?: number | null) => {
 const formatKrwValue = (value?: number | null) => {
   const numeric = Number(value || 0);
   return KRW_FORMATTER.format(numeric);
+};
+
+const formatRateValue = (value?: number | null) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return "-";
+  }
+  return RATE_FORMATTER.format(numeric);
 };
 
 const maskName = (value?: string | null) => {
@@ -3154,6 +3167,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-slate-400">
                               USDT
                             </span>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            환율 {formatRateValue(order.rate)} KRW / USDT
                           </div>
                         </td>
                         <td className="w-[208px] border-b border-slate-100 px-4 py-4 align-top">
