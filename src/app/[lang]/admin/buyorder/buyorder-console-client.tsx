@@ -2629,7 +2629,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
                       {item.label}
                     </div>
-                    <div className="console-display mt-1.5 text-right text-[2rem] font-semibold tracking-[-0.05em] text-slate-950">
+                    <div className="console-display mt-1 text-right text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
                       {item.value}
                     </div>
                   </div>
