@@ -3159,8 +3159,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                 disabled={isCancellingThisOrder || cancelModalSubmitting}
                                 className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
                                   isCancellingThisOrder || cancelModalSubmitting
-                                    ? "cursor-not-allowed border border-rose-200 bg-rose-50 text-rose-500 opacity-60"
-                                    : "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                                    ? "cursor-not-allowed border border-rose-500 bg-rose-400 text-white opacity-60"
+                                    : "border border-rose-600 bg-rose-600 text-white shadow-[0_10px_24px_-12px_rgba(225,29,72,0.92)] hover:border-rose-500 hover:bg-rose-500"
                                 }`}
                               >
                                 {isCancellingThisOrder ? "거래취소중..." : "거래취소하기"}
@@ -3177,7 +3177,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             />
                             <div className="min-w-0">
                               <div className="truncate font-medium text-slate-950">{storeLabel}</div>
-                              <div className="mt-1 text-xs text-slate-500">{order.storecode || "-"}</div>
                             </div>
                           </div>
                         </td>
