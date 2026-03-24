@@ -3062,6 +3062,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       status === "paymentConfirmed" && hasSettlementCompleted(order);
                     const settlement = getSettlementInfo(order);
                     const settlementTxHash = getSettlementTxHash(order);
+                    const isSettlementPending = status === "paymentConfirmed" && !hasSettlementCompleted(order);
+                    const settlementPendingElapsedLabel = formatElapsedTimer(
+                      order.paymentConfirmedAt || settlement?.createdAt || order.updatedAt || order.createdAt,
+                      countdownNowMs,
+                    );
                     const shouldShowUsdtTransferAmount = status === "paymentConfirmed";
                     const isUsdtTransferPending =
                       status === "paymentConfirmed" && (!transactionHash || transactionHash === "0x");
@@ -3311,7 +3316,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           )}
                         </td>
                         <td className="w-[188px] border-b border-slate-100 px-4 py-4 align-top">
-                          {settlementTxHash ? (
+                          {isSettlementPending ? (
+                            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
+                              <div className="text-sm font-semibold text-slate-950">결제중</div>
+                              <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
+                                {settlementPendingElapsedLabel || "--:--:--"}
+                              </div>
+                            </div>
+                          ) : settlementTxHash ? (
                     <a
                       href={getBscscanTxUrl(settlementTxHash)}
                       target="_blank"
