@@ -280,6 +280,7 @@ const COUNTDOWN_TICK_MS = 1000;
 const NEW_ORDER_HIGHLIGHT_MS = 6500;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const SUMMARY_VALUE_ANIMATION_MS = 700;
 
 const createInputDate = (daysOffset = 0) => {
   const kstDate = new Date(Date.now() + KST_OFFSET_MS);
@@ -481,6 +482,74 @@ const formatRateValue = (value?: number | null) => {
     return "-";
   }
   return RATE_FORMATTER.format(numeric);
+};
+
+const easeOutQuart = (progress: number) => {
+  return 1 - ((1 - progress) ** 4);
+};
+
+const useAnimatedNumber = (value: number | null | undefined, durationMs = SUMMARY_VALUE_ANIMATION_MS) => {
+  const targetValue = Number(value || 0);
+  const safeTargetValue = Number.isFinite(targetValue) ? targetValue : 0;
+  const [animatedValue, setAnimatedValue] = useState(safeTargetValue);
+  const animatedValueRef = useRef(safeTargetValue);
+  const animationFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    const startValue = animatedValueRef.current;
+    if (Math.abs(startValue - safeTargetValue) < 0.0005) {
+      animatedValueRef.current = safeTargetValue;
+      setAnimatedValue(safeTargetValue);
+      return;
+    }
+
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      animatedValueRef.current = safeTargetValue;
+      setAnimatedValue(safeTargetValue);
+      return;
+    }
+
+    const startTime = performance.now();
+
+    const animate = (timestamp: number) => {
+      const progress = Math.min(1, (timestamp - startTime) / durationMs);
+      const easedProgress = easeOutQuart(progress);
+      const nextValue = startValue + ((safeTargetValue - startValue) * easedProgress);
+      animatedValueRef.current = nextValue;
+      setAnimatedValue(nextValue);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      animatedValueRef.current = safeTargetValue;
+      setAnimatedValue(safeTargetValue);
+      animationFrameRef.current = null;
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [durationMs, safeTargetValue]);
+
+  return animatedValue;
 };
 
 const maskName = (value?: string | null) => {
@@ -2099,6 +2168,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
   const isSignedIn = Boolean(activeAccount);
   const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
+  const animatedTradeSummaryTotalCount = useAnimatedNumber(tradeSummary.totalCount);
+  const animatedTradeSummaryTotalUsdtAmount = useAnimatedNumber(tradeSummary.totalUsdtAmount);
+  const animatedTradeSummaryTotalKrwAmount = useAnimatedNumber(tradeSummary.totalKrwAmount);
+  const animatedTradeSummaryTotalSettlementCount = useAnimatedNumber(tradeSummary.totalSettlementCount);
+  const animatedTradeSummaryTotalSettlementAmount = useAnimatedNumber(tradeSummary.totalSettlementAmount);
+  const animatedTradeSummaryTotalSettlementAmountKrw = useAnimatedNumber(tradeSummary.totalSettlementAmountKRW);
+  const animatedTradeSummaryTotalFeeAmount = useAnimatedNumber(tradeSummary.totalFeeAmount);
+  const animatedTradeSummaryTotalFeeAmountKrw = useAnimatedNumber(tradeSummary.totalFeeAmountKRW);
   const sellerBankTradeStats = data?.sellerBankTradeStats || EMPTY_SELLER_BANK_TRADE_STATS;
   const banktransferTodaySummary = data?.banktransferTodaySummary || EMPTY_BANKTRANSFER_TODAY_SUMMARY;
   const sellerBankTradeSummaries = useMemo(() => {
@@ -2808,7 +2885,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Count</div>
                 <div className="mt-1 text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                  {NUMBER_FORMATTER.format(tradeSummary.totalCount)}
+                  {NUMBER_FORMATTER.format(animatedTradeSummaryTotalCount)}
                 </div>
               </div>
             </div>
@@ -2818,7 +2895,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래량</div>
                 <div className="mt-2 flex items-end justify-end gap-3 text-right">
                   <span className="text-[1.4rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {formatUsdtValue(tradeSummary.totalUsdtAmount)}
+                    {formatUsdtValue(animatedTradeSummaryTotalUsdtAmount)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
                 </div>
@@ -2828,7 +2905,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래금액</div>
                 <div className="mt-2 flex items-end justify-end gap-3 text-right">
                   <span className="text-[1.4rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {formatKrwValue(tradeSummary.totalKrwAmount)}
+                    {formatKrwValue(animatedTradeSummaryTotalKrwAmount)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
@@ -2845,7 +2922,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Count</div>
                 <div className="mt-1 text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                  {NUMBER_FORMATTER.format(tradeSummary.totalSettlementCount)}
+                  {NUMBER_FORMATTER.format(animatedTradeSummaryTotalSettlementCount)}
                 </div>
               </div>
             </div>
@@ -2855,7 +2932,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제량</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {formatUsdtValue(tradeSummary.totalSettlementAmount)}
+                    {formatUsdtValue(animatedTradeSummaryTotalSettlementAmount)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
                 </div>
@@ -2865,7 +2942,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제금액</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {formatKrwValue(tradeSummary.totalSettlementAmountKRW)}
+                    {formatKrwValue(animatedTradeSummaryTotalSettlementAmountKrw)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
@@ -2875,7 +2952,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료량</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {formatUsdtValue(tradeSummary.totalFeeAmount)}
+                    {formatUsdtValue(animatedTradeSummaryTotalFeeAmount)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
                 </div>
@@ -2885,7 +2962,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료금액</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {formatKrwValue(tradeSummary.totalFeeAmountKRW)}
+                    {formatKrwValue(animatedTradeSummaryTotalFeeAmountKrw)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
@@ -2944,11 +3021,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   현재 필터에 해당하는 판매자 통장별 P2P 거래 집계가 없습니다.
                 </div>
               ) : (
-                <div className="grid justify-center gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(186px,208px))]">
+                <div className="grid justify-center gap-1 [grid-template-columns:repeat(auto-fit,minmax(168px,182px))]">
                   {sellerBankTradeSummaries.map((item, index) => (
                     <article
                       key={`${item.accountNumber}-${index}`}
-                      className="w-full rounded-[15px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.9))] px-2 py-2 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)]"
+                      className="w-full rounded-[14px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.9))] px-1.5 py-1.5 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)]"
                     >
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
@@ -2956,11 +3033,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             <span className="console-mono inline-flex h-5 shrink-0 items-center rounded-full bg-slate-100 px-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                               {String(index + 1).padStart(2, "0")}
                             </span>
-                            <div className="truncate text-[10px] text-slate-500">
+                            <div className="truncate text-[9px] text-slate-500">
                               {item.bankName}
                             </div>
-                            <span className="shrink-0 text-[10px] text-slate-300">/</span>
-                            <div className="truncate text-[11px] font-semibold text-slate-900">
+                            <span className="shrink-0 text-[9px] text-slate-300">/</span>
+                            <div className="truncate text-[10px] font-semibold text-slate-900">
                               {item.accountHolder}
                             </div>
                           </div>
@@ -2974,27 +3051,27 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             }
                             void navigator.clipboard?.writeText(item.accountNumber);
                           }}
-                          className="shrink-0 rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="shrink-0 rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
                           disabled={!item.accountNumber || item.accountNumber === "-"}
                         >
                           복사
                         </button>
                       </div>
 
-                      <div className="console-mono mt-1 truncate text-[0.82rem] font-semibold tracking-[-0.04em] text-slate-950">
+                      <div className="console-mono mt-1 truncate text-[0.76rem] font-semibold tracking-[-0.04em] text-slate-950">
                         {item.accountNumber}
                       </div>
 
-                      <div className="mt-1 grid grid-cols-[54px_minmax(0,1fr)] gap-1">
-                        <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-2 py-1.5 text-right text-[11px] font-semibold tracking-[-0.03em] text-slate-950">
+                      <div className="mt-1 grid grid-cols-[46px_minmax(0,1fr)] gap-1">
+                        <div className="rounded-[9px] border border-slate-200 bg-slate-50 px-1.5 py-1 text-right text-[10px] font-semibold tracking-[-0.03em] text-slate-950">
                           <div>
                             {NUMBER_FORMATTER.format(item.totalCount)}
                           </div>
                         </div>
 
-                        <div className="rounded-[10px] border border-amber-100 bg-amber-50/70 px-2 py-1.5">
+                        <div className="rounded-[9px] border border-amber-100 bg-amber-50/70 px-1.5 py-1">
                           <div
-                            className="console-mono truncate text-right text-[11px] font-semibold tracking-[-0.03em] text-amber-700"
+                            className="console-mono truncate text-right text-[10px] font-semibold tracking-[-0.03em] text-amber-700"
                             style={{ fontFamily: "monospace" }}
                           >
                             {formatKrwValue(item.totalKrwAmount)}
