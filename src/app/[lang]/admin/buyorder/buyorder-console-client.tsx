@@ -1022,6 +1022,18 @@ const getBscscanTxUrl = (txHash: string) => {
   return `https://bscscan.com/tx/${txHash}`;
 };
 
+const BscChainIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+      <circle cx="12" cy="12" r="12" fill="#FFF7DB" />
+      <path
+        fill="#F0B90B"
+        d="M12 4.25 14.35 6.6 12 8.95 9.65 6.6 12 4.25Zm4.4 4.4 2.35 2.35-2.35 2.35-2.35-2.35 2.35-2.35Zm-8.8 0 2.35 2.35-2.35 2.35-2.35-2.35L7.6 8.65ZM12 13.05l2.35 2.35L12 17.75l-2.35-2.35L12 13.05Zm0-4.4 2.35 2.35L12 13.35 9.65 11 12 8.65Z"
+      />
+    </svg>
+  );
+};
+
 const getBuyerLabel = (order: BuyOrder) => {
   return (
     order.buyer?.nickname
@@ -3346,6 +3358,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         rel="noreferrer"
                         className="mt-1 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
                       >
+                        <BscChainIcon className="h-4 w-4 shrink-0" />
                         <span className="console-mono">{shortAddress(transactionHash)}</span>
                       </a>
                           ) : (
@@ -3367,6 +3380,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       rel="noreferrer"
                       className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
                     >
+                      <BscChainIcon className="h-4 w-4 shrink-0" />
                       <span className="console-mono">{shortAddress(settlementTxHash)}</span>
                     </a>
                           ) : (
