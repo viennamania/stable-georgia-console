@@ -2944,23 +2944,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   현재 필터에 해당하는 판매자 통장별 P2P 거래 집계가 없습니다.
                 </div>
               ) : (
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid justify-center gap-2 [grid-template-columns:repeat(auto-fit,minmax(214px,240px))]">
                   {sellerBankTradeSummaries.map((item, index) => (
                     <article
                       key={`${item.accountNumber}-${index}`}
-                      className="rounded-[18px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.9))] px-3 py-3 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)]"
+                      className="w-full rounded-[16px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.9))] px-2.5 py-2.5 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)]"
                     >
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start justify-between gap-1.5">
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <span className="console-mono inline-flex h-5 shrink-0 items-center rounded-full bg-slate-100 px-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                               {String(index + 1).padStart(2, "0")}
                             </span>
-                            <div className="truncate text-[13px] font-semibold text-slate-900">
+                            <div className="truncate text-[12px] font-semibold text-slate-900">
                               {item.bankName}
                             </div>
                           </div>
-                          <div className="mt-1 truncate text-[11px] text-slate-500">
+                          <div className="mt-0.5 truncate text-[10px] text-slate-500">
                             {item.accountHolder}
                           </div>
                         </div>
@@ -2973,29 +2973,29 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             }
                             void navigator.clipboard?.writeText(item.accountNumber);
                           }}
-                          className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="shrink-0 rounded-full border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
                           disabled={!item.accountNumber || item.accountNumber === "-"}
                         >
                           복사
                         </button>
                       </div>
 
-                      <div className="console-mono mt-2 truncate text-[0.92rem] font-semibold tracking-[-0.04em] text-slate-950">
+                      <div className="console-mono mt-1.5 truncate text-[0.88rem] font-semibold tracking-[-0.04em] text-slate-950">
                         {item.accountNumber}
                       </div>
 
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="rounded-[12px] border border-slate-200 bg-slate-50 px-2.5 py-2">
+                      <div className="mt-1.5 grid grid-cols-[68px_minmax(0,1fr)] gap-1.5">
+                        <div className="rounded-[11px] border border-slate-200 bg-slate-50 px-2 py-1.5">
                           <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">Count</div>
-                          <div className="mt-1 text-right text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
+                          <div className="mt-1 text-right text-[12px] font-semibold tracking-[-0.03em] text-slate-950">
                             {NUMBER_FORMATTER.format(item.totalCount)}
                           </div>
                         </div>
 
-                        <div className="rounded-[12px] border border-amber-100 bg-amber-50/70 px-2.5 py-2">
+                        <div className="rounded-[11px] border border-amber-100 bg-amber-50/70 px-2.5 py-1.5">
                           <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-amber-700">KRW</div>
                           <div
-                            className="console-mono mt-1 truncate text-right text-[13px] font-semibold tracking-[-0.03em] text-amber-700"
+                            className="console-mono mt-1 truncate text-right text-[12px] font-semibold tracking-[-0.03em] text-amber-700"
                             style={{ fontFamily: "monospace" }}
                           >
                             {formatKrwValue(item.totalKrwAmount)}
