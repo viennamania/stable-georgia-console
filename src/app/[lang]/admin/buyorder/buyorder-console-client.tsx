@@ -3168,7 +3168,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           </div>
                         </td>
                         <td className="w-[280px] border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="grid grid-cols-[minmax(0,1fr)_132px] items-start gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-[15px] font-semibold text-slate-950">
                                 {buyerDepositName || buyerLabel}
@@ -3182,13 +3182,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                 {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                               </div>
                             </div>
-                            <div className="flex min-w-0 shrink-0 items-center gap-2 text-left">
+                            <div className="flex w-full min-w-0 items-center gap-2 text-left">
                               <img
                                 src={storeLogoSrc}
                                 alt={storeLabel}
                                 className="h-8 w-8 shrink-0 rounded-xl border border-slate-200 bg-slate-100 object-cover"
                               />
-                              <div className="min-w-0 max-w-[112px]">
+                              <div className="min-w-0 flex-1">
                                 <div className="truncate text-sm font-medium text-slate-700">{storeLabel}</div>
                               </div>
                             </div>
