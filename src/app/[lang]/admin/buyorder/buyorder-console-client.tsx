@@ -518,15 +518,14 @@ const getSellerBankSummary = (order: BuyOrder) => {
   if (!bankInfo) {
     return {
       primary: "계좌정보 없음",
-      secondary: shortAddress(order.seller?.walletAddress || order.seller?.signerAddress),
+      accountNumber: "",
     };
   }
 
   const accountNumber = bankInfo.realAccountNumber || bankInfo.accountNumber || "";
   const primary = [bankInfo.bankName, bankInfo.accountHolder].filter(Boolean).join(" / ") || "계좌정보 없음";
-  const secondary = accountNumber || shortAddress(order.seller?.walletAddress || order.seller?.signerAddress);
 
-  return { primary, secondary };
+  return { primary, accountNumber };
 };
 
 const getActorDisplayLabel = (value: unknown) => {
@@ -1037,6 +1036,10 @@ const getSellerLabel = (order: BuyOrder) => {
     order.seller?.nickname
     || shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)
   );
+};
+
+const getSellerWalletLabel = (order: BuyOrder) => {
+  return shortAddress(order.seller?.walletAddress || order.seller?.signerAddress);
 };
 
 const getStoreLogoSrc = (order: BuyOrder, stores: StoreItem[]) => {
@@ -3047,6 +3050,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const createdAtLabel = formatDateTime(order.createdAt);
                     const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
                     const sellerBankSummary = getSellerBankSummary(order);
+                    const sellerWalletLabel = getSellerWalletLabel(order);
                     const isSellerMatching = status === "ordered";
                     const sellerMatchingElapsedLabel = formatElapsedTimer(order.createdAt, countdownNowMs);
                     const depositProcessing = getDepositProcessingMeta(order);
@@ -3226,6 +3230,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           ) : shouldHighlightSellerBankInfo ? (
                             <>
                               <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
+                              {sellerWalletLabel ? (
+                                <div className="console-mono mt-1 text-xs text-slate-500">
+                                  {sellerWalletLabel}
+                                </div>
+                              ) : null}
                               <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
@@ -3239,19 +3248,26 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                   </div>
                                 </div>
                                 <div className="console-mono mt-1 text-sm font-semibold tracking-[-0.01em] text-slate-950">
-                                  {sellerBankSummary.secondary}
+                                  {sellerBankSummary.accountNumber || "-"}
                                 </div>
                               </div>
                             </>
                           ) : (
                             <>
                               <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
+                              {sellerWalletLabel ? (
+                                <div className="console-mono mt-1 text-xs text-slate-500">
+                                  {sellerWalletLabel}
+                                </div>
+                              ) : null}
                               <div className="mt-1 text-xs text-slate-600">
                                 {sellerBankSummary.primary}
                               </div>
-                              <div className="console-mono mt-1 text-xs text-slate-500">
-                                {sellerBankSummary.secondary}
-                              </div>
+                              {sellerBankSummary.accountNumber ? (
+                                <div className="console-mono mt-1 text-xs text-slate-500">
+                                  {sellerBankSummary.accountNumber}
+                                </div>
+                              ) : null}
                             </>
                           )}
                         </td>
