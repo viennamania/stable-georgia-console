@@ -214,6 +214,8 @@ type FilterState = {
   searchOrderStatusCompleted: boolean;
 };
 
+type OrdersQueryState = "idle" | "loading" | "ready" | "error";
+
 const DATE_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "2-digit",
@@ -1121,6 +1123,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [cancellingTradeId, setCancellingTradeId] = useState("");
   const [data, setData] = useState<DashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ordersQueryState, setOrdersQueryState] = useState<OrdersQueryState>("idle");
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [connectionState, setConnectionState] = useState<Ably.ConnectionState>("initialized");
@@ -1175,6 +1178,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
+      const shouldLoadOrders = Boolean(activeAccount);
 
       if (inflightLoadRef.current) {
         if (silent) {
@@ -1189,6 +1193,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
         setRefreshing(true);
       } else {
         setLoading(true);
+        if (shouldLoadOrders) {
+          setOrdersQueryState("loading");
+        }
       }
 
       try {
@@ -1241,8 +1248,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
         setData(payload.result as DashboardResult);
         setError("");
+        if (shouldLoadOrders) {
+          setOrdersQueryState("ready");
+        }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
+        if (shouldLoadOrders) {
+          setOrdersQueryState("error");
+        }
       } finally {
         inflightLoadRef.current = false;
         setLoading(false);
@@ -2009,6 +2022,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       return status === "paymentConfirmed" && !hasSettlementCompleted(order);
     }).length;
   }, [orders]);
+  const shouldShowOrdersSpinner = orders.length === 0 && (loading || ordersQueryState === "loading");
+  const shouldShowOrdersConnectPrompt = orders.length === 0 && !isSignedIn && ordersQueryState === "idle" && !loading;
+  const shouldShowOrdersErrorState = orders.length === 0 && ordersQueryState === "error" && !loading;
   const depositedRatio = useMemo(() => {
     if (banktransferTodaySummary.depositedAmount <= 0) {
       return 0;
@@ -3022,11 +3038,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 {orders.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
-                      {loading ? (
+                      {shouldShowOrdersSpinner ? (
                         <span className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700">
                           <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
                           주문 목록 불러오는 중...
                         </span>
+                      ) : shouldShowOrdersConnectPrompt ? (
+                        "지갑 연결 후 주문 목록이 표시됩니다."
+                      ) : shouldShowOrdersErrorState ? (
+                        "주문 목록을 불러오지 못했습니다."
                       ) : "현재 필터에 해당하는 주문이 없습니다."}
                     </td>
                   </tr>
@@ -3050,7 +3070,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const createdAtLabel = formatDateTime(order.createdAt);
                     const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
                     const sellerBankSummary = getSellerBankSummary(order);
+                    const sellerLabel = getSellerLabel(order);
                     const sellerWalletLabel = getSellerWalletLabel(order);
+                    const shouldShowSellerWalletLabel = Boolean(
+                      sellerWalletLabel && sellerWalletLabel !== sellerLabel,
+                    );
                     const isSellerMatching = status === "ordered";
                     const sellerMatchingElapsedLabel = formatElapsedTimer(order.createdAt, countdownNowMs);
                     const depositProcessing = getDepositProcessingMeta(order);
@@ -3229,12 +3253,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             </div>
                           ) : shouldHighlightSellerBankInfo ? (
                             <>
-                              <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
-                              {sellerWalletLabel ? (
-                                <div className="console-mono mt-1 text-xs text-slate-500">
-                                  {sellerWalletLabel}
-                                </div>
-                              ) : null}
+                              <div className="flex items-baseline gap-2">
+                                <div className="truncate font-medium text-slate-950">{sellerLabel}</div>
+                                {shouldShowSellerWalletLabel ? (
+                                  <div className="console-mono min-w-0 flex-1 truncate text-right text-[11px] text-slate-500">
+                                    {sellerWalletLabel}
+                                  </div>
+                                ) : null}
+                              </div>
                               <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
@@ -3254,12 +3280,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             </>
                           ) : (
                             <>
-                              <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
-                              {sellerWalletLabel ? (
-                                <div className="console-mono mt-1 text-xs text-slate-500">
-                                  {sellerWalletLabel}
-                                </div>
-                              ) : null}
+                              <div className="flex items-baseline gap-2">
+                                <div className="truncate font-medium text-slate-950">{sellerLabel}</div>
+                                {shouldShowSellerWalletLabel ? (
+                                  <div className="console-mono min-w-0 flex-1 truncate text-right text-[11px] text-slate-500">
+                                    {sellerWalletLabel}
+                                  </div>
+                                ) : null}
+                              </div>
                               <div className="mt-1 text-xs text-slate-600">
                                 {sellerBankSummary.primary}
                               </div>
