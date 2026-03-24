@@ -2868,26 +2868,26 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </article>
         </section>
 
-        <section className="console-panel overflow-hidden rounded-[30px]">
-          <div className="border-b border-slate-200/80 px-6 py-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        <section className="console-panel overflow-hidden rounded-[28px]">
+          <div className="border-b border-slate-200/80 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div>
                 <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">Seller bank stats</div>
-                <h2 className="console-display mt-1 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                <h2 className="console-display mt-1 text-[1.35rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[1.55rem]">
                   판매자 통장별 P2P 거래 통계
                 </h2>
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                 {loading ? (
                   <span className={SECTION_LOADING_BADGE_CLASS_NAME}>
                     <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
                     로딩중
                   </span>
                 ) : null}
-                <span className="rounded-full bg-slate-100 px-3 py-1">
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                   {NUMBER_FORMATTER.format(sellerBankTradeSummaries.length)} 계좌
                 </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1">
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                   {filters.storecode
                     ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
                     : "전체 가맹점"}
@@ -2896,7 +2896,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             </div>
           </div>
 
-          <div className="px-6 py-5">
+          <div className="px-5 py-4">
             {!isSignedIn ? (
               <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
                 판매자 통장별 P2P 거래 통계는 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
@@ -2908,59 +2908,72 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 현재 필터에 해당하는 판매자 통장별 P2P 거래 집계가 없습니다.
               </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                {sellerBankTradeSummaries.map((item, index) => (
-                  <article
-                    key={`${item.accountNumber}-${index}`}
-                    className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.94))] px-4 py-4 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
+              <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.92),_rgba(248,250,252,0.98))]">
+                <div className="console-mono hidden grid-cols-[minmax(0,1.45fr)_88px_minmax(120px,0.9fr)_68px] gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-slate-400 lg:grid">
+                  <div>Account</div>
+                  <div className="text-right">Count</div>
+                  <div className="text-right">KRW</div>
+                  <div className="text-right">Action</div>
+                </div>
+
+                <div className="divide-y divide-slate-200/80">
+                  {sellerBankTradeSummaries.map((item, index) => (
+                    <article
+                      key={`${item.accountNumber}-${index}`}
+                      className="grid gap-2.5 px-4 py-3 lg:grid-cols-[minmax(0,1.45fr)_88px_minmax(120px,0.9fr)_68px] lg:items-center"
+                    >
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-slate-900">
-                          {item.bankName} · {item.accountHolder}
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="console-mono inline-flex h-6 shrink-0 items-center rounded-full bg-slate-100 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <div className="min-w-0 truncate text-sm font-semibold text-slate-900">
+                            {item.bankName}
+                          </div>
+                          <div className="min-w-0 truncate text-xs text-slate-500">
+                            {item.accountHolder}
+                          </div>
                         </div>
-                        <div className="console-mono mt-1 truncate text-[1.2rem] font-semibold tracking-[-0.04em] text-slate-950">
+                        <div className="console-mono mt-1 truncate text-[0.95rem] font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1rem]">
                           {item.accountNumber}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!item.accountNumber || item.accountNumber === "-") {
-                            return;
-                          }
-                          void navigator.clipboard?.writeText(item.accountNumber);
-                        }}
-                        className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-                      >
-                        복사
-                      </button>
-                    </div>
 
-                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                      <div className="rounded-[18px] border border-slate-200 bg-white px-3 py-3">
-                        <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">건수</div>
-                        <div className="mt-2 text-right text-[1.45rem] font-bold leading-none tracking-[-0.04em] text-slate-950">
+                      <div className="flex items-center justify-between rounded-[14px] border border-slate-200 bg-slate-50 px-3 py-2 lg:block lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
+                        <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-slate-400 lg:hidden">Count</div>
+                        <div className="text-right text-sm font-semibold tracking-[-0.03em] text-slate-950 sm:text-[0.95rem]">
                           {NUMBER_FORMATTER.format(item.totalCount)}
                         </div>
                       </div>
 
-                      <div className="rounded-[18px] border border-emerald-100 bg-emerald-50/70 px-3 py-3">
-                        <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-700">USDT</div>
-                        <div className="mt-2 text-right text-[1.1rem] font-bold leading-none tracking-[-0.03em] text-emerald-700" style={{ fontFamily: "monospace" }}>
-                          {formatUsdtValue(item.totalUsdtAmount)}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[18px] border border-amber-100 bg-amber-50/70 px-3 py-3">
-                        <div className="text-[10px] uppercase tracking-[0.14em] text-amber-700">KRW</div>
-                        <div className="mt-2 text-right text-[1.1rem] font-bold leading-none tracking-[-0.03em] text-amber-700" style={{ fontFamily: "monospace" }}>
+                      <div className="flex items-center justify-between rounded-[14px] border border-amber-100 bg-amber-50/70 px-3 py-2 lg:block lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
+                        <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-700 lg:hidden">KRW</div>
+                        <div
+                          className="console-mono text-right text-sm font-semibold tracking-[-0.03em] text-amber-700 sm:text-[0.95rem]"
+                          style={{ fontFamily: "monospace" }}
+                        >
                           {formatKrwValue(item.totalKrwAmount)}
                         </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!item.accountNumber || item.accountNumber === "-") {
+                              return;
+                            }
+                            void navigator.clipboard?.writeText(item.accountNumber);
+                          }}
+                          className="shrink-0 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          disabled={!item.accountNumber || item.accountNumber === "-"}
+                        >
+                          복사
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
               </div>
             )}
           </div>
