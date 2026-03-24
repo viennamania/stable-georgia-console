@@ -48,6 +48,9 @@ type BuyOrder = {
   status?: string;
   createdAt?: string;
   updatedAt?: string;
+  paymentRequestedAt?: string;
+  paymentConfirmedAt?: string;
+  cancelledAt?: string;
   usdtAmount?: number;
   krwAmount?: number;
   rate?: number;
@@ -656,7 +659,7 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
     return {
       label: "확인중",
       className: "bg-slate-100 text-slate-700",
-      detail: "입금 확인 대기",
+      detail: "",
       actor: "",
     };
   }
@@ -2994,6 +2997,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isSellerMatching = status === "ordered";
                     const sellerMatchingElapsedLabel = formatElapsedTimer(order.createdAt, countdownNowMs);
                     const depositProcessing = getDepositProcessingMeta(order);
+                    const isDepositPending = status === "paymentRequested";
+                    const depositPendingElapsedLabel = formatElapsedTimer(
+                      order.paymentRequestedAt || order.updatedAt || order.createdAt,
+                      countdownNowMs,
+                    );
                     const tradeId = String(order.tradeId || "").trim();
                     const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
                     const buyerLabel = getBuyerLabel(order);
@@ -3176,12 +3184,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         </td>
                         <td className="w-[208px] border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col gap-2">
+                            {isDepositPending ? (
+                              <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
+                                <div className="text-sm font-semibold text-slate-950">확인중</div>
+                                <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
+                                  {depositPendingElapsedLabel || "--:--:--"}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${depositProcessing.className}`}
+                                >
+                                  {depositProcessing.label}
+                                </span>
+                              </div>
+                            )}
                             <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${depositProcessing.className}`}
-                              >
-                                {depositProcessing.label}
-                              </span>
                               {canCompleteOrder ? (
                                 <button
                                   type="button"
@@ -3195,7 +3214,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                       : "border border-emerald-600 bg-emerald-600 text-white shadow-[0_10px_24px_-12px_rgba(5,150,105,0.95)] hover:border-emerald-500 hover:bg-emerald-500"
                                   }`}
                                 >
-                                  {isConfirmingThisOrder ? "거래완료중..." : "거래완료하기"}
+                                  {isConfirmingThisOrder ? "수동처리중..." : "수동처리하기"}
                                 </button>
                               ) : null}
                             </div>
@@ -3519,7 +3538,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         : "bg-emerald-600 hover:bg-emerald-700"
                     }`}
                   >
-                    {depositModalSubmitting ? "거래완료 처리중..." : "거래완료하기"}
+                    {depositModalSubmitting ? "수동처리중..." : "수동처리하기"}
                   </button>
                 </div>
               </div>
