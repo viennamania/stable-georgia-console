@@ -3186,7 +3186,25 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           <div className="flex flex-col gap-2">
                             {isDepositPending ? (
                               <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
-                                <div className="text-sm font-semibold text-slate-950">확인중</div>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="pt-1 text-sm font-semibold text-slate-950">확인중</div>
+                                  {canCompleteOrder ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void openDepositModalForOrder(order);
+                                      }}
+                                      disabled={isConfirmingThisOrder || depositModalSubmitting}
+                                      className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                                        isConfirmingThisOrder || depositModalSubmitting
+                                          ? "cursor-not-allowed border border-emerald-500 bg-emerald-400 text-white opacity-60"
+                                          : "border border-emerald-600 bg-emerald-600 text-white shadow-[0_10px_24px_-12px_rgba(5,150,105,0.95)] hover:border-emerald-500 hover:bg-emerald-500"
+                                      }`}
+                                    >
+                                      {isConfirmingThisOrder ? "수동처리중..." : "수동처리하기"}
+                                    </button>
+                                  ) : null}
+                                </div>
                                 <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
                                   {depositPendingElapsedLabel || "--:--:--"}
                                 </div>
@@ -3200,24 +3218,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                 </span>
                               </div>
                             )}
-                            <div className="flex flex-wrap items-center gap-2">
-                              {canCompleteOrder ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void openDepositModalForOrder(order);
-                                  }}
-                                  disabled={isConfirmingThisOrder || depositModalSubmitting}
-                                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                                    isConfirmingThisOrder || depositModalSubmitting
-                                      ? "cursor-not-allowed border border-emerald-500 bg-emerald-400 text-white opacity-60"
-                                      : "border border-emerald-600 bg-emerald-600 text-white shadow-[0_10px_24px_-12px_rgba(5,150,105,0.95)] hover:border-emerald-500 hover:bg-emerald-500"
-                                  }`}
-                                >
-                                  {isConfirmingThisOrder ? "수동처리중..." : "수동처리하기"}
-                                </button>
-                              ) : null}
-                            </div>
                             {depositProcessing.detail ? (
                               <span className="text-xs text-slate-500">{depositProcessing.detail}</span>
                             ) : null}
