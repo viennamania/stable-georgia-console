@@ -2039,32 +2039,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   }, [banktransferBarBaseAmount, banktransferTodaySummary.withdrawnAmount]);
   const fieldClassName =
     "h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100";
-  const metricCards = [
-    {
-      label: "Total buy orders",
-      value: NUMBER_FORMATTER.format(data?.metrics.totalBuyOrders || 0),
-      caption: "원백엔드 전체 진행 건수",
-      accent: "bg-sky-500",
-    },
-    {
-      label: "Clearance queue",
-      value: NUMBER_FORMATTER.format(data?.metrics.totalClearanceOrders || 0),
-      caption: "청산 대기 주문 수",
-      accent: "bg-amber-500",
-    },
-    {
-      label: "Audio alerts",
-      value: NUMBER_FORMATTER.format(data?.metrics.audioOnBuyOrders || 0),
-      caption: "오디오 알림이 켜진 주문",
-      accent: "bg-emerald-500",
-    },
-    {
-      label: "Stores",
-      value: NUMBER_FORMATTER.format(data?.storeTotalCount || 0),
-      caption: "검색 가능한 가맹점 수",
-      accent: "bg-violet-500",
-    },
-  ];
   const syncStatusLabel = loading
     ? "Loading dashboard"
     : connectionState === "connected"
@@ -2235,7 +2209,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
                           {item.label}
                         </div>
-                        <div className="console-display mt-1.5 text-[1.6rem] font-semibold tracking-[-0.05em] text-white">
+                        <div className="console-display mt-1.5 text-right text-[1.6rem] font-semibold tracking-[-0.05em] text-white">
                           {item.value}
                         </div>
                       </div>
@@ -2305,21 +2279,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               </div>
             </div>
           </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          {metricCards.map((item) => (
-            <article key={item.label} className="console-panel relative overflow-hidden rounded-[28px] p-5">
-              <div className={`absolute left-5 top-5 h-2 w-10 rounded-full ${item.accent}`} />
-              <div className="console-mono pl-14 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                {item.label}
-              </div>
-              <div className="console-display mt-5 text-right text-5xl font-semibold tracking-[-0.06em] text-slate-950">
-                {item.value}
-              </div>
-              <div className="mt-2 text-right text-sm leading-6 text-slate-600">{item.caption}</div>
-            </article>
-          ))}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_360px]">
