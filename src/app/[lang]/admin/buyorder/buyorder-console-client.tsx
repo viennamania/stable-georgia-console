@@ -3113,6 +3113,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const shouldShowUsdtTransferAmount = status === "paymentConfirmed";
                     const isUsdtTransferPending =
                       status === "paymentConfirmed" && (!transactionHash || transactionHash === "0x");
+                    const usdtTransferPendingElapsedLabel = formatElapsedTimer(
+                      order.paymentConfirmedAt || order.updatedAt || order.createdAt,
+                      countdownNowMs,
+                    );
 
                     return (
                       <tr
@@ -3364,10 +3368,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             </div>
                           ) : null}
                           {isUsdtTransferPending ? (
-                            <div className="mt-1">
-                              <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                                전송중
-                              </span>
+                            <div className="mt-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-left">
+                              <div className="text-sm font-semibold text-slate-950">전송중</div>
+                              <div className="console-mono mt-2 text-right text-sm font-semibold text-sky-700">
+                                {usdtTransferPendingElapsedLabel || "--:--:--"}
+                              </div>
                             </div>
                           ) : transactionHash ? (
                       <a
