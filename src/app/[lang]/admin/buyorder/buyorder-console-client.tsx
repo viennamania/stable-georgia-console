@@ -3117,9 +3117,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           {isSellerMatching ? (
                             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
                               <div className="text-sm font-semibold text-slate-950">판매자 매칭중</div>
-                              <div className="mt-1 text-xs text-slate-600">
-                                판매자 정보를 찾는 중입니다.
-                              </div>
                               <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
                                 {sellerMatchingElapsedLabel || "--:--:--"}
                               </div>
