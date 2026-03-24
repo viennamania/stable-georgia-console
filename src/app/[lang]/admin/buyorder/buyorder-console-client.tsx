@@ -2995,8 +2995,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   <th className="w-[156px] border-b border-slate-200 px-4 py-3">상태</th>
                   <th className="w-[196px] border-b border-slate-200 px-4 py-3">가맹점</th>
                   <th className="border-b border-slate-200 px-4 py-3">구매자</th>
-                  <th className="w-[220px] border-b border-slate-200 px-4 py-3">판매자</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">구매금액 / 구매량</th>
+                  <th className="w-[220px] border-b border-slate-200 px-4 py-3">판매자</th>
                   <th className="w-[208px] border-b border-slate-200 px-4 py-3">입금처리</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -3193,6 +3193,27 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                           </div>
                         </td>
+                        <td className="border-b border-slate-100 px-4 py-4 text-right align-top font-medium tabular-nums text-slate-950">
+                          <div className="flex justify-end gap-2">
+                            <span className="text-[1.15rem] font-bold tracking-[-0.03em] text-slate-950">
+                              {formatKrwValue(order.krwAmount)}
+                            </span>
+                            <span className="console-mono pt-1 text-[11px] uppercase tracking-[0.14em] text-amber-600">
+                              KRW
+                            </span>
+                          </div>
+                          <div className="mt-1.5 flex justify-end gap-2">
+                            <span className="text-[13px] font-semibold tracking-[-0.01em] text-slate-500">
+                              {formatUsdtValue(order.usdtAmount)}
+                            </span>
+                            <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                              USDT
+                            </span>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            환율 {formatRateValue(order.rate)}
+                          </div>
+                        </td>
                         <td className="w-[220px] border-b border-slate-100 px-4 py-4 align-top">
                           {isSellerMatching ? (
                             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
@@ -3232,27 +3253,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               </div>
                             </>
                           )}
-                        </td>
-                        <td className="border-b border-slate-100 px-4 py-4 text-right align-top font-medium tabular-nums text-slate-950">
-                          <div className="flex justify-end gap-2">
-                            <span className="text-[1.15rem] font-bold tracking-[-0.03em] text-slate-950">
-                              {formatKrwValue(order.krwAmount)}
-                            </span>
-                            <span className="console-mono pt-1 text-[11px] uppercase tracking-[0.14em] text-amber-600">
-                              KRW
-                            </span>
-                          </div>
-                          <div className="mt-1.5 flex justify-end gap-2">
-                            <span className="text-[13px] font-semibold tracking-[-0.01em] text-slate-500">
-                              {formatUsdtValue(order.usdtAmount)}
-                            </span>
-                            <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-slate-400">
-                              USDT
-                            </span>
-                          </div>
-                          <div className="mt-2 text-xs text-slate-500">
-                            환율 {formatRateValue(order.rate)}
-                          </div>
                         </td>
                         <td className="w-[208px] border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col gap-2">
