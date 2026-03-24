@@ -219,6 +219,10 @@ const EMPTY_BANKTRANSFER_TODAY_SUMMARY: DashboardResult["banktransferTodaySummar
 
 const SECTION_LOADING_BADGE_CLASS_NAME =
   "inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700";
+const COMPACT_SECTION_TITLE_CLASS_NAME =
+  "console-display text-[1.2rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[1.35rem]";
+const SECTION_TOGGLE_BUTTON_CLASS_NAME =
+  "inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50";
 
 type FilterState = {
   storecode: string;
@@ -1097,6 +1101,25 @@ const BscChainIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => 
   );
 };
 
+const SectionToggleIcon = ({ collapsed }: { collapsed: boolean }) => {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={`h-4 w-4 transition-transform ${collapsed ? "-rotate-90" : "rotate-0"}`}
+    >
+      <path
+        d="M5 7.5 10 12.5 15 7.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
 const getBuyerLabel = (order: BuyOrder) => {
   return (
     order.buyer?.nickname
@@ -1211,6 +1234,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [highlightedUnmatchedId, setHighlightedUnmatchedId] = useState("");
   const [copiedTradeId, setCopiedTradeId] = useState("");
   const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
+  const [sellerBankStatsCollapsed, setSellerBankStatsCollapsed] = useState(false);
+  const [unmatchedLiveCollapsed, setUnmatchedLiveCollapsed] = useState(false);
+  const [buyOrdersCollapsed, setBuyOrdersCollapsed] = useState(false);
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
   const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2873,7 +2899,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div>
                 <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">Seller bank stats</div>
-                <h2 className="console-display mt-1 text-[1.35rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[1.55rem]">
+                <h2 className={`${COMPACT_SECTION_TITLE_CLASS_NAME} mt-1`}>
                   판매자 통장별 P2P 거래 통계
                 </h2>
               </div>
@@ -2892,71 +2918,53 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
                     : "전체 가맹점"}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setSellerBankStatsCollapsed((prev) => !prev)}
+                  className={SECTION_TOGGLE_BUTTON_CLASS_NAME}
+                  aria-expanded={!sellerBankStatsCollapsed}
+                >
+                  <SectionToggleIcon collapsed={sellerBankStatsCollapsed} />
+                  {sellerBankStatsCollapsed ? "펼치기" : "접기"}
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="px-5 py-4">
-            {!isSignedIn ? (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
-                판매자 통장별 P2P 거래 통계는 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
-                위 영역에서 지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`의 계좌별 집계가
-                함께 로드됩니다.
-              </div>
-            ) : sellerBankTradeSummaries.length === 0 ? (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
-                현재 필터에 해당하는 판매자 통장별 P2P 거래 집계가 없습니다.
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.92),_rgba(248,250,252,0.98))]">
-                <div className="console-mono hidden grid-cols-[minmax(0,1.45fr)_88px_minmax(120px,0.9fr)_68px] gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-slate-400 lg:grid">
-                  <div>Account</div>
-                  <div className="text-right">Count</div>
-                  <div className="text-right">KRW</div>
-                  <div className="text-right">Action</div>
+          {!sellerBankStatsCollapsed ? (
+            <div className="px-5 py-4">
+              {!isSignedIn ? (
+                <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
+                  판매자 통장별 P2P 거래 통계는 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
+                  위 영역에서 지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`의 계좌별 집계가
+                  함께 로드됩니다.
                 </div>
-
-                <div className="divide-y divide-slate-200/80">
+              ) : sellerBankTradeSummaries.length === 0 ? (
+                <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
+                  현재 필터에 해당하는 판매자 통장별 P2P 거래 집계가 없습니다.
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {sellerBankTradeSummaries.map((item, index) => (
                     <article
                       key={`${item.accountNumber}-${index}`}
-                      className="grid gap-2.5 px-4 py-3 lg:grid-cols-[minmax(0,1.45fr)_88px_minmax(120px,0.9fr)_68px] lg:items-center"
+                      className="rounded-[18px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.9))] px-3 py-3 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)]"
                     >
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="console-mono inline-flex h-6 shrink-0 items-center rounded-full bg-slate-100 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <div className="min-w-0 truncate text-sm font-semibold text-slate-900">
-                            {item.bankName}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="console-mono inline-flex h-5 shrink-0 items-center rounded-full bg-slate-100 px-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                              {String(index + 1).padStart(2, "0")}
+                            </span>
+                            <div className="truncate text-[13px] font-semibold text-slate-900">
+                              {item.bankName}
+                            </div>
                           </div>
-                          <div className="min-w-0 truncate text-xs text-slate-500">
+                          <div className="mt-1 truncate text-[11px] text-slate-500">
                             {item.accountHolder}
                           </div>
                         </div>
-                        <div className="console-mono mt-1 truncate text-[0.95rem] font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1rem]">
-                          {item.accountNumber}
-                        </div>
-                      </div>
 
-                      <div className="flex items-center justify-between rounded-[14px] border border-slate-200 bg-slate-50 px-3 py-2 lg:block lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
-                        <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-slate-400 lg:hidden">Count</div>
-                        <div className="text-right text-sm font-semibold tracking-[-0.03em] text-slate-950 sm:text-[0.95rem]">
-                          {NUMBER_FORMATTER.format(item.totalCount)}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-[14px] border border-amber-100 bg-amber-50/70 px-3 py-2 lg:block lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
-                        <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-700 lg:hidden">KRW</div>
-                        <div
-                          className="console-mono text-right text-sm font-semibold tracking-[-0.03em] text-amber-700 sm:text-[0.95rem]"
-                          style={{ fontFamily: "monospace" }}
-                        >
-                          {formatKrwValue(item.totalKrwAmount)}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end">
                         <button
                           type="button"
                           onClick={() => {
@@ -2965,204 +2973,249 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             }
                             void navigator.clipboard?.writeText(item.accountNumber);
                           }}
-                          className="shrink-0 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
                           disabled={!item.accountNumber || item.accountNumber === "-"}
                         >
                           복사
                         </button>
                       </div>
+
+                      <div className="console-mono mt-2 truncate text-[0.92rem] font-semibold tracking-[-0.04em] text-slate-950">
+                        {item.accountNumber}
+                      </div>
+
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="rounded-[12px] border border-slate-200 bg-slate-50 px-2.5 py-2">
+                          <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">Count</div>
+                          <div className="mt-1 text-right text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
+                            {NUMBER_FORMATTER.format(item.totalCount)}
+                          </div>
+                        </div>
+
+                        <div className="rounded-[12px] border border-amber-100 bg-amber-50/70 px-2.5 py-2">
+                          <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-amber-700">KRW</div>
+                          <div
+                            className="console-mono mt-1 truncate text-right text-[13px] font-semibold tracking-[-0.03em] text-amber-700"
+                            style={{ fontFamily: "monospace" }}
+                          >
+                            {formatKrwValue(item.totalKrwAmount)}
+                          </div>
+                        </div>
+                      </div>
                     </article>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <section className="console-panel overflow-hidden rounded-[30px]">
-          <div className="border-b border-slate-200/80 px-6 py-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="border-b border-slate-200/80 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div>
-                <h2 className="console-display text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                <h2 className={COMPACT_SECTION_TITLE_CLASS_NAME}>
                   미신청입금 live
                 </h2>
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                 {loading ? (
                   <span className={SECTION_LOADING_BADGE_CLASS_NAME}>
                     <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
                     로딩중
                   </span>
                 ) : null}
-                <span className="rounded-full bg-slate-100 px-3 py-1">
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                   {NUMBER_FORMATTER.format(unmatchedTransfers.length)} / {NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}
                 </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1">
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                   {formatKrw(data?.unmatchedTotalAmount || 0)}
                 </span>
                 <span
-                  className={`rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${liveTransportBadgeClassName}`}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${liveTransportBadgeClassName}`}
                 >
                   {liveTransportLabel}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setUnmatchedLiveCollapsed((prev) => !prev)}
+                  className={SECTION_TOGGLE_BUTTON_CLASS_NAME}
+                  aria-expanded={!unmatchedLiveCollapsed}
+                >
+                  <SectionToggleIcon collapsed={unmatchedLiveCollapsed} />
+                  {unmatchedLiveCollapsed ? "펼치기" : "접기"}
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="relative px-4 py-4">
-            <div className={`overflow-x-auto transition ${showUnmatchedLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
-              {loading && unmatchedTransfers.length === 0 ? (
-                <div className="flex min-w-full gap-3">
-                  {Array.from({ length: 3 }).map((_, index) => (
-                    <div
-                      key={`unmatched-loading-${index}`}
-                      className="min-w-[260px] max-w-[300px] animate-pulse rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="h-4 w-24 rounded-full bg-slate-200" />
-                          <div className="mt-2 h-3 w-32 rounded-full bg-slate-200" />
-                        </div>
-                        <div className="h-6 w-20 rounded-full bg-slate-200" />
-                      </div>
-                      <div className="mt-5 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded-xl bg-slate-200" />
-                          <div className="h-3 w-20 rounded-full bg-slate-200" />
-                        </div>
-                        <div className="h-3 w-24 rounded-full bg-slate-200" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : unmatchedTransfers.length === 0 ? (
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
-                  현재 필터에 해당하는 미신청입금이 없습니다.
-                </div>
-              ) : (
-                <div className="flex min-w-full gap-3">
-                  {unmatchedTransfers.map((transfer, index) => {
-                    const id = String(transfer._id || `unmatched-${index}`);
-                    const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
-                    const storeLabel =
-                      transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
-                    const storeLogoSrc = getUnmatchedTransferStoreLogoSrc(transfer, stores);
-                    const transactionDate =
-                      transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
-                    const unmatchedBankSummary = [transfer.bankName, transfer.accountHolder].filter(Boolean).join(" / ");
-                    const unmatchedAccountLabel =
-                      [unmatchedBankSummary, transfer.bankAccountNumber].filter(Boolean).join(" · ") || "-";
-
-                    return (
-                      <article
-                        key={id}
-                        className={`min-w-[260px] max-w-[300px] rounded-[24px] border px-4 py-3 shadow-sm transition ${
-                          isHighlighted
-                            ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
-                            : "border-slate-200 bg-white"
-                        }`}
+          {!unmatchedLiveCollapsed ? (
+            <div className="relative px-4 py-4">
+              <div className={`overflow-x-auto transition ${showUnmatchedLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
+                {loading && unmatchedTransfers.length === 0 ? (
+                  <div className="flex min-w-full gap-3">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div
+                        key={`unmatched-loading-${index}`}
+                        className="min-w-[260px] max-w-[300px] animate-pulse rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold text-slate-900">
-                              {transfer.transactionName || "-"}
-                            </div>
-                            <div className="mt-1 truncate text-sm text-slate-600">
-                              {unmatchedAccountLabel}
-                            </div>
+                            <div className="h-4 w-24 rounded-full bg-slate-200" />
+                            <div className="mt-2 h-3 w-32 rounded-full bg-slate-200" />
                           </div>
-                          <div className="shrink-0 text-right">
-                            <div className="text-xl font-semibold tracking-[-0.04em] text-rose-600">
-                              {formatKrw(transfer.amount || 0)}
-                            </div>
-                            {isHighlighted ? (
-                              <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                                live updated
-                              </span>
-                            ) : null}
-                          </div>
+                          <div className="h-6 w-20 rounded-full bg-slate-200" />
                         </div>
+                        <div className="mt-5 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-6 w-6 rounded-xl bg-slate-200" />
+                            <div className="h-3 w-20 rounded-full bg-slate-200" />
+                          </div>
+                          <div className="h-3 w-24 rounded-full bg-slate-200" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : unmatchedTransfers.length === 0 ? (
+                  <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
+                    현재 필터에 해당하는 미신청입금이 없습니다.
+                  </div>
+                ) : (
+                  <div className="flex min-w-full gap-3">
+                    {unmatchedTransfers.map((transfer, index) => {
+                      const id = String(transfer._id || `unmatched-${index}`);
+                      const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
+                      const storeLabel =
+                        transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
+                      const storeLogoSrc = getUnmatchedTransferStoreLogoSrc(transfer, stores);
+                      const transactionDate =
+                        transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
+                      const unmatchedBankSummary = [transfer.bankName, transfer.accountHolder].filter(Boolean).join(" / ");
+                      const unmatchedAccountLabel =
+                        [unmatchedBankSummary, transfer.bankAccountNumber].filter(Boolean).join(" · ") || "-";
 
-                        <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span
-                              className="h-6 w-6 shrink-0 rounded-xl border border-slate-200 bg-slate-100 bg-cover bg-center"
-                              style={{ backgroundImage: `url(${storeLogoSrc})` }}
-                              aria-hidden="true"
-                            />
-                            <span className="truncate">{storeLabel}</span>
+                      return (
+                        <article
+                          key={id}
+                          className={`min-w-[260px] max-w-[300px] rounded-[24px] border px-4 py-3 shadow-sm transition ${
+                            isHighlighted
+                              ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
+                              : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-semibold text-slate-900">
+                                {transfer.transactionName || "-"}
+                              </div>
+                              <div className="mt-1 truncate text-sm text-slate-600">
+                                {unmatchedAccountLabel}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-xl font-semibold tracking-[-0.04em] text-rose-600">
+                                {formatKrw(transfer.amount || 0)}
+                              </div>
+                              {isHighlighted ? (
+                                <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                                  live updated
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
-                          <span className="shrink-0">{formatDateTime(transactionDate)}</span>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            {showUnmatchedLoadingOverlay ? (
-              <div className="pointer-events-none absolute inset-4 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/85 backdrop-blur-sm">
-                <div className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
-                  미신청입금 내역 불러오는 중...
-                </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                className="h-6 w-6 shrink-0 rounded-xl border border-slate-200 bg-slate-100 bg-cover bg-center"
+                                style={{ backgroundImage: `url(${storeLogoSrc})` }}
+                                aria-hidden="true"
+                              />
+                              <span className="truncate">{storeLabel}</span>
+                            </div>
+                            <span className="shrink-0">{formatDateTime(transactionDate)}</span>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ) : null}
-          </div>
+              {showUnmatchedLoadingOverlay ? (
+                <div className="pointer-events-none absolute inset-4 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/85 backdrop-blur-sm">
+                  <div className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
+                    미신청입금 내역 불러오는 중...
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="console-panel overflow-hidden rounded-[30px]">
-          <div className="border-b border-slate-200/80 px-6 py-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="border-b border-slate-200/80 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div>
-                <h2 className="console-display text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                <h2 className={COMPACT_SECTION_TITLE_CLASS_NAME}>
                   구매주문
                 </h2>
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                 {loading ? (
                   <span className={SECTION_LOADING_BADGE_CLASS_NAME}>
                     <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
                     로딩중
                   </span>
                 ) : null}
-                <span className="rounded-full bg-slate-100 px-3 py-1">
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                   Rows {NUMBER_FORMATTER.format(currentOrderRangeStart)}-
                   {NUMBER_FORMATTER.format(currentOrderRangeEnd)} /{" "}
                   {NUMBER_FORMATTER.format(totalOrderCount)}
                 </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1">
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                   Page {NUMBER_FORMATTER.format(currentOrderPage)} / {NUMBER_FORMATTER.format(totalOrderPages)}
                 </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1">{syncStatusLabel}</span>
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">{syncStatusLabel}</span>
                 <span
-                  className={`rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${liveTransportBadgeClassName}`}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${liveTransportBadgeClassName}`}
                 >
                   {liveTransportLabel}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setBuyOrdersCollapsed((prev) => !prev)}
+                  className={SECTION_TOGGLE_BUTTON_CLASS_NAME}
+                  aria-expanded={!buyOrdersCollapsed}
+                >
+                  <SectionToggleIcon collapsed={buyOrdersCollapsed} />
+                  {buyOrdersCollapsed ? "펼치기" : "접기"}
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="space-y-4 px-6 py-5">
-            {!isSignedIn ? (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
-                주문 목록은 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다. 위 영역에서
-                지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`가 로컬 BFF를 통해
-                호출됩니다.
-              </div>
-            ) : null}
+          {!buyOrdersCollapsed ? (
+            <>
+              <div className="space-y-4 px-6 py-5">
+                {!isSignedIn ? (
+                  <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
+                    주문 목록은 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다. 위 영역에서
+                    지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`가 로컬 BFF를 통해
+                    호출됩니다.
+                  </div>
+                ) : null}
 
-            {error ? (
-              <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {error}
+                {error ? (
+                  <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {error}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
 
-          <div className="relative px-2 pb-2">
-            <div className={`overflow-x-auto transition ${showOrdersLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
-              <table className="min-w-[1320px] w-full border-separate border-spacing-0">
+              <div className="relative px-2 pb-2">
+                <div className={`overflow-x-auto transition ${showOrdersLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
+                  <table className="min-w-[1320px] w-full border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
                   <th className="border-b border-slate-200 px-4 py-3">거래번호</th>
@@ -3570,77 +3623,79 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   })
                 )}
               </tbody>
-              </table>
-            </div>
-            {showOrdersLoadingOverlay ? (
-              <div className="pointer-events-none absolute inset-x-2 top-0 bottom-2 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/85 backdrop-blur-sm">
-                <div className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
-                  주문 목록 불러오는 중...
+                  </table>
+                </div>
+                {showOrdersLoadingOverlay ? (
+                  <div className="pointer-events-none absolute inset-x-2 top-0 bottom-2 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/85 backdrop-blur-sm">
+                    <div className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
+                      주문 목록 불러오는 중...
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200/80 px-6 py-5">
+                <div className="text-sm text-slate-600">
+                  {orders.length === 0
+                    ? "현재 페이지에 표시할 주문이 없습니다."
+                    : `${NUMBER_FORMATTER.format(currentOrderRangeStart)}-${NUMBER_FORMATTER.format(currentOrderRangeEnd)} / ${NUMBER_FORMATTER.format(totalOrderCount)} rows`}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage(1)}
+                    disabled={currentOrderPage === 1 || loading}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    처음
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage(currentOrderPage - 1)}
+                    disabled={currentOrderPage === 1 || loading}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    이전
+                  </button>
+
+                  {visibleOrderPages.map((page) => (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setOrderPage(page)}
+                      disabled={loading && page === currentOrderPage}
+                      className={`min-w-[42px] rounded-full px-3 py-2 text-sm font-medium transition ${
+                        page === currentOrderPage
+                          ? "bg-slate-950 text-white"
+                          : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      } ${loading && page === currentOrderPage ? "cursor-not-allowed opacity-70" : ""}`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage(currentOrderPage + 1)}
+                    disabled={currentOrderPage === totalOrderPages || loading}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    다음
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage(totalOrderPages)}
+                    disabled={currentOrderPage === totalOrderPages || loading}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    마지막
+                  </button>
                 </div>
               </div>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200/80 px-6 py-5">
-            <div className="text-sm text-slate-600">
-              {orders.length === 0
-                ? "현재 페이지에 표시할 주문이 없습니다."
-                : `${NUMBER_FORMATTER.format(currentOrderRangeStart)}-${NUMBER_FORMATTER.format(currentOrderRangeEnd)} / ${NUMBER_FORMATTER.format(totalOrderCount)} rows`}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setOrderPage(1)}
-                disabled={currentOrderPage === 1 || loading}
-                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                처음
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrderPage(currentOrderPage - 1)}
-                disabled={currentOrderPage === 1 || loading}
-                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                이전
-              </button>
-
-              {visibleOrderPages.map((page) => (
-                <button
-                  key={page}
-                  type="button"
-                  onClick={() => setOrderPage(page)}
-                  disabled={loading && page === currentOrderPage}
-                  className={`min-w-[42px] rounded-full px-3 py-2 text-sm font-medium transition ${
-                    page === currentOrderPage
-                      ? "bg-slate-950 text-white"
-                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  } ${loading && page === currentOrderPage ? "cursor-not-allowed opacity-70" : ""}`}
-                >
-                  {page}
-                </button>
-              ))}
-
-              <button
-                type="button"
-                onClick={() => setOrderPage(currentOrderPage + 1)}
-                disabled={currentOrderPage === totalOrderPages || loading}
-                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                다음
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrderPage(totalOrderPages)}
-                disabled={currentOrderPage === totalOrderPages || loading}
-                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                마지막
-              </button>
-            </div>
-          </div>
+            </>
+          ) : null}
         </section>
 
         {depositModalOpen && targetConfirmOrder ? (
