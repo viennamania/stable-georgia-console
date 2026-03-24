@@ -244,6 +244,7 @@ const USDT_FORMATTER = new Intl.NumberFormat("en-US", {
 });
 
 const COUNTDOWN_TICK_MS = 1000;
+const NEW_ORDER_HIGHLIGHT_MS = 6500;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -623,7 +624,7 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
     return {
       label: "수동",
       className: "bg-amber-100 text-amber-800",
-      detail: "수동입금확인",
+      detail: "",
       actor: processedByLabel || "관리자",
     };
   }
@@ -650,7 +651,7 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
     return {
       label: "수동",
       className: "bg-amber-100 text-amber-800",
-      detail: "수동입금확인",
+      detail: "",
       actor: processedByLabel || "관리자",
     };
   }
@@ -1115,6 +1116,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [lastRealtimeEventAt, setLastRealtimeEventAt] = useState("");
   const [lastUnmatchedEventAt, setLastUnmatchedEventAt] = useState("");
   const [highlightedTradeId, setHighlightedTradeId] = useState("");
+  const [newRealtimeTradeIds, setNewRealtimeTradeIds] = useState<string[]>([]);
   const [highlightedUnmatchedId, setHighlightedUnmatchedId] = useState("");
   const [copiedTradeId, setCopiedTradeId] = useState("");
   const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
@@ -1122,6 +1124,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const queuedSilentRefreshRef = useRef(false);
   const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const highlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const newOrderHighlightTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const unmatchedHighlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRealtimeEventIdRef = useRef("");
@@ -1274,11 +1277,34 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     }
   }, []);
 
+  const queueNewOrderHighlight = useCallback((matchKey: string) => {
+    const safeMatchKey = String(matchKey || "").trim();
+    if (!safeMatchKey) {
+      return;
+    }
+
+    setNewRealtimeTradeIds((current) => {
+      return current.includes(safeMatchKey) ? current : [...current, safeMatchKey];
+    });
+
+    if (newOrderHighlightTimersRef.current[safeMatchKey]) {
+      clearTimeout(newOrderHighlightTimersRef.current[safeMatchKey]);
+    }
+
+    newOrderHighlightTimersRef.current[safeMatchKey] = setTimeout(() => {
+      setNewRealtimeTradeIds((current) => current.filter((item) => item !== safeMatchKey));
+      delete newOrderHighlightTimersRef.current[safeMatchKey];
+    }, NEW_ORDER_HIGHLIGHT_MS);
+  }, []);
+
   const applyRealtimeEventToDashboard = useCallback((event: BuyOrderStatusRealtimeEvent) => {
     const matchKey = String(event.tradeId || event.orderId || "").trim();
     if (!matchKey) {
       return;
     }
+
+    let shouldAnimateAsNewOrder = false;
+    const nextStatus = String(event.statusTo || "").trim();
 
     setData((current) => {
       if (!current) {
@@ -1286,12 +1312,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       }
 
       let changed = false;
+      let hasMatchingOrder = false;
       const patchOrder = (order: BuyOrder) => {
         const orderTradeId = String(order.tradeId || order._id || "").trim();
         if (orderTradeId !== matchKey) {
           return order;
         }
 
+        hasMatchingOrder = true;
         changed = true;
         return {
           ...order,
@@ -1304,6 +1332,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       const nextOrders = current.orders.map(patchOrder);
       const nextProcessingBuyOrders = current.processingBuyOrders.map(patchOrder);
       const nextProcessingClearanceOrders = current.processingClearanceOrders.map(patchOrder);
+
+      if (!hasMatchingOrder && nextStatus === "ordered") {
+        shouldAnimateAsNewOrder = true;
+      }
 
       if (!changed) {
         return current;
@@ -1319,6 +1351,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     });
 
     setLastRealtimeEventAt(event.publishedAt || new Date().toISOString());
+    if (shouldAnimateAsNewOrder) {
+      queueNewOrderHighlight(matchKey);
+    }
     setHighlightedTradeId(matchKey);
     if (highlightResetTimerRef.current) {
       clearTimeout(highlightResetTimerRef.current);
@@ -1326,7 +1361,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     highlightResetTimerRef.current = setTimeout(() => {
       setHighlightedTradeId("");
     }, 4000);
-  }, []);
+  }, [queueNewOrderHighlight]);
 
   const applyUnmatchedRealtimeEventToDashboard = useCallback(
     (event: BankTransferUnmatchedRealtimeEvent) => {
@@ -1798,6 +1833,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     return () => {
       if (copyResetTimerRef.current) {
         clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const newOrderHighlightTimers = newOrderHighlightTimersRef.current;
+    return () => {
+      for (const timer of Object.values(newOrderHighlightTimers)) {
+        clearTimeout(timer);
       }
     };
   }, []);
@@ -2991,6 +3035,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const storeLogoSrc = getStoreLogoSrc(order, stores);
                     const rowMatchKey = String(order.tradeId || order._id || "").trim();
                     const isRealtimeHighlighted = highlightedTradeId && rowMatchKey === highlightedTradeId;
+                    const isNewRealtimeOrder = newRealtimeTradeIds.includes(rowMatchKey);
                     const createdAtLabel = formatDateTime(order.createdAt);
                     const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
                     const sellerBankSummary = getSellerBankSummary(order);
@@ -3024,8 +3069,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     return (
                       <tr
                         key={order._id || order.tradeId}
-                        className={`text-sm text-slate-700 transition hover:bg-sky-50/70 ${
-                          isRealtimeHighlighted
+                        className={`h-28 text-sm text-slate-700 transition hover:bg-sky-50/70 ${
+                          isNewRealtimeOrder ? "console-new-order-row " : ""
+                        }${
+                          isRealtimeHighlighted || isNewRealtimeOrder
                             ? "bg-emerald-50 ring-1 ring-inset ring-emerald-200"
                             : statusRowTone
                               ? statusRowTone
@@ -3035,27 +3082,32 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         }`}
                       >
                         <td className="w-[196px] border-b border-slate-100 px-4 py-4 align-top">
-                          {tradeId ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void copyTradeId(tradeId);
-                              }}
-                              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left transition hover:border-sky-300 hover:bg-sky-50"
-                              title="클릭해서 tradeId 복사"
-                            >
-                              <span className="font-semibold text-slate-950">{tradeId}</span>
-                              <span
-                                className={`console-mono text-[10px] uppercase tracking-[0.14em] ${
-                                  isCopiedTradeId ? "text-emerald-600" : "text-slate-400"
-                                }`}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {tradeId ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void copyTradeId(tradeId);
+                                }}
+                                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left transition hover:border-sky-300 hover:bg-sky-50"
+                                title="클릭해서 tradeId 복사"
                               >
-                                {isCopiedTradeId ? "copied" : "copy"}
-                              </span>
-                            </button>
-                          ) : (
-                            <div className="font-semibold text-slate-950">-</div>
-                          )}
+                                <span className="font-semibold text-slate-950">{tradeId}</span>
+                                <span
+                                  className={`console-mono text-[10px] uppercase tracking-[0.14em] ${
+                                    isCopiedTradeId ? "text-emerald-600" : "text-slate-400"
+                                  }`}
+                                >
+                                  {isCopiedTradeId ? "copied" : "copy"}
+                                </span>
+                              </button>
+                            ) : (
+                              <div className="font-semibold text-slate-950">-</div>
+                            )}
+                            {isNewRealtimeOrder ? (
+                              <span className="console-new-order-badge">신규주문</span>
+                            ) : null}
+                          </div>
                           <div className="mt-1 flex flex-col items-start gap-0.5 text-xs">
                             <span className="text-slate-500">{createdAtLabel}</span>
                             {createdAtLabel === "-" ? null : (
@@ -3195,13 +3247,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                         void openDepositModalForOrder(order);
                                       }}
                                       disabled={isConfirmingThisOrder || depositModalSubmitting}
-                                      className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                                      className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
                                         isConfirmingThisOrder || depositModalSubmitting
                                           ? "cursor-not-allowed border border-emerald-500 bg-emerald-400 text-white opacity-60"
                                           : "border border-emerald-600 bg-emerald-600 text-white shadow-[0_10px_24px_-12px_rgba(5,150,105,0.95)] hover:border-emerald-500 hover:bg-emerald-500"
                                       }`}
                                     >
-                                      {isConfirmingThisOrder ? "수동처리중..." : "수동처리하기"}
+                                      {isConfirmingThisOrder ? "처리중..." : "처리하기"}
                                     </button>
                                   ) : null}
                                 </div>
@@ -3538,7 +3590,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         : "bg-emerald-600 hover:bg-emerald-700"
                     }`}
                   >
-                    {depositModalSubmitting ? "수동처리중..." : "수동처리하기"}
+                    {depositModalSubmitting ? "처리중..." : "처리하기"}
                   </button>
                 </div>
               </div>
