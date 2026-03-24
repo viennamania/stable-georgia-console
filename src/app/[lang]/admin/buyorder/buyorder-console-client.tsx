@@ -3169,7 +3169,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             </span>
                           </div>
                           <div className="mt-2 text-xs text-slate-500">
-                            환율 {formatRateValue(order.rate)} KRW / USDT
+                            환율 {formatRateValue(order.rate)}
                           </div>
                         </td>
                         <td className="w-[208px] border-b border-slate-100 px-4 py-4 align-top">
