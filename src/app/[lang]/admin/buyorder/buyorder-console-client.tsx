@@ -611,6 +611,15 @@ const getDepositProcessedByLabel = (order: BuyOrder) => {
 const getDepositProcessingMeta = (order: BuyOrder) => {
   const processedByLabel = getDepositProcessedByLabel(order);
 
+  if (order.status === "accepted") {
+    return {
+      label: "입금정보 제공중",
+      className: "bg-sky-100 text-sky-700",
+      detail: "",
+      actor: "",
+    };
+  }
+
   if (order.autoConfirmPayment === true) {
     return {
       label: "자동",
@@ -3042,6 +3051,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isSellerMatching = status === "ordered";
                     const sellerMatchingElapsedLabel = formatElapsedTimer(order.createdAt, countdownNowMs);
                     const depositProcessing = getDepositProcessingMeta(order);
+                    const isDepositInfoProviding = status === "accepted";
+                    const depositInfoProvidingElapsedLabel = formatElapsedTimer(
+                      order.updatedAt || order.createdAt,
+                      countdownNowMs,
+                    );
                     const isDepositPending = status === "paymentRequested";
                     const depositPendingElapsedLabel = formatElapsedTimer(
                       order.paymentRequestedAt || order.updatedAt || order.createdAt,
@@ -3243,7 +3257,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         </td>
                         <td className="w-[208px] border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col gap-2">
-                            {isDepositPending ? (
+                            {isDepositInfoProviding ? (
+                              <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
+                                <div className="text-sm font-semibold text-slate-950">입금정보 제공중</div>
+                                <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
+                                  {depositInfoProvidingElapsedLabel || "--:--:--"}
+                                </div>
+                              </div>
+                            ) : isDepositPending ? (
                               <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="pt-1 text-sm font-semibold text-slate-950">확인중</div>
