@@ -36,11 +36,17 @@ export type BankTransferUnmatchedRealtimeEvent = {
   eventId?: string;
   amount?: number;
   transactionName?: string | null;
+  bankName?: string | null;
+  accountHolder?: string | null;
   bankAccountNumber?: string | null;
   transactionDate?: string | null;
   processingDate?: string | null;
   publishedAt?: string | null;
   storecode?: string | null;
+  receiver?: {
+    bankName?: string | null;
+    accountHolder?: string | null;
+  } | null;
   store?: {
     code?: string | null;
     name?: string | null;

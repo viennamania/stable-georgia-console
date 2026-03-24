@@ -104,6 +104,7 @@ type UnmatchedTransfer = {
   amount?: number;
   transactionName?: string;
   bankName?: string;
+  accountHolder?: string;
   bankAccountNumber?: string;
   transactionDateUtc?: string;
   processingDate?: string;
@@ -1418,6 +1419,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           _id: syntheticId,
           amount: Number(event.amount || 0),
           transactionName: String(event.transactionName || "").trim(),
+          bankName: String(event.bankName || event.receiver?.bankName || "").trim() || undefined,
+          accountHolder: String(event.accountHolder || event.receiver?.accountHolder || "").trim() || undefined,
           bankAccountNumber: String(event.bankAccountNumber || "").trim(),
           transactionDateUtc: event.transactionDate || null || undefined,
           processingDate: event.processingDate || null || undefined,
@@ -2856,6 +2859,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const storeLogoSrc = getUnmatchedTransferStoreLogoSrc(transfer, stores);
                     const transactionDate =
                       transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
+                    const unmatchedBankSummary = [transfer.bankName, transfer.accountHolder].filter(Boolean).join(" / ");
+                    const unmatchedAccountLabel =
+                      [unmatchedBankSummary, transfer.bankAccountNumber].filter(Boolean).join(" · ") || "-";
 
                     return (
                       <article
@@ -2872,7 +2878,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               {transfer.transactionName || "-"}
                             </div>
                             <div className="mt-1 truncate text-sm text-slate-600">
-                              {transfer.bankAccountNumber || "-"}
+                              {unmatchedAccountLabel}
                             </div>
                           </div>
                           <div className="shrink-0 text-right">
