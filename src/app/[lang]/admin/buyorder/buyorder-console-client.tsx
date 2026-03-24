@@ -129,9 +129,26 @@ type DepositOption = {
   userId?: string;
 };
 
+type SellerBankTradeLookupInfo = {
+  bankName?: string;
+  accountHolder?: string;
+  accountNumber?: string;
+  realAccountNumber?: string;
+  defaultAccountNumber?: string;
+};
+
+type SellerBankTradeStat = {
+  _id?: string;
+  totalCount?: number;
+  totalKrwAmount?: number;
+  totalUsdtAmount?: number;
+  bankUserInfo?: SellerBankTradeLookupInfo[];
+};
+
 const EMPTY_ORDERS: BuyOrder[] = [];
 const EMPTY_STORES: StoreItem[] = [];
 const EMPTY_UNMATCHED_TRANSFERS: UnmatchedTransfer[] = [];
+const EMPTY_SELLER_BANK_TRADE_STATS: SellerBankTradeStat[] = [];
 
 type DashboardResult = {
   fetchedAt: string;
@@ -155,6 +172,7 @@ type DashboardResult = {
     totalAgentFeeAmount: number;
     totalAgentFeeAmountKRW: number;
   };
+  sellerBankTradeStats: SellerBankTradeStat[];
   banktransferTodaySummary: {
     dateKst: string;
     depositedAmount: number;
@@ -216,6 +234,14 @@ type FilterState = {
 };
 
 type OrdersQueryState = "idle" | "loading" | "ready" | "error";
+
+const normalizeString = (value: unknown) => {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+};
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
@@ -529,6 +555,43 @@ const getSellerBankSummary = (order: BuyOrder) => {
   const primary = [bankInfo.bankName, bankInfo.accountHolder].filter(Boolean).join(" / ") || "계좌정보 없음";
 
   return { primary, accountNumber };
+};
+
+const getSellerBankTradeLookupInfo = (item: SellerBankTradeStat) => {
+  if (!Array.isArray(item.bankUserInfo) || item.bankUserInfo.length === 0) {
+    return null;
+  }
+
+  return item.bankUserInfo.find((candidate) => {
+    return Boolean(
+      candidate?.bankName
+      || candidate?.accountHolder
+      || candidate?.defaultAccountNumber
+      || candidate?.realAccountNumber
+      || candidate?.accountNumber,
+    );
+  }) || item.bankUserInfo[0] || null;
+};
+
+const getSellerBankTradeSummary = (item: SellerBankTradeStat) => {
+  const bankInfo = getSellerBankTradeLookupInfo(item);
+  const bankName = normalizeString(bankInfo?.bankName);
+  const accountHolder = normalizeString(bankInfo?.accountHolder);
+  const accountNumber =
+    normalizeString(bankInfo?.defaultAccountNumber)
+    || normalizeString(bankInfo?.realAccountNumber)
+    || normalizeString(bankInfo?.accountNumber)
+    || normalizeString(item._id)
+    || "-";
+
+  return {
+    bankName: bankName || "은행명 없음",
+    accountHolder: accountHolder || "예금주 없음",
+    accountNumber,
+    totalCount: Number(item.totalCount || 0),
+    totalKrwAmount: Number(item.totalKrwAmount || 0),
+    totalUsdtAmount: Number(item.totalUsdtAmount || 0),
+  };
 };
 
 const getActorDisplayLabel = (value: unknown) => {
@@ -2010,7 +2073,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
   const isSignedIn = Boolean(activeAccount);
   const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
+  const sellerBankTradeStats = data?.sellerBankTradeStats || EMPTY_SELLER_BANK_TRADE_STATS;
   const banktransferTodaySummary = data?.banktransferTodaySummary || EMPTY_BANKTRANSFER_TODAY_SUMMARY;
+  const sellerBankTradeSummaries = useMemo(() => {
+    return sellerBankTradeStats.map(getSellerBankTradeSummary);
+  }, [sellerBankTradeStats]);
   const todayDateLabelKst = useMemo(() => getKstDateLabel(new Date(countdownNowMs)), [countdownNowMs]);
   const remainingMsToday = useMemo(() => getRemainingKstMs(countdownNowMs), [countdownNowMs]);
   const countdownLabel = useMemo(() => formatCountdownHms(remainingMsToday), [remainingMsToday]);
@@ -2799,6 +2866,104 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               </div>
             </div>
           </article>
+        </section>
+
+        <section className="console-panel overflow-hidden rounded-[30px]">
+          <div className="border-b border-slate-200/80 px-6 py-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">Seller bank stats</div>
+                <h2 className="console-display mt-1 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                  판매자 통장별 P2P 거래 통계
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                {loading ? (
+                  <span className={SECTION_LOADING_BADGE_CLASS_NAME}>
+                    <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
+                    로딩중
+                  </span>
+                ) : null}
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  {NUMBER_FORMATTER.format(sellerBankTradeSummaries.length)} 계좌
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  {filters.storecode
+                    ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
+                    : "전체 가맹점"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-6 py-5">
+            {!isSignedIn ? (
+              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
+                판매자 통장별 P2P 거래 통계는 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
+                위 영역에서 지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`의 계좌별 집계가
+                함께 로드됩니다.
+              </div>
+            ) : sellerBankTradeSummaries.length === 0 ? (
+              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
+                현재 필터에 해당하는 판매자 통장별 P2P 거래 집계가 없습니다.
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                {sellerBankTradeSummaries.map((item, index) => (
+                  <article
+                    key={`${item.accountNumber}-${index}`}
+                    className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.94))] px-4 py-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-900">
+                          {item.bankName} · {item.accountHolder}
+                        </div>
+                        <div className="console-mono mt-1 truncate text-[1.2rem] font-semibold tracking-[-0.04em] text-slate-950">
+                          {item.accountNumber}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!item.accountNumber || item.accountNumber === "-") {
+                            return;
+                          }
+                          void navigator.clipboard?.writeText(item.accountNumber);
+                        }}
+                        className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                      >
+                        복사
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-[18px] border border-slate-200 bg-white px-3 py-3">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">건수</div>
+                        <div className="mt-2 text-right text-[1.45rem] font-bold leading-none tracking-[-0.04em] text-slate-950">
+                          {NUMBER_FORMATTER.format(item.totalCount)}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[18px] border border-emerald-100 bg-emerald-50/70 px-3 py-3">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-700">USDT</div>
+                        <div className="mt-2 text-right text-[1.1rem] font-bold leading-none tracking-[-0.03em] text-emerald-700" style={{ fontFamily: "monospace" }}>
+                          {formatUsdtValue(item.totalUsdtAmount)}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[18px] border border-amber-100 bg-amber-50/70 px-3 py-3">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-amber-700">KRW</div>
+                        <div className="mt-2 text-right text-[1.1rem] font-bold leading-none tracking-[-0.03em] text-amber-700" style={{ fontFamily: "monospace" }}>
+                          {formatKrwValue(item.totalKrwAmount)}
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="console-panel overflow-hidden rounded-[30px]">

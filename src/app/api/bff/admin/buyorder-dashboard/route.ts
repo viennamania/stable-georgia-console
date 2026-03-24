@@ -149,6 +149,9 @@ export async function POST(request: NextRequest) {
         totalAgentFeeAmount: Number(signedOrdersResult.totalAgentFeeAmount || 0),
         totalAgentFeeAmountKRW: Number(signedOrdersResult.totalAgentFeeAmountKRW || 0),
       },
+      sellerBankTradeStats: Array.isArray(signedOrdersResult.totalBySellerBankAccountNumber)
+        ? signedOrdersResult.totalBySellerBankAccountNumber
+        : [],
       banktransferTodaySummary: {
         dateKst: String(banktransferSummaryResponse.json?.summary?.dateKst || ""),
         depositedAmount: Number(banktransferSummaryResponse.json?.summary?.depositedAmount || 0),
