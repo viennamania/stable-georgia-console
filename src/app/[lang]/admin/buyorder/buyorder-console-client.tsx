@@ -3127,17 +3127,22 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           ) : shouldHighlightSellerBankInfo ? (
                             <>
                               <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
-                            <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
-                              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
-                                입금계좌
+                              <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
+                                    입금계좌
+                                  </div>
+                                  <div
+                                    className="min-w-0 flex-1 truncate text-right text-xs font-medium text-slate-700"
+                                    title={sellerBankSummary.primary}
+                                  >
+                                    {sellerBankSummary.primary}
+                                  </div>
+                                </div>
+                                <div className="console-mono mt-1 text-sm font-semibold tracking-[-0.01em] text-slate-950">
+                                  {sellerBankSummary.secondary}
+                                </div>
                               </div>
-                              <div className="console-mono mt-1 text-sm font-semibold tracking-[-0.01em] text-slate-950">
-                                {sellerBankSummary.secondary}
-                              </div>
-                              <div className="mt-1 text-xs font-medium text-slate-700">
-                                {sellerBankSummary.primary}
-                              </div>
-                            </div>
                             </>
                           ) : (
                             <>
