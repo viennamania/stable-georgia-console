@@ -3198,7 +3198,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           {isSellerMatching ? (
                             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
                               <div className="text-sm font-semibold text-slate-950">판매자 매칭중</div>
-                              <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
+                              <div className="console-mono mt-2 text-right text-sm font-semibold text-sky-700">
                                 {sellerMatchingElapsedLabel || "--:--:--"}
                               </div>
                             </div>
@@ -3260,7 +3260,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             {isDepositInfoProviding ? (
                               <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
                                 <div className="text-sm font-semibold text-slate-950">입금정보 제공중</div>
-                                <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
+                                <div className="console-mono mt-2 text-right text-sm font-semibold text-sky-700">
                                   {depositInfoProvidingElapsedLabel || "--:--:--"}
                                 </div>
                               </div>
@@ -3285,7 +3285,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                     </button>
                                   ) : null}
                                 </div>
-                                <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
+                                <div className="console-mono mt-2 text-right text-sm font-semibold text-sky-700">
                                   {depositPendingElapsedLabel || "--:--:--"}
                                 </div>
                               </div>
@@ -3342,7 +3342,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           {isSettlementPending ? (
                             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
                               <div className="text-sm font-semibold text-slate-950">결제중</div>
-                              <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
+                              <div className="console-mono mt-2 text-right text-sm font-semibold text-sky-700">
                                 {settlementPendingElapsedLabel || "--:--:--"}
                               </div>
                             </div>
