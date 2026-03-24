@@ -3058,13 +3058,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isCancellingThisOrder = Boolean(cancellingTradeId && rowMatchKey === cancellingTradeId);
                     const shouldHighlightSellerBankInfo = status === "paymentRequested";
                     const transactionHash = String(order.transactionHash || "").trim();
+                    const isUsdtTransferCompleted =
+                      status === "paymentConfirmed" && Boolean(transactionHash && transactionHash !== "0x");
                     const isSettlementCompleted =
                       status === "paymentConfirmed" && hasSettlementCompleted(order);
                     const settlement = getSettlementInfo(order);
                     const settlementTxHash = getSettlementTxHash(order);
-                    const isSettlementPending = status === "paymentConfirmed" && !hasSettlementCompleted(order);
+                    const isSettlementPending = isUsdtTransferCompleted && !hasSettlementCompleted(order);
                     const settlementPendingElapsedLabel = formatElapsedTimer(
-                      order.paymentConfirmedAt || settlement?.createdAt || order.updatedAt || order.createdAt,
+                      order.updatedAt || settlement?.createdAt || order.paymentConfirmedAt || order.createdAt,
                       countdownNowMs,
                     );
                     const shouldShowUsdtTransferAmount = status === "paymentConfirmed";
