@@ -2613,23 +2613,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           </div>
 
           <aside className="space-y-5">
-            <div className="console-panel rounded-[30px] p-5">
+            <div className="console-panel rounded-[30px] p-4">
               <div>
-                <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                <p className="console-mono text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">
                   Queue snapshot
                 </p>
-                <h2 className="console-display mt-1 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                <h2 className="console-display mt-0.5 text-[2.1rem] font-semibold tracking-[-0.05em] text-slate-950">
                   Live queue
                 </h2>
               </div>
 
-              <div className="mt-5 space-y-3">
+              <div className="mt-4 space-y-2.5">
                 {liveQueueCards.slice(0, 3).map((item) => (
-                  <div key={item.label} className="console-panel-muted rounded-[24px] p-4">
-                    <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  <div key={item.label} className="console-panel-muted rounded-[22px] px-4 py-3">
+                    <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
                       {item.label}
                     </div>
-                    <div className="console-display mt-2 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                    <div className="console-display mt-1.5 text-right text-[2rem] font-semibold tracking-[-0.05em] text-slate-950">
                       {item.value}
                     </div>
                   </div>
