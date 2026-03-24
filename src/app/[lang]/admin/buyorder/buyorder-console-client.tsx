@@ -285,6 +285,20 @@ const formatCountdownHms = (totalMs: number) => {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
+const formatElapsedTimer = (value: string | null | undefined, referenceMs: number) => {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  const startedAtMs = parsed.getTime();
+  if (Number.isNaN(startedAtMs)) {
+    return "";
+  }
+
+  return formatCountdownHms(Math.max(0, referenceMs - startedAtMs));
+};
+
 const areFiltersEqual = (left: FilterState, right: FilterState) => {
   return (
     left.storecode === right.storecode
@@ -2964,6 +2978,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const createdAtLabel = formatDateTime(order.createdAt);
                     const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
                     const sellerBankSummary = getSellerBankSummary(order);
+                    const isSellerMatching = status === "ordered";
+                    const sellerMatchingElapsedLabel = formatElapsedTimer(order.createdAt, countdownNowMs);
                     const depositProcessing = getDepositProcessingMeta(order);
                     const tradeId = String(order.tradeId || "").trim();
                     const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
@@ -3085,8 +3101,22 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
-                          {shouldHighlightSellerBankInfo ? (
+                          {isSellerMatching ? (
+                            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
+                              <div className="text-sm font-semibold text-slate-950">판매자 매칭중</div>
+                              <div className="mt-1 text-xs text-slate-600">
+                                판매자 정보를 찾는 중입니다.
+                              </div>
+                              <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
+                                {sellerMatchingElapsedLabel || "--:--:--"}
+                              </div>
+                              <div className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-sky-700">
+                                주문접수 후 경과시간
+                              </div>
+                            </div>
+                          ) : shouldHighlightSellerBankInfo ? (
+                            <>
+                              <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
                             <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
                               <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
                                 입금계좌
@@ -3098,8 +3128,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                 {sellerBankSummary.primary}
                               </div>
                             </div>
+                            </>
                           ) : (
                             <>
+                              <div className="font-medium text-slate-950">{getSellerLabel(order)}</div>
                               <div className="mt-1 text-xs text-slate-600">
                                 {sellerBankSummary.primary}
                               </div>
