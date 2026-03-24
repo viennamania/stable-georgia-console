@@ -117,6 +117,31 @@ a {
     box-shadow: 0 18px 34px -22px rgba(14, 165, 233, 0.88);
     animation: console-new-order-badge-pop 4.8s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+
+  .console-seller-bank-card {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .console-seller-bank-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .console-seller-bank-card-updated {
+    animation: console-seller-bank-card-glow 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .console-seller-bank-card-updated::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(108deg, transparent 0%, rgba(255, 255, 255, 0.72) 42%, transparent 72%);
+    transform: translateX(-150%);
+    animation: console-seller-bank-card-sheen 1.05s ease-out 0.08s 1 both;
+  }
 }
 
 @keyframes console-new-order-glow {
@@ -184,10 +209,54 @@ a {
   }
 }
 
+@keyframes console-seller-bank-card-glow {
+  0% {
+    box-shadow: 0 18px 40px -34px rgba(15, 23, 42, 0.4);
+    border-color: rgba(15, 23, 42, 0.08);
+  }
+
+  18% {
+    border-color: rgba(56, 189, 248, 0.42);
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.18),
+      0 22px 46px -24px rgba(56, 189, 248, 0.45);
+  }
+
+  58% {
+    border-color: rgba(245, 158, 11, 0.36);
+    box-shadow:
+      0 0 0 1px rgba(245, 158, 11, 0.14),
+      0 22px 46px -24px rgba(245, 158, 11, 0.34);
+  }
+
+  100% {
+    box-shadow: 0 18px 40px -34px rgba(15, 23, 42, 0.4);
+    border-color: rgba(15, 23, 42, 0.08);
+  }
+}
+
+@keyframes console-seller-bank-card-sheen {
+  0% {
+    transform: translateX(-150%);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 0.74;
+  }
+
+  100% {
+    transform: translateX(135%);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .console-new-order-row > td,
   .console-new-order-row > td::after,
-  .console-new-order-badge {
+  .console-new-order-badge,
+  .console-seller-bank-card-updated,
+  .console-seller-bank-card-updated::after {
     animation: none !important;
   }
 }

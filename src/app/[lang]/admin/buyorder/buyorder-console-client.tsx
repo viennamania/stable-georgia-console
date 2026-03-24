@@ -145,6 +145,15 @@ type SellerBankTradeStat = {
   bankUserInfo?: SellerBankTradeLookupInfo[];
 };
 
+type SellerBankTradeSummary = {
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  totalCount: number;
+  totalKrwAmount: number;
+  totalUsdtAmount: number;
+};
+
 const EMPTY_ORDERS: BuyOrder[] = [];
 const EMPTY_STORES: StoreItem[] = [];
 const EMPTY_UNMATCHED_TRANSFERS: UnmatchedTransfer[] = [];
@@ -281,6 +290,7 @@ const NEW_ORDER_HIGHLIGHT_MS = 6500;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const SUMMARY_VALUE_ANIMATION_MS = 700;
+const SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS = 2200;
 
 const createInputDate = (daysOffset = 0) => {
   const kstDate = new Date(Date.now() + KST_OFFSET_MS);
@@ -488,11 +498,17 @@ const easeOutQuart = (progress: number) => {
   return 1 - ((1 - progress) ** 4);
 };
 
-const useAnimatedNumber = (value: number | null | undefined, durationMs = SUMMARY_VALUE_ANIMATION_MS) => {
+const useAnimatedNumber = (
+  value: number | null | undefined,
+  durationMs = SUMMARY_VALUE_ANIMATION_MS,
+  options?: { initialValue?: number | null },
+) => {
   const targetValue = Number(value || 0);
   const safeTargetValue = Number.isFinite(targetValue) ? targetValue : 0;
-  const [animatedValue, setAnimatedValue] = useState(safeTargetValue);
-  const animatedValueRef = useRef(safeTargetValue);
+  const initialValue = Number(options?.initialValue);
+  const safeInitialValue = Number.isFinite(initialValue) ? initialValue : safeTargetValue;
+  const [animatedValue, setAnimatedValue] = useState(safeInitialValue);
+  const animatedValueRef = useRef(safeInitialValue);
   const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -646,7 +662,7 @@ const getSellerBankTradeLookupInfo = (item: SellerBankTradeStat) => {
   }) || item.bankUserInfo[0] || null;
 };
 
-const getSellerBankTradeSummary = (item: SellerBankTradeStat) => {
+const getSellerBankTradeSummary = (item: SellerBankTradeStat): SellerBankTradeSummary => {
   const bankInfo = getSellerBankTradeLookupInfo(item);
   const bankName = normalizeString(bankInfo?.bankName);
   const accountHolder = normalizeString(bankInfo?.accountHolder);
@@ -665,6 +681,116 @@ const getSellerBankTradeSummary = (item: SellerBankTradeStat) => {
     totalKrwAmount: Number(item.totalKrwAmount || 0),
     totalUsdtAmount: Number(item.totalUsdtAmount || 0),
   };
+};
+
+const SellerBankTradeSummaryCard = ({
+  item,
+  index,
+}: {
+  item: SellerBankTradeSummary;
+  index: number;
+}) => {
+  const animatedTotalCount = useAnimatedNumber(item.totalCount, SUMMARY_VALUE_ANIMATION_MS, { initialValue: 0 });
+  const animatedTotalKrwAmount = useAnimatedNumber(item.totalKrwAmount, SUMMARY_VALUE_ANIMATION_MS, { initialValue: 0 });
+  const [isUpdateHighlighted, setIsUpdateHighlighted] = useState(false);
+  const previousValueRef = useRef({
+    totalCount: item.totalCount,
+    totalKrwAmount: item.totalKrwAmount,
+  });
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const previousValue = previousValueRef.current;
+    const hasValueChanged =
+      previousValue.totalCount !== item.totalCount
+      || previousValue.totalKrwAmount !== item.totalKrwAmount;
+
+    previousValueRef.current = {
+      totalCount: item.totalCount,
+      totalKrwAmount: item.totalKrwAmount,
+    };
+
+    if (!hasValueChanged) {
+      return;
+    }
+
+    setIsUpdateHighlighted(true);
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
+    highlightTimerRef.current = setTimeout(() => {
+      setIsUpdateHighlighted(false);
+      highlightTimerRef.current = null;
+    }, SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS);
+  }, [item.totalCount, item.totalKrwAmount]);
+
+  return (
+    <article
+      className={`console-seller-bank-card w-full rounded-[13px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.9))] px-[5px] py-[5px] shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)] ${
+        isUpdateHighlighted ? "console-seller-bank-card-updated" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-1">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1">
+            <span className="console-mono inline-flex h-[18px] shrink-0 items-center rounded-full bg-slate-100 px-[5px] text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <div className="truncate text-[8px] text-slate-500">
+              {item.bankName}
+            </div>
+            <span className="shrink-0 text-[8px] text-slate-300">/</span>
+            <div className="truncate text-[9px] font-semibold text-slate-900">
+              {item.accountHolder}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!item.accountNumber || item.accountNumber === "-") {
+              return;
+            }
+            void navigator.clipboard?.writeText(item.accountNumber);
+          }}
+          className="shrink-0 rounded-full border border-slate-200 bg-white px-[5px] py-0.5 text-[8px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!item.accountNumber || item.accountNumber === "-"}
+        >
+          복사
+        </button>
+      </div>
+
+      <div className="console-mono mt-[3px] truncate text-[0.72rem] font-semibold tracking-[-0.04em] text-slate-950">
+        {item.accountNumber}
+      </div>
+
+      <div className="mt-[3px] grid grid-cols-[40px_minmax(0,1fr)] gap-1">
+        <div className="rounded-[8px] border border-slate-200 bg-slate-50 px-[5px] py-[3px] text-right text-[9px] font-semibold tracking-[-0.03em] text-slate-950">
+          <div>
+            {NUMBER_FORMATTER.format(animatedTotalCount)}
+          </div>
+        </div>
+
+        <div className="rounded-[8px] border border-amber-100 bg-amber-50/70 px-[5px] py-[3px]">
+          <div
+            className="console-mono truncate text-right text-[9px] font-semibold tracking-[-0.03em] text-amber-700"
+            style={{ fontFamily: "monospace" }}
+          >
+            {formatKrwValue(animatedTotalKrwAmount)}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
 };
 
 const getActorDisplayLabel = (value: unknown) => {
@@ -3021,64 +3147,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   현재 필터에 해당하는 판매자 통장별 P2P 거래 집계가 없습니다.
                 </div>
               ) : (
-                <div className="grid justify-center gap-1 [grid-template-columns:repeat(auto-fit,minmax(168px,182px))]">
+                <div className="grid justify-center gap-1 [grid-template-columns:repeat(auto-fit,minmax(154px,168px))]">
                   {sellerBankTradeSummaries.map((item, index) => (
-                    <article
+                    <SellerBankTradeSummaryCard
                       key={`${item.accountNumber}-${index}`}
-                      className="w-full rounded-[14px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.9))] px-1.5 py-1.5 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)]"
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="min-w-0">
-                          <div className="flex min-w-0 items-center gap-1">
-                            <span className="console-mono inline-flex h-5 shrink-0 items-center rounded-full bg-slate-100 px-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                              {String(index + 1).padStart(2, "0")}
-                            </span>
-                            <div className="truncate text-[9px] text-slate-500">
-                              {item.bankName}
-                            </div>
-                            <span className="shrink-0 text-[9px] text-slate-300">/</span>
-                            <div className="truncate text-[10px] font-semibold text-slate-900">
-                              {item.accountHolder}
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!item.accountNumber || item.accountNumber === "-") {
-                              return;
-                            }
-                            void navigator.clipboard?.writeText(item.accountNumber);
-                          }}
-                          className="shrink-0 rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
-                          disabled={!item.accountNumber || item.accountNumber === "-"}
-                        >
-                          복사
-                        </button>
-                      </div>
-
-                      <div className="console-mono mt-1 truncate text-[0.76rem] font-semibold tracking-[-0.04em] text-slate-950">
-                        {item.accountNumber}
-                      </div>
-
-                      <div className="mt-1 grid grid-cols-[46px_minmax(0,1fr)] gap-1">
-                        <div className="rounded-[9px] border border-slate-200 bg-slate-50 px-1.5 py-1 text-right text-[10px] font-semibold tracking-[-0.03em] text-slate-950">
-                          <div>
-                            {NUMBER_FORMATTER.format(item.totalCount)}
-                          </div>
-                        </div>
-
-                        <div className="rounded-[9px] border border-amber-100 bg-amber-50/70 px-1.5 py-1">
-                          <div
-                            className="console-mono truncate text-right text-[10px] font-semibold tracking-[-0.03em] text-amber-700"
-                            style={{ fontFamily: "monospace" }}
-                          >
-                            {formatKrwValue(item.totalKrwAmount)}
-                          </div>
-                        </div>
-                      </div>
-                    </article>
+                      item={item}
+                      index={index}
+                    />
                   ))}
                 </div>
               )}
