@@ -2926,7 +2926,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   <th className="w-[156px] border-b border-slate-200 px-4 py-3">상태</th>
                   <th className="w-[196px] border-b border-slate-200 px-4 py-3">가맹점</th>
                   <th className="border-b border-slate-200 px-4 py-3">구매자</th>
-                  <th className="border-b border-slate-200 px-4 py-3">판매자</th>
+                  <th className="w-[220px] border-b border-slate-200 px-4 py-3">판매자</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">구매금액 / 구매량</th>
                   <th className="w-[208px] border-b border-slate-200 px-4 py-3">입금처리</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">
@@ -3100,7 +3100,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="w-[220px] border-b border-slate-100 px-4 py-4 align-top">
                           {isSellerMatching ? (
                             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
                               <div className="text-sm font-semibold text-slate-950">판매자 매칭중</div>
@@ -3109,9 +3109,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               </div>
                               <div className="console-mono mt-2 text-sm font-semibold text-sky-700">
                                 {sellerMatchingElapsedLabel || "--:--:--"}
-                              </div>
-                              <div className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-sky-700">
-                                주문접수 후 경과시간
                               </div>
                             </div>
                           ) : shouldHighlightSellerBankInfo ? (
