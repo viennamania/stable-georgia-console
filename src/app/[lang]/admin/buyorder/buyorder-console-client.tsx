@@ -3186,9 +3186,6 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                 className="h-8 w-8 shrink-0 rounded-xl border border-slate-200 bg-slate-100 object-cover"
                               />
                               <div className="min-w-0">
-                                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                                  가맹점
-                                </div>
                                 <div className="truncate text-sm font-medium text-slate-700">{storeLabel}</div>
                               </div>
                             </div>
