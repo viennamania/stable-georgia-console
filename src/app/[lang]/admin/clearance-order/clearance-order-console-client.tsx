@@ -1280,6 +1280,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   embedded
                   forcedStorecode={selectedStorecode}
                   hideStoreFilter
+                  hideWithdrawalLiveSection
                 />
               </>
             )}

@@ -129,6 +129,7 @@ type ClearanceManagementConsoleClientProps = {
   embedded?: boolean;
   forcedStorecode?: string;
   hideStoreFilter?: boolean;
+  hideWithdrawalLiveSection?: boolean;
 };
 
 type WithdrawalRealtimeItem = {
@@ -646,6 +647,7 @@ export default function ClearanceManagementConsoleClient({
   embedded = false,
   forcedStorecode = "",
   hideStoreFilter = false,
+  hideWithdrawalLiveSection = false,
 }: ClearanceManagementConsoleClientProps) {
   const activeAccount = useActiveAccount();
   const normalizedForcedStorecode = normalizeText(forcedStorecode);
@@ -1630,7 +1632,8 @@ export default function ClearanceManagementConsoleClient({
           ))}
         </section>
 
-        <section className="console-panel overflow-hidden rounded-[30px]">
+        {!hideWithdrawalLiveSection ? (
+          <section className="console-panel overflow-hidden rounded-[30px]">
           <div className="border-b border-slate-200/80 px-6 py-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="space-y-2">
@@ -1882,7 +1885,8 @@ export default function ClearanceManagementConsoleClient({
               </div>
             )}
           </div>
-        </section>
+          </section>
+        ) : null}
 
         <section className="console-panel overflow-hidden rounded-[30px]">
           <div className="border-b border-slate-200/80 px-6 py-4">
