@@ -138,6 +138,8 @@ type ClearanceActionModalState = {
   order: ClearanceOrder;
 };
 
+type PaginationItem = number | "start-ellipsis" | "end-ellipsis";
+
 const EMPTY_STORES: StoreItem[] = [];
 const EMPTY_ORDERS: ClearanceOrder[] = [];
 const EMPTY_WITHDRAWALS: BankTransferDashboardEvent[] = [];
@@ -214,6 +216,43 @@ const createOrdersLoadSignature = (filters: FilterState, walletAddress?: string 
     filters.toDate,
     filters.searchMyOrders ? "1" : "0",
   ].join("|");
+};
+
+const buildPaginationItems = (
+  currentPage: number,
+  totalPages: number,
+  maxVisiblePages = 7,
+): PaginationItem[] => {
+  const safeTotalPages = Math.max(1, totalPages);
+  const safeCurrentPage = Math.max(1, Math.min(currentPage, safeTotalPages));
+
+  if (safeTotalPages <= maxVisiblePages) {
+    return Array.from({ length: safeTotalPages }, (_, index) => index + 1);
+  }
+
+  const visibleInnerPages = Math.max(1, maxVisiblePages - 2);
+  let startPage = Math.max(2, safeCurrentPage - Math.floor((visibleInnerPages - 1) / 2));
+  let endPage = Math.min(safeTotalPages - 1, startPage + visibleInnerPages - 1);
+
+  startPage = Math.max(2, endPage - visibleInnerPages + 1);
+
+  const items: PaginationItem[] = [1];
+
+  if (startPage > 2) {
+    items.push("start-ellipsis");
+  }
+
+  for (let page = startPage; page <= endPage; page += 1) {
+    items.push(page);
+  }
+
+  if (endPage < safeTotalPages - 1) {
+    items.push("end-ellipsis");
+  }
+
+  items.push(safeTotalPages);
+
+  return items;
 };
 
 const normalizeText = (value: unknown) => {
@@ -1239,6 +1278,26 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const totalOrderPages = Math.max(1, Math.ceil(totalOrderCount / Math.max(1, filters.limit)));
   const currentOrderRangeStart = totalOrderCount === 0 ? 0 : (currentOrderPage - 1) * filters.limit + 1;
   const currentOrderRangeEnd = totalOrderCount === 0 ? 0 : Math.min(totalOrderCount, currentOrderPage * filters.limit);
+  const orderPaginationItems = useMemo(
+    () => buildPaginationItems(currentOrderPage, totalOrderPages),
+    [currentOrderPage, totalOrderPages],
+  );
+  const canGoToPreviousOrderPage = currentOrderPage > 1;
+  const canGoToNextOrderPage = currentOrderPage < totalOrderPages;
+  const isOrderPaginationBusy = ordersLoading || ordersRefreshing;
+  const updateOrderPage = useCallback((nextPage: number) => {
+    const clampedPage = Math.max(1, Math.min(nextPage, totalOrderPages));
+    setFilters((prev) => {
+      if (prev.page === clampedPage) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        page: clampedPage,
+      };
+    });
+  }, [totalOrderPages]);
   const showOrdersLoadingState = ordersLoading && totalOrderCount === 0 && orders.length === 0 && !ordersError;
   const actionModalBuyerBankSummary = actionModalState ? getBuyerBankSummary(actionModalState.order) : null;
   const actionModalSellerBankSummary = actionModalState ? getSellerBankSummary(actionModalState.order) : null;
@@ -1248,6 +1307,23 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const actionModalProcessingModeMeta = actionModalState
     ? getWithdrawalProcessingModeMeta(actionModalState.order)
     : null;
+
+  useEffect(() => {
+    if (filters.page <= totalOrderPages) {
+      return;
+    }
+
+    setFilters((prev) => {
+      if (prev.page <= totalOrderPages) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        page: totalOrderPages,
+      };
+    });
+  }, [filters.page, totalOrderPages]);
 
   return (
     <div className="console-shell px-4 py-6 sm:px-6 lg:px-8">
@@ -1762,7 +1838,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
         </section>
 
         <section className="console-panel overflow-hidden rounded-[30px]">
-          <div className="border-b border-slate-200/80 px-6 py-5">
+          <div className="border-b border-slate-200/80 px-6 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
@@ -1785,25 +1861,25 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
             </div>
           </div>
 
-          <div className="space-y-4 px-6 py-5">
-            {error || ordersError ? (
+          {error || ordersError ? (
+            <div className="px-6 py-3">
               <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {error || ordersError}
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           <div className="px-2 pb-2">
             <table className="w-full table-fixed border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                  <th className="w-[20%] border-b border-slate-200 px-3 py-3">Trade / Created</th>
-                  <th className="w-[10%] border-b border-slate-200 px-3 py-3">Status</th>
-                  <th className="w-[16%] border-b border-slate-200 px-3 py-3">Buyer</th>
-                  <th className="w-[18%] border-b border-slate-200 px-3 py-3">Seller / 입금계좌</th>
-                  <th className="w-[12%] border-b border-slate-200 px-3 py-3 text-right">Amount</th>
-                  <th className="w-[15%] border-b border-slate-200 px-3 py-3">출금상태</th>
-                  <th className="w-[9%] border-b border-slate-200 px-3 py-3">USDT 전송</th>
+                  <th className="w-[20%] border-b border-slate-200 px-3 py-2.5">Trade / Created</th>
+                  <th className="w-[10%] border-b border-slate-200 px-3 py-2.5">Status</th>
+                  <th className="w-[16%] border-b border-slate-200 px-3 py-2.5">Buyer</th>
+                  <th className="w-[18%] border-b border-slate-200 px-3 py-2.5">Seller / 입금계좌</th>
+                  <th className="w-[12%] border-b border-slate-200 px-3 py-2.5 text-right">Amount</th>
+                  <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">출금상태</th>
+                  <th className="w-[9%] border-b border-slate-200 px-3 py-2.5">USDT 전송</th>
                 </tr>
               </thead>
               <tbody>
@@ -1841,80 +1917,80 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                         key={order._id || order.tradeId}
                         className={index % 2 === 0 ? "bg-white text-sm text-slate-700" : "bg-slate-50/60 text-sm text-slate-700"}
                       >
-                        <td className="border-b border-slate-100 px-3 py-4 align-top">
-                          <div className="flex items-start gap-3">
+                        <td className="border-b border-slate-100 px-3 py-3 align-top">
+                          <div className="flex items-start gap-2.5">
                             <img
                               src={getStoreLogoSrc(order.store)}
                               alt={getStoreDisplayName(order.store) || order.storecode || "Store"}
-                              className="h-10 w-10 shrink-0 rounded-2xl border border-slate-200 bg-white object-cover"
+                              className="h-9 w-9 shrink-0 rounded-2xl border border-slate-200 bg-white object-cover"
                             />
                             <div className="min-w-0 break-words">
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 <div className="min-w-0 break-words font-semibold text-slate-950">
                                   {getStoreDisplayName(order.store) || order.storecode || "-"}
                                 </div>
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${creationMeta.className}`}>
+                                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${creationMeta.className}`}>
                                   {creationMeta.label}
                                 </span>
                               </div>
-                              <div className="mt-2 break-all font-semibold text-slate-900">
+                              <div className="mt-1 break-all font-semibold text-slate-900">
                                 {order.tradeId || "-"}
                               </div>
-                              <div className="mt-1 break-words text-xs text-slate-500">
+                              <div className="mt-0.5 break-words text-[11px] text-slate-500">
                                 {createdAtLabel === "-" ? "-" : `${createdAtLabel} · ${createdTimeAgoLabel}`}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-4 align-top">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                        <td className="border-b border-slate-100 px-3 py-3 align-top">
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusMeta.className}`}>
                             {statusMeta.label}
                           </span>
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-4 align-top">
-                          <div className="space-y-1.5 break-words">
+                        <td className="border-b border-slate-100 px-3 py-3 align-top">
+                          <div className="space-y-1 break-words">
                             <div className="break-words font-medium text-slate-950">{buyerLabel}</div>
-                            <div className="break-all text-xs text-slate-600">{buyerBankSummary.secondary}</div>
-                            <div className="break-words text-xs text-slate-500">{buyerBankSummary.primary}</div>
-                            <div className="console-mono break-all text-xs text-slate-500">
+                            <div className="break-all text-[11px] text-slate-600">{buyerBankSummary.secondary}</div>
+                            <div className="break-words text-[11px] text-slate-500">{buyerBankSummary.primary}</div>
+                            <div className="console-mono break-all text-[11px] text-slate-500">
                               {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                             </div>
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-4 align-top">
-                          <div className="space-y-1.5 break-words">
+                        <td className="border-b border-slate-100 px-3 py-3 align-top">
+                          <div className="space-y-1 break-words">
                             <div className="break-words font-medium text-slate-950">
                               {order.seller?.nickname || shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)}
                             </div>
-                            <div className="break-words text-xs text-slate-600">{sellerBankSummary.primary}</div>
-                            <div className="break-all text-xs text-slate-500">{sellerBankSummary.secondary}</div>
-                            <div className="console-mono break-all text-xs text-slate-500">
+                            <div className="break-words text-[11px] text-slate-600">{sellerBankSummary.primary}</div>
+                            <div className="break-all text-[11px] text-slate-500">{sellerBankSummary.secondary}</div>
+                            <div className="console-mono break-all text-[11px] text-slate-500">
                               {shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)}
                             </div>
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-4 text-right align-top">
-                          <div className="text-[1.05rem] font-semibold tracking-[-0.03em] text-slate-950">
+                        <td className="border-b border-slate-100 px-3 py-3 text-right align-top">
+                          <div className="text-base font-semibold tracking-[-0.03em] text-slate-950">
                             {formatKrwValue(order.krwAmount)} KRW
                           </div>
-                          <div className="mt-1 text-xs font-semibold text-emerald-600">
+                          <div className="mt-0.5 text-[11px] font-semibold text-emerald-600">
                             {formatUsdtValue(order.usdtAmount)} USDT
                           </div>
-                          <div className="mt-1 text-xs text-amber-700">
+                          <div className="mt-0.5 text-[11px] text-amber-700">
                             입금액 {formatKrwValue(order.paymentAmount)} KRW
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-4 align-top">
-                          <div className="flex min-h-[136px] min-w-0 flex-col items-start gap-2 break-words">
-                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${withdrawalStatusMeta.className}`}>
+                        <td className="border-b border-slate-100 px-3 py-3 align-top">
+                          <div className="flex min-w-0 flex-col items-start gap-1.5 break-words">
+                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${withdrawalStatusMeta.className}`}>
                               {withdrawalStatusMeta.label}
                             </span>
-                            <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold ${processingModeMeta.className}`}>
+                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${processingModeMeta.className}`}>
                               {processingModeMeta.label}
                             </span>
 
                             {isWithdrawalCompleted ? (
-                              <div className="space-y-1 text-xs text-slate-500">
+                              <div className="space-y-0.5 text-[11px] text-slate-500">
                                 {processingModeMeta.isManual && depositCompletedActorLabel && depositCompletedActorLabel !== "-" ? (
                                   <div>처리자 {depositCompletedActorLabel}</div>
                                 ) : null}
@@ -1923,16 +1999,16 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                                 ) : null}
                               </div>
                             ) : isCancelled ? (
-                              <div className="break-words text-xs text-slate-500">
+                              <div className="break-words text-[11px] text-slate-500">
                                 취소된 주문으로 출금이 완료되지 않았습니다.
                               </div>
                             ) : (
-                              <div className="flex w-full flex-col gap-2">
+                              <div className="flex w-full flex-col gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => openActionModal("complete", order)}
                                   disabled={isProcessingThisOrder || actionModalSubmitting}
-                                  className={`rounded-full px-3 py-2 text-xs font-semibold text-white transition ${
+                                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition ${
                                     isProcessingThisOrder || actionModalSubmitting
                                       ? "cursor-not-allowed bg-emerald-300"
                                       : "bg-emerald-600 hover:bg-emerald-700"
@@ -1946,7 +2022,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                                   type="button"
                                   onClick={() => openActionModal("cancel", order)}
                                   disabled={isProcessingThisOrder || actionModalSubmitting}
-                                  className={`rounded-full px-3 py-2 text-xs font-semibold text-white transition ${
+                                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition ${
                                     isProcessingThisOrder || actionModalSubmitting
                                       ? "cursor-not-allowed bg-rose-300"
                                       : "bg-rose-600 hover:bg-rose-700"
@@ -1960,23 +2036,23 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                             )}
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-4 align-top">
+                        <td className="border-b border-slate-100 px-3 py-3 align-top">
                           {transactionHash && transactionHash !== "0x" ? (
                             <div className="min-w-0 break-words">
-                              <div className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                              <div className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                                 전송완료
                               </div>
-                              <div className="console-mono mt-2 break-all text-xs text-slate-500">{shortAddress(transactionHash)}</div>
-                              <div className="mt-1 break-words text-xs text-slate-500">
+                              <div className="console-mono mt-1 break-all text-[11px] text-slate-500">{shortAddress(transactionHash)}</div>
+                              <div className="mt-0.5 break-words text-[11px] text-slate-500">
                                 {formatDateTime(order.paymentConfirmedAt || order.updatedAt)}
                               </div>
                             </div>
                           ) : (
                             <div className="min-w-0 break-words">
-                              <div className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                              <div className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-700">
                                 전송대기
                               </div>
-                              <div className="mt-2 break-words text-xs text-slate-500">
+                              <div className="mt-1 break-words text-[11px] text-slate-500">
                                 출금완료 처리 후 반영됩니다.
                               </div>
                             </div>
@@ -1989,6 +2065,85 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
               </tbody>
             </table>
           </div>
+
+          {totalOrderCount > 0 ? (
+            <div className="border-t border-slate-200/80 px-4 py-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="text-xs text-slate-500">
+                  Rows {NUMBER_FORMATTER.format(currentOrderRangeStart)}-{NUMBER_FORMATTER.format(currentOrderRangeEnd)}
+                  {" / "}
+                  {NUMBER_FORMATTER.format(totalOrderCount)}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => updateOrderPage(1)}
+                    disabled={!canGoToPreviousOrderPage || isOrderPaginationBusy}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    처음
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateOrderPage(currentOrderPage - 1)}
+                    disabled={!canGoToPreviousOrderPage || isOrderPaginationBusy}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    이전
+                  </button>
+
+                  {orderPaginationItems.map((item, index) => {
+                    if (typeof item !== "number") {
+                      return (
+                        <span
+                          key={`${item}-${index}`}
+                          className="px-1 text-xs font-medium text-slate-400"
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+
+                    const isActive = item === currentOrderPage;
+
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => updateOrderPage(item)}
+                        disabled={isActive || isOrderPaginationBusy}
+                        className={`min-w-[34px] rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          isActive
+                            ? "border border-sky-200 bg-sky-50 text-sky-700"
+                            : "border border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+                        {NUMBER_FORMATTER.format(item)}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => updateOrderPage(currentOrderPage + 1)}
+                    disabled={!canGoToNextOrderPage || isOrderPaginationBusy}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    다음
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateOrderPage(totalOrderPages)}
+                    disabled={!canGoToNextOrderPage || isOrderPaginationBusy}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    마지막
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {actionModalState ? (
