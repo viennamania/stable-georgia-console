@@ -1853,7 +1853,7 @@ export default function ClearanceManagementConsoleClient({
               </div>
             ) : (
               <div className="-mx-1 overflow-x-auto px-1 pb-1">
-                <div className="flex min-w-full items-stretch gap-3">
+                <div className="flex min-w-full items-start gap-3">
                   {filteredWithdrawalRealtimeItems.map((item) => {
                     const event = item.data;
                     const isHighlighted = item.highlightUntil > withdrawalRealtimeNowMs;
@@ -1936,8 +1936,8 @@ export default function ClearanceManagementConsoleClient({
                           </div>
                         </div>
 
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
+                        <div className="mt-3 grid grid-cols-2 items-start gap-2">
+                          <div className="min-w-0 self-start rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
                                 송금인
@@ -1951,15 +1951,11 @@ export default function ClearanceManagementConsoleClient({
                               >
                                 {isConfiguredAccountMatched ? "계좌 일치" : "계좌 미일치"}
                               </span>
-                              {isConfiguredAccountMatched ? (
+                              {isConfiguredAccountMatched && isConfiguredHolderMatched ? (
                                 <span
-                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                    isConfiguredHolderMatched
-                                      ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                                      : "border border-slate-200 bg-slate-50 text-slate-600"
-                                  }`}
+                                  className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
                                 >
-                                  {isConfiguredHolderMatched ? "예금주 일치" : "예금주 상이"}
+                                  예금주 일치
                                 </span>
                               ) : null}
                             </div>
@@ -1979,15 +1975,9 @@ export default function ClearanceManagementConsoleClient({
                               </div>
                             ) : null}
 
-                            <div className="mt-1.5 truncate text-[11px] text-slate-500">
-                              거래명 {normalizedWebhookName || "-"}
-                            </div>
-                            <div className="mt-0.5 truncate text-[11px] text-slate-500">
-                              계좌 {normalizeAccountNumber(event.bankAccountNumber) || "-"}
-                            </div>
                           </div>
 
-                          <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                          <div className="min-w-0 self-start rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                             <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">수취인</div>
                             <div className="mt-1 truncate text-xs font-semibold text-slate-900">{receiverBankName}</div>
                             <div className="mt-0.5 truncate text-[11px] text-slate-600">
