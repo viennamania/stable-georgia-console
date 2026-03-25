@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchAllStoresForBalance } from "@/lib/server/store-list";
+import { postRemoteJson } from "@/lib/server/remote-backend";
 
 export const runtime = "nodejs";
 
@@ -40,12 +40,15 @@ export async function POST(request: NextRequest) {
     body = {};
   }
 
-  const limit = Math.min(parsePositiveInt(body.limit, 200), 300);
+  const limit = Math.min(parsePositiveInt(body.limit, 300), 500);
   const page = Math.max(parsePositiveInt(body.page, 1), 1);
+  const searchStore = normalizeString(body.searchStore);
 
-  const response = await fetchAllStoresForBalance({
+  const response = await postRemoteJson("/api/store/getAllStores", {
     limit,
-    startPage: page,
+    page,
+    searchStore,
+    sortBy: "storeNameDesc",
   });
 
   if (!response.ok) {
