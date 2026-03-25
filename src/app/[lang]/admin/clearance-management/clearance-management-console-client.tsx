@@ -2152,9 +2152,6 @@ export default function ClearanceManagementConsoleClient({
                           <div className="mt-0.5 text-[11px] font-semibold text-emerald-600">
                             {formatUsdtValue(order.usdtAmount)} USDT
                           </div>
-                          <div className="mt-0.5 text-[11px] text-amber-700">
-                            입금액 {formatKrwValue(order.paymentAmount)} KRW
-                          </div>
                         </td>
                         <td className="border-b border-slate-100 px-3 py-3 align-top">
                           <div className="flex min-w-0 flex-col items-start gap-1.5 break-words">
