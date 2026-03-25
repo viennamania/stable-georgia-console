@@ -1320,69 +1320,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                       </div>
                     </article>
 
-                    <article className="console-panel rounded-[30px] p-6">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                            Seller balance
-                          </div>
-                          <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
-                            판매자 지갑 잔고 현황
-                          </h2>
-                        </div>
-                        {storeContext?.sellersBalanceError ? (
-                          <span className="text-xs text-rose-600">{storeContext.sellersBalanceError}</span>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                        {storeContextLoading && storeContext?.sellersBalance?.length === 0 ? (
-                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                            판매자 지갑 잔고를 불러오는 중입니다...
-                          </div>
-                        ) : null}
-
-                        {!storeContextLoading && (storeContext?.sellersBalance || []).length === 0 ? (
-                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                            표시할 판매자 지갑 잔고가 없습니다.
-                          </div>
-                        ) : null}
-
-                        {(storeContext?.sellersBalance || []).map((item) => (
-                          <div
-                            key={`${normalizeText(item.walletAddress)}-${normalizeText(item.nickname)}`}
-                            className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-sm font-semibold text-slate-950">
-                                  {normalizeText(item.nickname) || "seller"}
-                                </div>
-                                <div className="console-mono mt-1 break-all text-[11px] text-slate-500">
-                                  {shortAddress(item.walletAddress)}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                                  USDT
-                                </div>
-                                <div className="mt-1 text-lg font-semibold tracking-[-0.04em] text-emerald-600">
-                                  {formatUsdtValue(item.currentUsdtBalance)}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                              <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
-                                미전송 {formatKrwValue(item.pendingTransferCount)}건
-                              </span>
-                              <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
-                                {formatUsdtValue(item.pendingTransferUsdtAmount)} USDT
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </article>
                   </div>
 
                   <article className="console-panel rounded-[30px] p-6">
