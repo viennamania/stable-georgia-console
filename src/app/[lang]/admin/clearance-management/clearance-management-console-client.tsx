@@ -1890,7 +1890,7 @@ export default function ClearanceManagementConsoleClient({
                     return (
                       <article
                         key={item.id}
-                        className={`w-[322px] min-w-[322px] shrink-0 rounded-[26px] border px-4 py-4 transition-all ${
+                        className={`flex h-fit w-[322px] min-w-[322px] shrink-0 self-start flex-col rounded-[26px] border px-4 py-3.5 transition-all ${
                           isHighlighted
                             ? "border-sky-300 bg-sky-50 shadow-[0_14px_30px_-20px_rgba(14,165,233,0.75)]"
                             : "border-slate-200 bg-white shadow-sm"
