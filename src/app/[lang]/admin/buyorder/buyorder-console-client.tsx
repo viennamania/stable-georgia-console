@@ -291,7 +291,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const SUMMARY_VALUE_ANIMATION_MS = 700;
 const SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS = 2200;
-const UNMATCHED_CARD_PRESENCE_MS = 420;
+const UNMATCHED_CARD_PRESENCE_MS = 560;
 
 const createInputDate = (daysOffset = 0) => {
   const kstDate = new Date(Date.now() + KST_OFFSET_MS);
