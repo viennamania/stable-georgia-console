@@ -1394,26 +1394,21 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   </div>
 
                   <article className="console-panel rounded-[30px] p-6">
-                    <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                      Create order
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                          Create order
+                        </div>
+                        <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                          청산주문 생성
+                        </h2>
+                      </div>
+                      <div className="text-right text-lg font-semibold tracking-[-0.05em] text-slate-950">
+                        {rate > 0 ? `${formatKrwValue(rate)} KRW` : "Rate unavailable"}
+                      </div>
                     </div>
-                    <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
-                      청산주문 생성
-                    </h2>
 
                     <div className="mt-5 grid gap-4">
-                      <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4">
-                        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                          Rate
-                        </div>
-                        <div className="mt-2 text-right text-2xl font-semibold tracking-[-0.05em] text-slate-950">
-                          {rate > 0 ? `${formatKrwValue(rate)} KRW` : "Rate unavailable"}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          1 USDT 기준 판매 환율
-                        </div>
-                      </div>
-
                       <label className="space-y-2 text-sm">
                         <span className="font-medium text-slate-700">청산금액 (KRW)</span>
                         <input
