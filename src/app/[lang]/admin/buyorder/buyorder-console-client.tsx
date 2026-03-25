@@ -135,6 +135,7 @@ type SellerBankTradeLookupInfo = {
   accountNumber?: string;
   realAccountNumber?: string;
   defaultAccountNumber?: string;
+  balance?: number | string;
 };
 
 type SellerBankTradeStat = {
@@ -149,6 +150,7 @@ type SellerBankTradeSummary = {
   bankName: string;
   accountHolder: string;
   accountNumber: string;
+  balance: number | null;
   totalCount: number;
   totalKrwAmount: number;
   totalUsdtAmount: number;
@@ -823,11 +825,14 @@ const getSellerBankTradeSummary = (item: SellerBankTradeStat): SellerBankTradeSu
     || normalizeString(bankInfo?.accountNumber)
     || normalizeString(item._id)
     || "-";
+  const rawBalance = Number(bankInfo?.balance);
+  const balance = Number.isFinite(rawBalance) ? rawBalance : null;
 
   return {
     bankName: bankName || "은행명 없음",
     accountHolder: accountHolder || "예금주 없음",
     accountNumber,
+    balance,
     totalCount: Number(item.totalCount || 0),
     totalKrwAmount: Number(item.totalKrwAmount || 0),
     totalUsdtAmount: Number(item.totalUsdtAmount || 0),
@@ -864,8 +869,12 @@ const SellerBankTradeSummaryCard = ({
 }) => {
   const animatedTotalCount = useAnimatedNumber(item.totalCount, SUMMARY_VALUE_ANIMATION_MS, { initialValue: 0 });
   const animatedTotalKrwAmount = useAnimatedNumber(item.totalKrwAmount, SUMMARY_VALUE_ANIMATION_MS, { initialValue: 0 });
+  const animatedBalance = useAnimatedNumber(item.balance ?? 0, SUMMARY_VALUE_ANIMATION_MS, {
+    initialValue: item.balance ?? 0,
+  });
   const [highlightIteration, setHighlightIteration] = useState(0);
   const previousValueRef = useRef({
+    balance: item.balance,
     totalCount: item.totalCount,
     totalKrwAmount: item.totalKrwAmount,
   });
@@ -882,10 +891,12 @@ const SellerBankTradeSummaryCard = ({
   useEffect(() => {
     const previousValue = previousValueRef.current;
     const hasValueChanged =
-      previousValue.totalCount !== item.totalCount
+      previousValue.balance !== item.balance
+      || previousValue.totalCount !== item.totalCount
       || previousValue.totalKrwAmount !== item.totalKrwAmount;
 
     previousValueRef.current = {
+      balance: item.balance,
       totalCount: item.totalCount,
       totalKrwAmount: item.totalKrwAmount,
     };
@@ -902,7 +913,7 @@ const SellerBankTradeSummaryCard = ({
       setHighlightIteration(0);
       highlightTimerRef.current = null;
     }, SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS);
-  }, [item.totalCount, item.totalKrwAmount]);
+  }, [item.balance, item.totalCount, item.totalKrwAmount]);
 
   const highlightClassName =
     highlightIteration === 0
@@ -950,6 +961,19 @@ const SellerBankTradeSummaryCard = ({
 
       <div className="console-mono mt-[3px] truncate text-[0.72rem] font-semibold tracking-[-0.04em] text-slate-950">
         {item.accountNumber}
+      </div>
+
+      <div className="mt-[3px] flex items-center justify-between gap-2 rounded-[8px] border border-emerald-100 bg-emerald-50/70 px-[6px] py-[4px]">
+        <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
+          잔고
+        </span>
+        <span
+          className="console-mono truncate text-right text-[12px] font-bold leading-none tracking-[-0.03em] text-emerald-700"
+          style={{ fontFamily: "monospace" }}
+          title={item.balance === null ? "잔고정보없음" : formatKrwValue(item.balance)}
+        >
+          {item.balance === null ? "잔고정보없음" : formatKrwValue(animatedBalance)}
+        </span>
       </div>
 
       <div className="mt-[3px] grid grid-cols-[44px_minmax(0,1fr)] gap-1">
