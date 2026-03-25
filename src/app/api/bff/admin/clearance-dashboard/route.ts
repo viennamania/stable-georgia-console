@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRemoteBackendBaseUrl, getRemoteJson, postRemoteJson } from "@/lib/server/remote-backend";
-import { fetchAllStoresWithBankInfo } from "@/lib/server/store-list";
 
 export const runtime = "nodejs";
 
@@ -76,17 +75,25 @@ export async function POST(request: NextRequest) {
   }
 
   const signedOrdersBody = asPlainObject(body.signedOrdersBody);
+  const signedStoreBody = asPlainObject(body.signedStoreBody);
   const storesLimit = Math.min(parsePositiveInt(body.storesLimit, 200), 300);
   const storesPage = Math.max(parsePositiveInt(body.storesPage, 1), 1);
   const withdrawalLimit = Math.min(parsePositiveInt(body.withdrawalLimit, 24), 80);
   const withdrawalSnapshotFetchLimit = Math.max(withdrawalLimit * 4, 96);
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
 
+  const hasSignedStoreBody = Object.keys(signedStoreBody).length > 0;
+
   const jobs: Array<Promise<{ ok: boolean; status: number; json: any }>> = [
-    fetchAllStoresWithBankInfo({
-      limit: storesLimit,
-      startPage: storesPage,
-    }),
+    postRemoteJson(
+      hasSignedStoreBody ? "/api/store/getAllStores" : "/api/store/getAllStoresForBalance",
+      hasSignedStoreBody
+        ? signedStoreBody
+        : {
+          limit: storesLimit,
+          page: storesPage,
+        },
+    ),
     getRemoteJson("/api/realtime/banktransfer/events", {
       public: "1",
       limit: String(withdrawalSnapshotFetchLimit),

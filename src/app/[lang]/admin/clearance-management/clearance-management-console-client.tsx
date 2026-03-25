@@ -217,7 +217,9 @@ const createDefaultFilters = (): FilterState => ({
   searchMyOrders: false,
 });
 
-const createBaseLoadSignature = () => "all";
+const createBaseLoadSignature = (walletAddress?: string | null) => {
+  return String(walletAddress || "").trim().toLowerCase() || "guest";
+};
 
 const createOrdersLoadSignature = (filters: FilterState, walletAddress?: string | null) => {
   return [
@@ -686,7 +688,7 @@ export default function ClearanceManagementConsoleClient({
   const desiredBaseLoadSignatureRef = useRef("");
   const desiredOrdersLoadSignatureRef = useRef("");
 
-  desiredBaseLoadSignatureRef.current = createBaseLoadSignature();
+  desiredBaseLoadSignatureRef.current = createBaseLoadSignature(activeAccount?.address);
   desiredOrdersLoadSignatureRef.current = createOrdersLoadSignature(filters, activeAccount?.address);
 
   const sortWithdrawalRealtimeItems = useCallback((items: WithdrawalRealtimeItem[]) => {
@@ -813,7 +815,7 @@ export default function ClearanceManagementConsoleClient({
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const loadSignature = createBaseLoadSignature();
+      const loadSignature = createBaseLoadSignature(activeAccount?.address);
 
       if (inflightLoadRef.current) {
         if (silent) {
@@ -830,6 +832,26 @@ export default function ClearanceManagementConsoleClient({
       }
 
       try {
+        let signedStoreBody: Record<string, unknown> | null = null;
+
+        if (activeAccount) {
+          try {
+            signedStoreBody = await createCenterStoreAdminSignedBody({
+              account: activeAccount,
+              route: "/api/store/getAllStores",
+              storecode: "admin",
+              requesterWalletAddress: activeAccount.address,
+              body: {
+                limit: 300,
+                page: 1,
+                sortBy: "storeNameDesc",
+              },
+            });
+          } catch {
+            signedStoreBody = null;
+          }
+        }
+
         const response = await fetch("/api/bff/admin/clearance-dashboard", {
           method: "POST",
           headers: {
@@ -837,9 +859,10 @@ export default function ClearanceManagementConsoleClient({
           },
           cache: "no-store",
           body: JSON.stringify({
-            storesLimit: 200,
+            storesLimit: 300,
             storesPage: 1,
             withdrawalLimit: 24,
+            signedStoreBody,
           }),
         });
 
@@ -891,7 +914,7 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [replaceWithdrawalRealtimeItems],
+    [activeAccount, replaceWithdrawalRealtimeItems],
   );
 
   const loadOrdersDashboard = useCallback(
