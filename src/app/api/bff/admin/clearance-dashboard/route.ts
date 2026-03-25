@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRemoteBackendBaseUrl, getRemoteJson, postRemoteJson } from "@/lib/server/remote-backend";
-import { fetchAllStoresForBalance } from "@/lib/server/store-list";
+import { fetchAllStoresWithBankInfo } from "@/lib/server/store-list";
 
 export const runtime = "nodejs";
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
 
   const jobs: Array<Promise<{ ok: boolean; status: number; json: any }>> = [
-    fetchAllStoresForBalance({
+    fetchAllStoresWithBankInfo({
       limit: storesLimit,
       startPage: storesPage,
     }),

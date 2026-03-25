@@ -199,6 +199,8 @@ const USDT_FORMATTER = new Intl.NumberFormat("en-US", {
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const WITHDRAWAL_HIGHLIGHT_MS = 4500;
 const WITHDRAWAL_CLOCK_TICK_MS = 5000;
+const WITHDRAWAL_RESYNC_INTERVAL_MS = 10_000;
+const WITHDRAWAL_RESYNC_LIMIT = 120;
 
 const createInputDate = (daysOffset = 0) => {
   const kstDate = new Date(Date.now() + KST_OFFSET_MS);
@@ -665,6 +667,7 @@ export default function ClearanceManagementConsoleClient({
   const [withdrawalRealtimeItems, setWithdrawalRealtimeItems] = useState<WithdrawalRealtimeItem[]>([]);
   const [connectionState, setConnectionState] = useState<Ably.ConnectionState>("initialized");
   const [connectionError, setConnectionError] = useState("");
+  const [withdrawalSyncError, setWithdrawalSyncError] = useState("");
   const [withdrawalRealtimeNowMs, setWithdrawalRealtimeNowMs] = useState(() => Date.now());
   const [actionModalState, setActionModalState] = useState<ClearanceActionModalState | null>(null);
   const [actionModalSubmitting, setActionModalSubmitting] = useState(false);
@@ -678,12 +681,134 @@ export default function ClearanceManagementConsoleClient({
   const ordersRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBuyorderEventIdRef = useRef("");
   const lastWithdrawalEventIdRef = useRef("");
+  const withdrawalRealtimeCursorRef = useRef<string | null>(null);
   const ablyClientIdRef = useRef(`console-clearance-${Math.random().toString(36).slice(2, 10)}`);
   const desiredBaseLoadSignatureRef = useRef("");
   const desiredOrdersLoadSignatureRef = useRef("");
 
   desiredBaseLoadSignatureRef.current = createBaseLoadSignature();
   desiredOrdersLoadSignatureRef.current = createOrdersLoadSignature(filters, activeAccount?.address);
+
+  const sortWithdrawalRealtimeItems = useCallback((items: WithdrawalRealtimeItem[]) => {
+    return [...items]
+      .sort((left, right) => {
+        const rightTimestamp = Math.max(
+          toSafeTimestamp(right.data.processingDate),
+          toSafeTimestamp(right.data.transactionDate),
+          toSafeTimestamp(right.data.publishedAt),
+          toSafeTimestamp(right.receivedAt),
+        );
+        const leftTimestamp = Math.max(
+          toSafeTimestamp(left.data.processingDate),
+          toSafeTimestamp(left.data.transactionDate),
+          toSafeTimestamp(left.data.publishedAt),
+          toSafeTimestamp(left.receivedAt),
+        );
+        return rightTimestamp - leftTimestamp;
+      })
+      .slice(0, 24);
+  }, []);
+
+  const replaceWithdrawalRealtimeItems = useCallback((
+    events: BankTransferDashboardEvent[],
+  ) => {
+    setWithdrawalRealtimeItems(
+      sortWithdrawalRealtimeItems(
+        events.map((event) => ({
+          id: String(event.eventId || event.traceId || Math.random().toString(36).slice(2)),
+          data: event,
+          receivedAt: new Date().toISOString(),
+          highlightUntil: 0,
+        })),
+      ),
+    );
+  }, [sortWithdrawalRealtimeItems]);
+
+  const upsertWithdrawalRealtimeEvents = useCallback((
+    incomingEvents: BankTransferDashboardEvent[],
+    options?: { highlightNew?: boolean },
+  ) => {
+    if (incomingEvents.length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const highlightNew = options?.highlightNew ?? true;
+
+    setWithdrawalRealtimeItems((current) => {
+      const nextMap = new Map(current.map((item) => [item.id, item]));
+
+      for (const event of incomingEvents) {
+        const nextId =
+          String(event.eventId || "").trim()
+          || `${event.traceId || "withdraw"}-${event.publishedAt || Date.now()}`;
+        const existing = nextMap.get(nextId);
+
+        if (existing) {
+          nextMap.set(nextId, {
+            ...existing,
+            data: event,
+          });
+          continue;
+        }
+
+        nextMap.set(nextId, {
+          id: nextId,
+          data: event,
+          receivedAt: new Date().toISOString(),
+          highlightUntil: highlightNew ? now + WITHDRAWAL_HIGHLIGHT_MS : 0,
+        });
+      }
+
+      return sortWithdrawalRealtimeItems(Array.from(nextMap.values()));
+    });
+  }, [sortWithdrawalRealtimeItems]);
+
+  const syncWithdrawalRealtimeEvents = useCallback(
+    async (options?: { sinceCursor?: string | null; highlightNew?: boolean }) => {
+      const params = new URLSearchParams({
+        limit: String(WITHDRAWAL_RESYNC_LIMIT),
+      });
+
+      const nextCursor = options?.sinceCursor ?? withdrawalRealtimeCursorRef.current;
+      if (nextCursor) {
+        params.set("since", nextCursor);
+      }
+
+      try {
+        const response = await fetch(`/api/bff/realtime/banktransfer-events?${params.toString()}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        const incomingEvents = Array.isArray(payload?.events)
+          ? (payload.events as BankTransferDashboardEvent[]).filter((event) => {
+            return normalizeBankTransferTransactionType(event?.transactionType) === "withdrawn";
+          })
+          : [];
+
+        upsertWithdrawalRealtimeEvents(incomingEvents, {
+          highlightNew: options?.highlightNew ?? Boolean(nextCursor),
+        });
+
+        if (typeof payload?.nextCursor === "string" && payload.nextCursor) {
+          withdrawalRealtimeCursorRef.current = payload.nextCursor;
+        }
+
+        setWithdrawalSyncError("");
+      } catch (error) {
+        setWithdrawalSyncError(
+          error instanceof Error ? error.message : "withdrawal realtime sync failed",
+        );
+      }
+    },
+    [upsertWithdrawalRealtimeEvents],
+  );
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -741,32 +866,14 @@ export default function ClearanceManagementConsoleClient({
           withdrawalEvents: Array.isArray(result?.withdrawalEvents) ? result.withdrawalEvents : EMPTY_WITHDRAWALS,
           withdrawalNextCursor: typeof result?.withdrawalNextCursor === "string" ? result.withdrawalNextCursor : null,
         }));
-        setWithdrawalRealtimeItems(
-          Array.isArray(result?.withdrawalEvents)
-            ? result.withdrawalEvents
-              .map((event: BankTransferDashboardEvent) => ({
-                id: String(event.eventId || event.traceId || Math.random().toString(36).slice(2)),
-                data: event,
-                receivedAt: new Date().toISOString(),
-                highlightUntil: 0,
-              }))
-              .sort((left, right) => {
-                const rightTimestamp = Math.max(
-                  toSafeTimestamp(right.data.processingDate),
-                  toSafeTimestamp(right.data.transactionDate),
-                  toSafeTimestamp(right.data.publishedAt),
-                  toSafeTimestamp(right.receivedAt),
-                );
-                const leftTimestamp = Math.max(
-                  toSafeTimestamp(left.data.processingDate),
-                  toSafeTimestamp(left.data.transactionDate),
-                  toSafeTimestamp(left.data.publishedAt),
-                  toSafeTimestamp(left.receivedAt),
-                );
-                return rightTimestamp - leftTimestamp;
-              })
-            : [],
+        withdrawalRealtimeCursorRef.current =
+          typeof result?.withdrawalNextCursor === "string" && result.withdrawalNextCursor
+            ? result.withdrawalNextCursor
+            : withdrawalRealtimeCursorRef.current;
+        replaceWithdrawalRealtimeItems(
+          Array.isArray(result?.withdrawalEvents) ? result.withdrawalEvents : EMPTY_WITHDRAWALS,
         );
+        setWithdrawalSyncError("");
         setError("");
       } catch (loadError) {
         if (desiredBaseLoadSignatureRef.current === loadSignature) {
@@ -784,7 +891,7 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [],
+    [replaceWithdrawalRealtimeItems],
   );
 
   const loadOrdersDashboard = useCallback(
@@ -1004,6 +1111,9 @@ export default function ClearanceManagementConsoleClient({
     });
     const buyorderChannel = realtime.channels.get(BUYORDER_STATUS_ABLY_CHANNEL);
     const banktransferChannel = realtime.channels.get(BANKTRANSFER_ABLY_CHANNEL);
+    const syncInterval = window.setInterval(() => {
+      void syncWithdrawalRealtimeEvents();
+    }, WITHDRAWAL_RESYNC_INTERVAL_MS);
 
     const onConnectionStateChange = (stateChange: Ably.ConnectionStateChange) => {
       setConnectionState(stateChange.current);
@@ -1011,6 +1121,7 @@ export default function ClearanceManagementConsoleClient({
         setConnectionError(stateChange.reason.message || "Ably connection error");
       } else if (stateChange.current === "connected") {
         setConnectionError("");
+        void syncWithdrawalRealtimeEvents();
       }
     };
 
@@ -1045,36 +1156,7 @@ export default function ClearanceManagementConsoleClient({
         return;
       }
 
-      setWithdrawalRealtimeItems((current) => {
-        const receivedAt = new Date().toISOString();
-        const nextId = eventId || `${event.traceId || "withdraw"}-${event.publishedAt || Date.now()}`;
-        const nextMap = new Map(current.map((item) => [item.id, item]));
-        const existing = nextMap.get(nextId);
-        nextMap.set(nextId, {
-          id: nextId,
-          data: event,
-          receivedAt: existing?.receivedAt || receivedAt,
-          highlightUntil: Date.now() + WITHDRAWAL_HIGHLIGHT_MS,
-        });
-
-        return Array.from(nextMap.values())
-          .sort((left, right) => {
-            const rightTimestamp = Math.max(
-              toSafeTimestamp(right.data.processingDate),
-              toSafeTimestamp(right.data.transactionDate),
-              toSafeTimestamp(right.data.publishedAt),
-              toSafeTimestamp(right.receivedAt),
-            );
-            const leftTimestamp = Math.max(
-              toSafeTimestamp(left.data.processingDate),
-              toSafeTimestamp(left.data.transactionDate),
-              toSafeTimestamp(left.data.publishedAt),
-              toSafeTimestamp(left.receivedAt),
-            );
-            return rightTimestamp - leftTimestamp;
-          })
-          .slice(0, 24);
-      });
+      upsertWithdrawalRealtimeEvents([event], { highlightNew: true });
 
       requestRealtimeRefresh();
     };
@@ -1082,17 +1164,19 @@ export default function ClearanceManagementConsoleClient({
     realtime.connection.on(onConnectionStateChange);
     void buyorderChannel.subscribe(BUYORDER_STATUS_ABLY_EVENT_NAME, onBuyorderMessage);
     void banktransferChannel.subscribe(BANKTRANSFER_ABLY_EVENT_NAME, onBanktransferMessage);
+    void syncWithdrawalRealtimeEvents({ sinceCursor: null, highlightNew: false });
 
     return () => {
       if (ordersRefreshTimerRef.current) {
         clearTimeout(ordersRefreshTimerRef.current);
       }
+      window.clearInterval(syncInterval);
       buyorderChannel.unsubscribe(BUYORDER_STATUS_ABLY_EVENT_NAME, onBuyorderMessage);
       banktransferChannel.unsubscribe(BANKTRANSFER_ABLY_EVENT_NAME, onBanktransferMessage);
       realtime.connection.off(onConnectionStateChange);
       realtime.close();
     };
-  }, [requestRealtimeRefresh]);
+  }, [requestRealtimeRefresh, syncWithdrawalRealtimeEvents, upsertWithdrawalRealtimeEvents]);
 
   const stores = data?.stores || EMPTY_STORES;
   const storesError = normalizeText(data?.storesError);
@@ -1723,9 +1807,18 @@ export default function ClearanceManagementConsoleClient({
               </div>
             </div>
 
-            {connectionError ? (
-              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                연결 오류: {connectionError}
+            {connectionError || withdrawalSyncError ? (
+              <div className="mt-4 space-y-2">
+                {connectionError ? (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    연결 오류: {connectionError}
+                  </div>
+                ) : null}
+                {withdrawalSyncError ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    동기화 오류: {withdrawalSyncError}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

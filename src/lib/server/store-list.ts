@@ -22,7 +22,8 @@ const normalizeStoreKey = (store: any, fallbackIndex: number) => {
   return `store:${fallbackIndex}`;
 };
 
-export const fetchAllStoresForBalance = async (
+const fetchAllStoresByRoute = async (
+  route: string,
   options?: FetchAllStoresOptions,
 ): Promise<RemoteJsonResponse> => {
   const limit = Math.max(1, Math.min(Number(options?.limit || 200), 300));
@@ -35,7 +36,7 @@ export const fetchAllStoresForBalance = async (
   const mergedStores: any[] = [];
 
   while (page < startPage + maxPages) {
-    const response = await postRemoteJson("/api/store/getAllStoresForBalance", {
+    const response = await postRemoteJson(route, {
       limit,
       page,
     });
@@ -85,4 +86,16 @@ export const fetchAllStoresForBalance = async (
       },
     },
   };
+};
+
+export const fetchAllStoresForBalance = async (
+  options?: FetchAllStoresOptions,
+): Promise<RemoteJsonResponse> => {
+  return fetchAllStoresByRoute("/api/store/getAllStoresForBalance", options);
+};
+
+export const fetchAllStoresWithBankInfo = async (
+  options?: FetchAllStoresOptions,
+): Promise<RemoteJsonResponse> => {
+  return fetchAllStoresByRoute("/api/store/getAllStores", options);
 };
