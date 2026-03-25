@@ -3524,21 +3524,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
           {!buyOrdersCollapsed ? (
             <>
-              <div className="space-y-4 px-6 py-5">
-                {!isSignedIn ? (
-                  <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
-                    주문 목록은 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다. 위 영역에서
-                    지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`가 로컬 BFF를 통해
-                    호출됩니다.
-                  </div>
-                ) : null}
+              {!isSignedIn || error ? (
+                <div className="space-y-4 px-6 pt-4 pb-3">
+                  {!isSignedIn ? (
+                    <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
+                      주문 목록은 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다. 위 영역에서
+                      지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`가 로컬 BFF를 통해
+                      호출됩니다.
+                    </div>
+                  ) : null}
 
-                {error ? (
-                  <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                    {error}
-                  </div>
-                ) : null}
-              </div>
+                  {error ? (
+                    <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {error}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="relative px-2 pb-2">
                 <div className={`overflow-x-auto transition ${showOrdersLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
