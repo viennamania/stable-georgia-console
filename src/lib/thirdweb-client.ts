@@ -10,6 +10,8 @@ if (!clientId) {
   );
 }
 
+export const thirdwebClientId = clientId;
+
 export const thirdwebClient = createThirdwebClient({
-  clientId,
+  clientId: thirdwebClientId,
 });

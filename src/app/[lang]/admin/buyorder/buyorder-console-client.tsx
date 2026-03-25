@@ -15,7 +15,7 @@ import {
   BANKTRANSFER_UNMATCHED_ABLY_EVENT_NAME,
   type BankTransferUnmatchedRealtimeEvent,
 } from "@/lib/realtime/banktransfer";
-import { thirdwebClient } from "@/lib/thirdweb-client";
+import { thirdwebClient, thirdwebClientId } from "@/lib/thirdweb-client";
 
 type BankInfo = {
   bankName?: string;
@@ -154,6 +154,15 @@ type SellerBankTradeSummary = {
   totalUsdtAmount: number;
 };
 
+type OrderStatusPreviewPanelState = {
+  url: string;
+  orderId: string;
+  tradeId: string;
+  storecode: string;
+  storeLabel: string;
+  statusLabel: string;
+};
+
 const EMPTY_ORDERS: BuyOrder[] = [];
 const EMPTY_STORES: StoreItem[] = [];
 const EMPTY_UNMATCHED_TRANSFERS: UnmatchedTransfer[] = [];
@@ -225,6 +234,8 @@ const EMPTY_BANKTRANSFER_TODAY_SUMMARY: DashboardResult["banktransferTodaySummar
   totalCount: 0,
   updatedAt: "",
 };
+
+const PAYMENT_REVERSE_PREVIEW_ORIGIN = "https://cryptoss-georgia.vercel.app";
 
 const SECTION_LOADING_BADGE_CLASS_NAME =
   "inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700";
@@ -1563,6 +1574,29 @@ const getStoreOptionLogoSrc = (store: StoreItem | Record<string, unknown> | null
   return logo || "/logo.png";
 };
 
+const buildPaymentReversePreviewUrl = ({
+  lang,
+  clientId,
+  storecode,
+  orderId,
+}: {
+  lang: string;
+  clientId: string;
+  storecode: string;
+  orderId: string;
+}) => {
+  const safeLang = normalizeString(lang);
+  const safeClientId = normalizeString(clientId);
+  const safeStorecode = normalizeString(storecode);
+  const safeOrderId = normalizeString(orderId);
+
+  if (!safeLang || !safeClientId || !safeStorecode || !safeOrderId) {
+    return "";
+  }
+
+  return `${PAYMENT_REVERSE_PREVIEW_ORIGIN}/${encodeURIComponent(safeLang)}/${encodeURIComponent(safeClientId)}/${encodeURIComponent(safeStorecode)}/pay-usdt-reverse/${encodeURIComponent(safeOrderId)}`;
+};
+
 export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const activeAccount = useActiveAccount();
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
@@ -1596,6 +1630,8 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [newRealtimeTradeIds, setNewRealtimeTradeIds] = useState<string[]>([]);
   const [highlightedUnmatchedId, setHighlightedUnmatchedId] = useState("");
   const [copiedTradeId, setCopiedTradeId] = useState("");
+  const [orderStatusPreviewPanelState, setOrderStatusPreviewPanelState] = useState<OrderStatusPreviewPanelState | null>(null);
+  const [orderStatusPreviewLoading, setOrderStatusPreviewLoading] = useState(false);
   const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
   const [sellerBankStatsCollapsed, setSellerBankStatsCollapsed] = useState(false);
   const [unmatchedLiveCollapsed, setUnmatchedLiveCollapsed] = useState(false);
@@ -1639,6 +1675,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   };
   const canSubmitConfirmModal = currentConfirmOrderStatus === "paymentRequested";
   const canSubmitCancelModal = currentCancelOrderStatus === "accepted" || currentCancelOrderStatus === "paymentRequested";
+  const closeOrderStatusPreviewPanel = useCallback(() => {
+    setOrderStatusPreviewPanelState(null);
+    setOrderStatusPreviewLoading(false);
+  }, []);
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -2337,6 +2377,23 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!orderStatusPreviewPanelState) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeOrderStatusPreviewPanel();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeOrderStatusPreviewPanel, orderStatusPreviewPanelState]);
 
   useEffect(() => {
     const realtime = new Ably.Realtime({
@@ -3625,6 +3682,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       countdownNowMs,
                     );
                     const tradeId = String(order.tradeId || "").trim();
+                    const orderId = String(order._id || "").trim();
                     const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
                     const buyerLabel = getBuyerLabel(order);
                     const buyerDepositName = getBuyerDepositName(order);
@@ -3668,6 +3726,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       order.paymentConfirmedAt || order.updatedAt || order.createdAt,
                       countdownNowMs,
                     );
+                    const orderPreviewStorecode = String(order.store?.storecode || order.storecode || "").trim();
+                    const orderPreviewUrl = buildPaymentReversePreviewUrl({
+                      lang,
+                      clientId: thirdwebClientId,
+                      storecode: orderPreviewStorecode,
+                      orderId: orderId || tradeId,
+                    });
+                    const canOpenOrderStatusPreview = Boolean(orderPreviewUrl);
 
                     return (
                       <tr
@@ -3720,7 +3786,31 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         </td>
                         <td className="w-[156px] border-b border-slate-100 px-4 py-4 align-top">
                           <div className="flex flex-col items-start gap-2">
-                            <div className="flex flex-col items-start gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!orderPreviewUrl) {
+                                  return;
+                                }
+
+                                setOrderStatusPreviewLoading(true);
+                                setOrderStatusPreviewPanelState({
+                                  url: orderPreviewUrl,
+                                  orderId: orderId || tradeId,
+                                  tradeId,
+                                  storecode: orderPreviewStorecode,
+                                  storeLabel,
+                                  statusLabel: statusMeta.label,
+                                });
+                              }}
+                              disabled={!canOpenOrderStatusPreview}
+                              title={canOpenOrderStatusPreview ? "주문 페이지 보기" : "주문 페이지 URL을 만들 수 없습니다."}
+                              className={`flex w-full max-w-[124px] flex-col items-start gap-1 rounded-[18px] border px-2.5 py-2 text-left transition ${
+                                canOpenOrderStatusPreview
+                                  ? "border-slate-200 bg-white hover:border-sky-200 hover:bg-sky-50"
+                                  : "cursor-not-allowed border-slate-100 bg-slate-50/70 opacity-70"
+                              }`}
+                            >
                               <span
                                 className={`inline-flex w-[108px] justify-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}
                               >
@@ -3731,7 +3821,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                   결제완료
                                 </span>
                               ) : null}
-                            </div>
+                            </button>
                             {canCancelOrder ? (
                               <button
                                 type="button"
@@ -4073,6 +4163,98 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             </>
           ) : null}
         </section>
+
+        {orderStatusPreviewPanelState ? (
+          <div className="fixed inset-0 z-40">
+            <button
+              type="button"
+              aria-label="주문 미리보기 패널 닫기"
+              onClick={closeOrderStatusPreviewPanel}
+              className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]"
+            />
+            <aside className="absolute inset-y-0 right-0 z-10 flex w-full justify-end">
+              <div className="flex h-full w-full max-w-[560px] flex-col border-l border-slate-200 bg-white shadow-[-24px_0_72px_rgba(15,23,42,0.22)]">
+                <div className="border-b border-slate-200 px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
+                        Order Preview
+                      </div>
+                      <h3 className="mt-1 text-lg font-semibold tracking-[-0.04em] text-slate-950">
+                        주문 페이지 미리보기
+                      </h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
+                          {orderStatusPreviewPanelState.storeLabel}
+                        </span>
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
+                          {orderStatusPreviewPanelState.statusLabel}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeOrderStatusPreviewPanel}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                    >
+                      닫기
+                    </button>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">Order ID</div>
+                      <div className="mt-1.5 break-all text-sm font-semibold text-slate-950">
+                        {orderStatusPreviewPanelState.orderId}
+                      </div>
+                    </div>
+                    <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">Storecode</div>
+                      <div className="mt-1.5 break-all text-sm font-semibold text-slate-950">
+                        {orderStatusPreviewPanelState.storecode}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <a
+                      href={orderStatusPreviewPanelState.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100"
+                    >
+                      새 탭에서 열기
+                    </a>
+                    {orderStatusPreviewPanelState.tradeId ? (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-500">
+                        trade {orderStatusPreviewPanelState.tradeId}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="relative min-h-0 flex-1 bg-slate-100">
+                  {orderStatusPreviewLoading ? (
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/78 backdrop-blur-sm">
+                      <div className="inline-flex items-center gap-3 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true" />
+                        주문 페이지 불러오는 중...
+                      </div>
+                    </div>
+                  ) : null}
+                  <iframe
+                    title={`주문 미리보기 ${orderStatusPreviewPanelState.orderId}`}
+                    src={orderStatusPreviewPanelState.url}
+                    className="h-full w-full border-0 bg-white"
+                    onLoad={() => {
+                      setOrderStatusPreviewLoading(false);
+                    }}
+                  />
+                </div>
+              </div>
+            </aside>
+          </div>
+        ) : null}
 
         {depositModalOpen && targetConfirmOrder ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
