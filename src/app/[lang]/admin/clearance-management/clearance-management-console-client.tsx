@@ -1936,11 +1936,11 @@ export default function ClearanceManagementConsoleClient({
                           </div>
                         </div>
 
-                        <div className="mt-3 space-y-2">
-                          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                                송금인 통장
+                                송금인
                               </span>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -1965,11 +1965,11 @@ export default function ClearanceManagementConsoleClient({
                             </div>
 
                             {isConfiguredAccountMatched ? (
-                              <div className="mt-1.5 space-y-1">
-                                <div className="text-xs font-semibold text-slate-900">
+                              <div className="mt-1.5 space-y-0.5 min-w-0">
+                                <div className="truncate text-xs font-semibold text-slate-900">
                                   {normalizeText(configuredFromBankInfo?.bankName) || "-"}
                                 </div>
-                                <div className="text-[11px] text-slate-600">
+                                <div className="truncate text-[11px] text-slate-600">
                                   {(normalizeText(configuredFromBankInfo?.accountHolder) || "-")
                                     + " · "
                                     + (normalizeAccountNumber(
@@ -1977,31 +1977,22 @@ export default function ClearanceManagementConsoleClient({
                                     ) || "-")}
                                 </div>
                               </div>
-                            ) : (
-                              <div className="mt-1.5 text-[11px] text-slate-500">
-                                해당 가맹점의 송금인 통장을 찾지 못했습니다.
-                              </div>
-                            )}
+                            ) : null}
 
-                            <div className="mt-2 text-[11px] text-slate-500">
+                            <div className="mt-1.5 truncate text-[11px] text-slate-500">
                               거래명 {normalizedWebhookName || "-"}
                             </div>
-                            <div className="mt-1 text-[11px] text-slate-500">
+                            <div className="mt-0.5 truncate text-[11px] text-slate-500">
                               계좌 {normalizeAccountNumber(event.bankAccountNumber) || "-"}
                             </div>
                           </div>
 
-                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">수취인 통장</div>
-                            <div className="mt-1 text-xs font-semibold text-slate-900">{receiverBankName}</div>
-                            <div className="mt-1 text-[11px] text-slate-600">
+                          <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">수취인</div>
+                            <div className="mt-1 truncate text-xs font-semibold text-slate-900">{receiverBankName}</div>
+                            <div className="mt-0.5 truncate text-[11px] text-slate-600">
                               {receiverAccountHolder} · {receiverAccountNumber}
                             </div>
-                            {normalizeText(event.receiver?.walletAddress) ? (
-                              <div className="console-mono mt-1 text-[10px] text-slate-500">
-                                {shortAddress(event.receiver?.walletAddress)}
-                              </div>
-                            ) : null}
                           </div>
                         </div>
 
