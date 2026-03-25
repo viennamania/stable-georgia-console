@@ -692,7 +692,7 @@ const SellerBankTradeSummaryCard = ({
 }) => {
   const animatedTotalCount = useAnimatedNumber(item.totalCount, SUMMARY_VALUE_ANIMATION_MS, { initialValue: 0 });
   const animatedTotalKrwAmount = useAnimatedNumber(item.totalKrwAmount, SUMMARY_VALUE_ANIMATION_MS, { initialValue: 0 });
-  const [isUpdateHighlighted, setIsUpdateHighlighted] = useState(false);
+  const [highlightIteration, setHighlightIteration] = useState(0);
   const previousValueRef = useRef({
     totalCount: item.totalCount,
     totalKrwAmount: item.totalKrwAmount,
@@ -722,20 +722,27 @@ const SellerBankTradeSummaryCard = ({
       return;
     }
 
-    setIsUpdateHighlighted(true);
+    setHighlightIteration((previous) => previous + 1);
     if (highlightTimerRef.current) {
       clearTimeout(highlightTimerRef.current);
     }
     highlightTimerRef.current = setTimeout(() => {
-      setIsUpdateHighlighted(false);
+      setHighlightIteration(0);
       highlightTimerRef.current = null;
     }, SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS);
   }, [item.totalCount, item.totalKrwAmount]);
 
+  const highlightClassName =
+    highlightIteration === 0
+      ? ""
+      : highlightIteration % 2 === 0
+        ? "console-seller-bank-card-updated-a"
+        : "console-seller-bank-card-updated-b";
+
   return (
     <article
       className={`console-seller-bank-card w-full rounded-[13px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.9))] px-[5px] py-[5px] shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)] ${
-        isUpdateHighlighted ? "console-seller-bank-card-updated" : ""
+        highlightClassName
       }`}
     >
       <div className="flex items-start justify-between gap-1">
@@ -744,11 +751,11 @@ const SellerBankTradeSummaryCard = ({
             <span className="console-mono inline-flex h-[18px] shrink-0 items-center rounded-full bg-slate-100 px-[5px] text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-500">
               {String(index + 1).padStart(2, "0")}
             </span>
-            <div className="truncate text-[8px] text-slate-500">
+            <div className="truncate text-[10px] font-bold tracking-[-0.02em] text-slate-950">
               {item.bankName}
             </div>
             <span className="shrink-0 text-[8px] text-slate-300">/</span>
-            <div className="truncate text-[9px] font-semibold text-slate-900">
+            <div className="truncate text-[10px] font-bold tracking-[-0.02em] text-slate-950">
               {item.accountHolder}
             </div>
           </div>
@@ -773,8 +780,8 @@ const SellerBankTradeSummaryCard = ({
         {item.accountNumber}
       </div>
 
-      <div className="mt-[3px] grid grid-cols-[40px_minmax(0,1fr)] gap-1">
-        <div className="rounded-[8px] border border-slate-200 bg-slate-50 px-[5px] py-[3px] text-right text-[12px] font-semibold tracking-[-0.03em] text-slate-950">
+      <div className="mt-[3px] grid grid-cols-[44px_minmax(0,1fr)] gap-1">
+        <div className="rounded-[8px] border border-slate-200 bg-slate-50 px-[5px] py-[3px] text-right text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
           <div>
             {NUMBER_FORMATTER.format(animatedTotalCount)}
           </div>
@@ -782,7 +789,7 @@ const SellerBankTradeSummaryCard = ({
 
         <div className="rounded-[8px] border border-amber-100 bg-amber-50/70 px-[5px] py-[3px]">
           <div
-            className="console-mono truncate text-right text-[12px] font-semibold tracking-[-0.03em] text-amber-700"
+            className="console-mono truncate text-right text-[13px] font-semibold tracking-[-0.03em] text-amber-700"
             style={{ fontFamily: "monospace" }}
           >
             {formatKrwValue(animatedTotalKrwAmount)}
