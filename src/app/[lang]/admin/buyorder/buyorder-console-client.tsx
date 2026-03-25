@@ -942,13 +942,13 @@ const SellerBankTradeSummaryCard = ({
       </div>
 
       <div className="mt-[3px] grid grid-cols-[44px_minmax(0,1fr)] gap-1">
-        <div className="rounded-[8px] border border-slate-200 bg-slate-50 px-[5px] py-[3px] text-right text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
+        <div className="console-seller-bank-card-metric console-seller-bank-card-metric-count rounded-[8px] border border-slate-200 bg-slate-50 px-[5px] py-[3px] text-right text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
           <div>
             {NUMBER_FORMATTER.format(animatedTotalCount)}
           </div>
         </div>
 
-        <div className="rounded-[8px] border border-amber-100 bg-amber-50/70 px-[5px] py-[3px]">
+        <div className="console-seller-bank-card-metric console-seller-bank-card-metric-amount rounded-[8px] border border-amber-100 bg-amber-50/70 px-[5px] py-[3px]">
           <div
             className="console-mono truncate text-right text-[15px] font-bold leading-none tracking-[-0.04em] text-amber-700"
             style={{ fontFamily: "monospace" }}
