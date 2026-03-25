@@ -49,29 +49,6 @@ type SellerBalanceItem = {
   pendingTransferUsdtAmount?: number;
 };
 
-type ClearanceOrderPreview = {
-  requestedKrwAmount?: number;
-  requestedUsdtAmount?: number;
-  rate?: number;
-  kstDayLabel?: string;
-  withinPerOrderLimit?: boolean;
-  withinDailyLimit?: boolean;
-  requesterIsAuthorizedAdmin?: boolean;
-  clearanceWalletIsServerWallet?: boolean;
-  currentDailyOrderCount?: number;
-  currentDailyKrwAmount?: number;
-  projectedDailyKrwAmount?: number;
-  remainingDailyKrwAmount?: number;
-  maxDailyKrwAmount?: number;
-  maxKrwAmount?: number;
-  canSubmit?: boolean;
-  blockingReasons?: string[];
-  existingActiveOrder?: {
-    tradeId?: string;
-    status?: string;
-  } | null;
-};
-
 type StoreContextResult = {
   store: StoreDetail | null;
   storeError?: string;
@@ -86,8 +63,6 @@ type StoreContextResult = {
 const STORECODE_QUERY_KEY = "storecode";
 const STORE_SETTINGS_MUTATION_SIGNING_PREFIX =
   "stable-georgia:store-settings-mutation:v1";
-const GET_CLEARANCE_ORDER_PREVIEW_SIGNING_PREFIX =
-  "stable-georgia:get-clearance-order-preview:v1";
 const SET_BUY_ORDER_FOR_CLEARANCE_SIGNING_PREFIX =
   "stable-georgia:set-buy-order-for-clearance:v1";
 const EMPTY_STORES: StoreListItem[] = [];
@@ -351,8 +326,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [sellerBankInfo, setSellerBankInfo] = useState<BankInfo | null>(null);
   const [krwAmountInput, setKrwAmountInput] = useState("");
   const [rate, setRate] = useState(0);
-  const [preview, setPreview] = useState<ClearanceOrderPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
@@ -435,7 +408,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   useEffect(() => {
     setActionError("");
     setActionSuccess("");
-    setPreview(null);
     setKrwAmountInput("");
   }, [selectedStorecode]);
 
@@ -641,7 +613,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   }, [sellerBankOptions]);
 
   useEffect(() => {
-    setPreview(null);
     setActionError("");
   }, [
     selectedStorecode,
@@ -718,59 +689,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     && Boolean(sellerBankInfo)
     && rate > 0;
 
-  const handlePreview = useCallback(async () => {
-    if (!activeAccount) {
-      setActionError("관리자 지갑을 연결해야 청산주문을 미리 계산할 수 있습니다.");
-      return;
-    }
-
-    if (!canPreviewOrder) {
-      setActionError("가맹점, 결제계좌, 금액을 먼저 확인해 주세요.");
-      return;
-    }
-
-    setPreviewLoading(true);
-    setActionError("");
-    setActionSuccess("");
-
-    try {
-      const body = buildClearanceOrderBody();
-      const signedBody = await createAdminSignedBody({
-        account: activeAccount,
-        route: "/api/order/getClearanceOrderPreview",
-        signingPrefix: GET_CLEARANCE_ORDER_PREVIEW_SIGNING_PREFIX,
-        requesterStorecode: "admin",
-        requesterWalletAddress: activeAccount.address,
-        actionFields: body,
-      });
-
-      const response = await fetch("/api/bff/admin/signed-order-action", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          route: "/api/order/getClearanceOrderPreview",
-          signedBody,
-        }),
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error || "청산주문 미리보기를 불러오지 못했습니다.");
-      }
-
-      setPreview((payload?.result || null) as ClearanceOrderPreview | null);
-    } catch (error) {
-      setPreview(null);
-      setActionError(
-        error instanceof Error ? error.message : "청산주문 미리보기 중 오류가 발생했습니다.",
-      );
-    } finally {
-      setPreviewLoading(false);
-    }
-  }, [activeAccount, buildClearanceOrderBody, canPreviewOrder]);
-
   const handleCreateOrder = useCallback(async () => {
     if (!activeAccount) {
       setActionError("관리자 지갑을 연결해야 청산주문을 생성할 수 있습니다.");
@@ -820,7 +738,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
           : "청산주문이 생성되었습니다.",
       );
       setKrwAmountInput("");
-      setPreview(null);
       setEmbeddedRefreshKey((prev) => prev + 1);
       void loadStoreContext();
     } catch (error) {
@@ -831,10 +748,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
       setSubmitLoading(false);
     }
   }, [activeAccount, buildClearanceOrderBody, canPreviewOrder, loadStoreContext]);
-
-  const previewBlockingReasons = Array.isArray(preview?.blockingReasons)
-    ? preview?.blockingReasons.filter(Boolean)
-    : [];
 
   return (
     <div className="console-shell px-4 py-6 sm:px-6 lg:px-8">
@@ -857,7 +770,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                 </h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-300">
                   메인 `가맹점 청산관리` 흐름을 콘솔에 맞춰 옮겼습니다. 가맹점을 선택하고,
-                  구매자/판매자 결제계좌를 고른 뒤 청산주문 미리보기와 생성, 출금 live,
+                  구매자/판매자 결제계좌를 고른 뒤 청산주문 생성, 출금 live,
                   `Clearance stream`까지 한 화면에서 확인할 수 있습니다.
                 </p>
               </div>
@@ -1335,25 +1248,11 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                         <button
                           type="button"
                           onClick={() => {
-                            void handlePreview();
-                          }}
-                          disabled={!canPreviewOrder || previewLoading || submitLoading}
-                          className={`rounded-full px-5 py-3 text-sm font-semibold text-white transition ${
-                            !canPreviewOrder || previewLoading || submitLoading
-                              ? "cursor-not-allowed bg-slate-300"
-                              : "bg-sky-600 hover:bg-sky-700"
-                          }`}
-                        >
-                          {previewLoading ? "미리 계산중..." : "미리보기"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
                             void handleCreateOrder();
                           }}
-                          disabled={!canPreviewOrder || submitLoading || (preview ? preview.canSubmit === false : false)}
+                          disabled={!canPreviewOrder || submitLoading}
                           className={`rounded-full px-5 py-3 text-sm font-semibold text-white transition ${
-                            !canPreviewOrder || submitLoading || (preview ? preview.canSubmit === false : false)
+                            !canPreviewOrder || submitLoading
                               ? "cursor-not-allowed bg-slate-300"
                               : "bg-emerald-600 hover:bg-emerald-700"
                           }`}
@@ -1363,93 +1262,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                       </div>
                     </div>
 
-                    <div className="mt-6 rounded-[24px] border border-slate-200 bg-white px-4 py-4">
-                      <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                        Preview
-                      </div>
-                      {preview ? (
-                        <div className="mt-4 space-y-4">
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                                신청금액
-                              </div>
-                              <div className="mt-2 text-lg font-semibold text-slate-950">
-                                {formatKrwValue(preview.requestedKrwAmount)} KRW
-                              </div>
-                              <div className="mt-1 text-sm text-emerald-600">
-                                {formatUsdtValue(preview.requestedUsdtAmount)} USDT
-                              </div>
-                            </div>
-                            <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                                환율 / KST
-                              </div>
-                              <div className="mt-2 text-lg font-semibold text-slate-950">
-                                {formatKrwValue(preview.rate)} KRW
-                              </div>
-                              <div className="mt-1 text-sm text-slate-500">
-                                {normalizeText(preview.kstDayLabel) || "-"}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                              <div>건별 한도 {formatKrwValue(preview.maxKrwAmount)} KRW</div>
-                              <div className="mt-1">
-                                상태 {preview.withinPerOrderLimit ? "통과" : "초과"}
-                              </div>
-                            </div>
-                            <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                              <div>일별 잔여 {formatKrwValue(preview.remainingDailyKrwAmount)} KRW</div>
-                              <div className="mt-1">
-                                상태 {preview.withinDailyLimit ? "통과" : "초과"}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            <span className={`rounded-full px-3 py-1 ${preview.requesterIsAuthorizedAdmin ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                              {preview.requesterIsAuthorizedAdmin ? "admin 권한 확인" : "admin 권한 확인 실패"}
-                            </span>
-                            <span className={`rounded-full px-3 py-1 ${preview.clearanceWalletIsServerWallet ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                              {preview.clearanceWalletIsServerWallet ? "server wallet 확인" : "server wallet 확인 실패"}
-                            </span>
-                            <span className={`rounded-full px-3 py-1 ${preview.canSubmit ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"}`}>
-                              {preview.canSubmit ? "제출 가능" : "제출 차단"}
-                            </span>
-                          </div>
-
-                          {preview.existingActiveOrder?.tradeId ? (
-                            <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                              기존 활성 주문 #{preview.existingActiveOrder.tradeId} ({preview.existingActiveOrder.status || "-"})
-                            </div>
-                          ) : null}
-
-                          {previewBlockingReasons.length > 0 ? (
-                            <div className="rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-3">
-                              <div className="text-sm font-semibold text-rose-800">
-                                현재 상태로는 주문 제출이 차단됩니다.
-                              </div>
-                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-rose-700">
-                                {previewBlockingReasons.map((reason) => (
-                                  <li key={reason}>{reason}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : (
-                            <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                              현재 조건에서는 청산주문 생성이 가능합니다.
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="mt-4 rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                          금액과 계좌를 선택한 뒤 `미리보기`를 누르면 주문 가능 여부와 한도 검사를 표시합니다.
-                        </div>
-                      )}
-                    </div>
                   </article>
                 </section>
 
