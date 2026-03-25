@@ -840,10 +840,6 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     }
   }, [activeAccount, searchKeyword, stores, updatingOrderStorecode]);
 
-  const selectedStoreSummary = useMemo(() => {
-    return stores.find((store) => normalizeText(store.storecode) === selectedStorecode) || null;
-  }, [selectedStorecode, stores]);
-
   const selectedStore = storeContext?.store || null;
   const buyerBankOptions = useMemo(() => getBuyerBankOptions(selectedStore), [selectedStore]);
   const sellerBankOptions = useMemo(() => getSellerBankOptions(selectedStore), [selectedStore]);
@@ -1315,65 +1311,23 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
               </div>
             ) : (
               <>
-                <section className="console-panel rounded-[30px] p-6">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <StoreLogo
-                        src={getStoreLogoSrc(selectedStore || selectedStoreSummary)}
-                        alt={getStoreDisplayName(selectedStore || selectedStoreSummary)}
-                        className="h-16 w-16 shrink-0 rounded-[24px] border border-slate-200 bg-slate-50"
-                      />
-                      <div className="min-w-0">
-                        <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                          Selected store
-                        </div>
-                        <div className="mt-2 truncate text-2xl font-semibold tracking-[-0.05em] text-slate-950">
-                          {getStoreDisplayName(selectedStore || selectedStoreSummary)}
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
-                            {selectedStorecode}
-                          </span>
-                          {clearanceWalletAddress ? (
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
-                              청산지갑 {shortAddress(clearanceWalletAddress)}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void loadStoreContext();
-                        }}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-                      >
-                        컨텍스트 새로고침
-                      </button>
-                    </div>
+                {storeContextError ? (
+                  <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {storeContextError}
                   </div>
+                ) : null}
 
-                  {storeContextError ? (
-                    <div className="mt-4 rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                      {storeContextError}
-                    </div>
-                  ) : null}
+                {storeContext?.storeError ? (
+                  <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {storeContext.storeError}
+                  </div>
+                ) : null}
 
-                  {storeContext?.storeError ? (
-                    <div className="mt-4 rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                      {storeContext.storeError}
-                    </div>
-                  ) : null}
-
-                  {storeContext?.storeReadMessage ? (
-                    <div className="mt-4 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                      {storeContext.storeReadMessage}
-                    </div>
-                  ) : null}
-                </section>
+                {storeContext?.storeReadMessage ? (
+                  <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    {storeContext.storeReadMessage}
+                  </div>
+                ) : null}
 
                 <section className="grid gap-5 2xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
                   <div className="space-y-5">
