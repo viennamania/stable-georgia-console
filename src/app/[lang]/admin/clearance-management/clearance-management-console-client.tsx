@@ -115,6 +115,8 @@ type ClearanceOrdersResult = {
 
 type ClearanceDashboardResult = ClearanceBaseResult & ClearanceOrdersResult;
 
+type ClearanceOrdersQueryMode = "buyOrders" | "collectOrdersForSeller";
+
 type FilterState = {
   storecode: string;
   limit: number;
@@ -130,6 +132,7 @@ type ClearanceManagementConsoleClientProps = {
   forcedStorecode?: string;
   hideStoreFilter?: boolean;
   hideWithdrawalLiveSection?: boolean;
+  ordersQueryMode?: ClearanceOrdersQueryMode;
 };
 
 type WithdrawalRealtimeItem = {
@@ -648,6 +651,7 @@ export default function ClearanceManagementConsoleClient({
   forcedStorecode = "",
   hideStoreFilter = false,
   hideWithdrawalLiveSection = false,
+  ordersQueryMode = "buyOrders",
 }: ClearanceManagementConsoleClientProps) {
   const activeAccount = useActiveAccount();
   const normalizedForcedStorecode = normalizeText(forcedStorecode);
@@ -826,12 +830,18 @@ export default function ClearanceManagementConsoleClient({
 
         let signedOrdersBody: Record<string, unknown> | null = null;
         let nextOrdersError = "";
+        const ordersRoute = ordersQueryMode === "collectOrdersForSeller"
+          ? "/api/order/getAllCollectOrdersForSeller"
+          : "/api/order/getAllBuyOrders";
+        const signingStorecode = ordersQueryMode === "collectOrdersForSeller"
+          ? filters.storecode
+          : "admin";
 
         try {
           signedOrdersBody = await createCenterStoreAdminSignedBody({
             account: activeAccount,
-            route: "/api/order/getAllBuyOrders",
-            storecode: "admin",
+            route: ordersRoute,
+            storecode: signingStorecode,
             requesterWalletAddress: activeAccount.address,
             body: {
               storecode: filters.storecode,
@@ -879,6 +889,7 @@ export default function ClearanceManagementConsoleClient({
           cache: "no-store",
           body: JSON.stringify({
             signedOrdersBody,
+            ordersQueryMode,
           }),
         });
 
@@ -923,7 +934,7 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [activeAccount, filters],
+    [activeAccount, filters, ordersQueryMode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
@@ -1339,6 +1350,7 @@ export default function ClearanceManagementConsoleClient({
     });
   }, [totalOrderPages]);
   const showOrdersLoadingState = ordersLoading && totalOrderCount === 0 && orders.length === 0 && !ordersError;
+  const usesCollectOrdersSummary = ordersQueryMode === "collectOrdersForSeller";
   const actionModalBuyerBankSummary = actionModalState ? getBuyerBankSummary(actionModalState.order) : null;
   const actionModalSellerBankSummary = actionModalState ? getSellerBankSummary(actionModalState.order) : null;
   const actionModalWithdrawalStatusMeta = actionModalState
@@ -1602,29 +1614,45 @@ export default function ClearanceManagementConsoleClient({
             {
               label: "전체 주문",
               value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(data?.totalCount || 0),
-              caption: showOrdersLoadingState ? "주문 집계 불러오는 중" : "현재 필터 기준 청산 주문 수",
+              caption: showOrdersLoadingState
+                ? "주문 집계 불러오는 중"
+                : usesCollectOrdersSummary
+                  ? "현재 필터 기준 전체 청산 주문 수"
+                  : "현재 필터 기준 청산 주문 수",
             },
             {
-              label: "출금완료",
+              label: usesCollectOrdersSummary ? "청산주문" : "출금완료",
               value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(data?.totalClearanceCount || 0),
-              caption: showOrdersLoadingState ? "주문 집계 불러오는 중" : "paymentConfirmed 기준 완료 건수",
+              caption: showOrdersLoadingState
+                ? "주문 집계 불러오는 중"
+                : usesCollectOrdersSummary
+                  ? "paymentRequested + paymentConfirmed 기준"
+                  : "paymentConfirmed 기준 완료 건수",
             },
             {
               label: "청산량",
               value: showOrdersLoadingState ? "..." : `${formatUsdtValue(data?.totalClearanceAmount || 0)} USDT`,
-              caption: showOrdersLoadingState ? "주문 집계 불러오는 중" : "완료된 청산 물량",
+              caption: showOrdersLoadingState
+                ? "주문 집계 불러오는 중"
+                : usesCollectOrdersSummary
+                  ? "청산 대상 물량"
+                  : "완료된 청산 물량",
             },
             {
               label: "청산금액",
               value: showOrdersLoadingState ? "..." : `${formatKrwValue(data?.totalClearanceAmountKRW || 0)} KRW`,
-              caption: showOrdersLoadingState ? "주문 집계 불러오는 중" : "완료된 청산 금액",
+              caption: showOrdersLoadingState
+                ? "주문 집계 불러오는 중"
+                : usesCollectOrdersSummary
+                  ? "청산 대상 금액"
+                  : "완료된 청산 금액",
             },
           ].map((item) => (
             <article key={item.label} className="console-panel rounded-[28px] p-5">
               <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
                 {item.label}
               </div>
-              <div className="console-display mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+              <div className="console-display mt-3 text-right text-3xl font-semibold tracking-[-0.05em] text-slate-950">
                 {item.value}
               </div>
               <div className="mt-2 text-sm text-slate-600">{item.caption}</div>

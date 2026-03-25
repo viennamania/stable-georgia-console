@@ -1460,6 +1460,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   forcedStorecode={selectedStorecode}
                   hideStoreFilter
                   hideWithdrawalLiveSection
+                  ordersQueryMode="collectOrdersForSeller"
                 />
               </>
             )}
