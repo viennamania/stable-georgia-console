@@ -789,7 +789,7 @@ const SellerBankTradeSummaryCard = ({
 
         <div className="rounded-[8px] border border-amber-100 bg-amber-50/70 px-[5px] py-[3px]">
           <div
-            className="console-mono truncate text-right text-[13px] font-semibold tracking-[-0.03em] text-amber-700"
+            className="console-mono truncate text-right text-[15px] font-bold leading-none tracking-[-0.04em] text-amber-700"
             style={{ fontFamily: "monospace" }}
           >
             {formatKrwValue(animatedTotalKrwAmount)}
