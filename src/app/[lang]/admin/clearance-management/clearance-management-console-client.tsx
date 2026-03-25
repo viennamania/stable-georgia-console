@@ -116,6 +116,7 @@ type ClearanceOrdersResult = {
 type ClearanceDashboardResult = ClearanceBaseResult & ClearanceOrdersResult;
 
 type FilterState = {
+  storecode: string;
   limit: number;
   page: number;
   fromDate: string;
@@ -193,6 +194,7 @@ const createInputDate = (daysOffset = 0) => {
 };
 
 const createDefaultFilters = (): FilterState => ({
+  storecode: "",
   limit: 30,
   page: 1,
   fromDate: createInputDate(0),
@@ -205,6 +207,7 @@ const createBaseLoadSignature = () => "all";
 const createOrdersLoadSignature = (filters: FilterState, walletAddress?: string | null) => {
   return [
     String(walletAddress || "").trim().toLowerCase(),
+    filters.storecode,
     String(filters.limit),
     String(filters.page),
     filters.fromDate,
@@ -777,6 +780,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
             storecode: "admin",
             requesterWalletAddress: activeAccount.address,
             body: {
+              storecode: filters.storecode,
               limit: filters.limit,
               page: filters.page,
               walletAddress: activeAccount.address,
@@ -1011,17 +1015,40 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   const storesError = normalizeText(data?.storesError);
   const ordersError = normalizeText(data?.ordersError);
   const orders = data?.orders || EMPTY_ORDERS;
-  const storeCoverageLabel = "전체 가맹점";
-  const storeCoverageCaption = `${NUMBER_FORMATTER.format(data?.storeTotalCount || 0)}개 등록 가맹점`;
-  const withdrawalRealtimeEventCount = withdrawalRealtimeItems.length;
-  const withdrawalRealtimeAmountTotal = withdrawalRealtimeItems.reduce((sum, item) => {
+  const selectedStoreSummary = useMemo(() => {
+    if (!filters.storecode) {
+      return null;
+    }
+
+    return (
+      stores.find((store) => String(store.storecode || "").trim() === filters.storecode)
+      || null
+    );
+  }, [filters.storecode, stores]);
+  const storeCoverageLabel = filters.storecode
+    ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
+    : "전체 가맹점";
+  const storeCoverageCaption = filters.storecode
+    ? `${filters.storecode} 기준 청산 주문 / 출금 webhook 흐름`
+    : `${NUMBER_FORMATTER.format(data?.storeTotalCount || 0)}개 등록 가맹점`;
+  const filteredWithdrawalRealtimeItems = useMemo(() => {
+    if (!filters.storecode) {
+      return withdrawalRealtimeItems;
+    }
+
+    return withdrawalRealtimeItems.filter((item) => {
+      return String(item.data.storecode || "").trim() === filters.storecode;
+    });
+  }, [filters.storecode, withdrawalRealtimeItems]);
+  const withdrawalRealtimeEventCount = filteredWithdrawalRealtimeItems.length;
+  const withdrawalRealtimeAmountTotal = filteredWithdrawalRealtimeItems.reduce((sum, item) => {
     return sum + Number(item.data.amount || 0);
   }, 0);
   const latestWithdrawalRealtimeAt =
-    withdrawalRealtimeItems[0]?.data.processingDate
-    || withdrawalRealtimeItems[0]?.data.transactionDate
-    || withdrawalRealtimeItems[0]?.data.publishedAt
-    || withdrawalRealtimeItems[0]?.receivedAt
+    filteredWithdrawalRealtimeItems[0]?.data.processingDate
+    || filteredWithdrawalRealtimeItems[0]?.data.transactionDate
+    || filteredWithdrawalRealtimeItems[0]?.data.publishedAt
+    || filteredWithdrawalRealtimeItems[0]?.receivedAt
     || null;
   const connectionIndicatorClassName =
     connectionState === "connected"
@@ -1242,8 +1269,8 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                   Clearance Management
                 </h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                  청산 주문 목록과 출금 webhook 흐름을 한 화면에서 확인합니다. 현재 화면은 전체 가맹점
-                  기준으로 동작하며 주문 목록은 `buyorder.status.changed`, 출금 live는
+                  청산 주문 목록과 출금 webhook 흐름을 한 화면에서 확인합니다. 현재 선택한 가맹점
+                  범위 기준으로 동작하며 주문 목록은 `buyorder.status.changed`, 출금 live는
                   `banktransfer.updated`를 구독합니다.
                 </p>
               </div>
@@ -1331,7 +1358,36 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           </div>
 
           <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
-            <div className="grid gap-3 lg:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-4">
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-200">가맹점</span>
+                <select
+                  value={filters.storecode}
+                  onChange={(event) => {
+                    setFilters((prev) => ({
+                      ...prev,
+                      storecode: event.target.value,
+                      page: 1,
+                    }));
+                  }}
+                  className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                >
+                  <option value="">전체 가맹점</option>
+                  {stores.map((store) => {
+                    const storecode = String(store.storecode || "").trim();
+                    if (!storecode) {
+                      return null;
+                    }
+
+                    return (
+                      <option key={storecode} value={storecode}>
+                        {getStoreDisplayName(store) || storecode}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+
               <label className="space-y-2 text-sm">
                 <span className="font-medium text-slate-200">날짜</span>
                 <input
@@ -1528,7 +1584,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
             ) : (
               <div className="-mx-1 overflow-x-auto px-1 pb-1">
                 <div className="flex min-w-full items-stretch gap-3">
-                  {withdrawalRealtimeItems.map((item) => {
+                  {filteredWithdrawalRealtimeItems.map((item) => {
                     const event = item.data;
                     const isHighlighted = item.highlightUntil > withdrawalRealtimeNowMs;
                     const publishedAt =
