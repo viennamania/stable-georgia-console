@@ -124,6 +124,13 @@ type FilterState = {
   searchMyOrders: boolean;
 };
 
+type ClearanceManagementConsoleClientProps = {
+  lang: string;
+  embedded?: boolean;
+  forcedStorecode?: string;
+  hideStoreFilter?: boolean;
+};
+
 type WithdrawalRealtimeItem = {
   id: string;
   data: BankTransferDashboardEvent;
@@ -634,8 +641,14 @@ const getWithdrawalRealtimeStatusMeta = (event?: BankTransferDashboardEvent | nu
   };
 };
 
-export default function ClearanceManagementConsoleClient({ lang }: { lang: string }) {
+export default function ClearanceManagementConsoleClient({
+  lang,
+  embedded = false,
+  forcedStorecode = "",
+  hideStoreFilter = false,
+}: ClearanceManagementConsoleClientProps) {
   const activeAccount = useActiveAccount();
+  const normalizedForcedStorecode = normalizeText(forcedStorecode);
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
   const [data, setData] = useState<ClearanceDashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -931,6 +944,24 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   }, [loadOrdersDashboard]);
 
   useEffect(() => {
+    if (!hideStoreFilter && !normalizedForcedStorecode) {
+      return;
+    }
+
+    setFilters((prev) => {
+      if (prev.storecode === normalizedForcedStorecode) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        storecode: normalizedForcedStorecode,
+        page: 1,
+      };
+    });
+  }, [hideStoreFilter, normalizedForcedStorecode]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       void loadDashboard({ silent: true });
     }, 60000);
@@ -1095,6 +1126,13 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
       : connectionState === "connecting" || connectionState === "initialized"
         ? "bg-amber-400"
         : "bg-rose-500";
+  const shellClassName = embedded
+    ? "w-full"
+    : "console-shell px-4 py-6 sm:px-6 lg:px-8";
+  const shellInnerClassName = embedded
+    ? "flex w-full flex-col gap-5"
+    : "mx-auto flex w-full max-w-[1480px] flex-col gap-5";
+  const filterGridClassName = hideStoreFilter ? "lg:grid-cols-3" : "lg:grid-cols-4";
 
   const patchOrderInDashboard = useCallback(
     (orderId: string, updater: (order: ClearanceOrder) => ClearanceOrder) => {
@@ -1326,8 +1364,9 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
   }, [filters.page, totalOrderPages]);
 
   return (
-    <div className="console-shell px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5">
+    <div className={shellClassName}>
+      <div className={shellInnerClassName}>
+        {!embedded ? (
         <section className="console-hero overflow-hidden rounded-[34px] text-white">
           <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.8fr)_380px] lg:px-8 lg:py-8">
             <div className="space-y-6">
@@ -1420,6 +1459,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
             </div>
           </div>
         </section>
+        ) : null}
 
         <section className="console-panel rounded-[30px] p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -1434,7 +1474,13 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
           </div>
 
           <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
-            <div className="grid gap-3 lg:grid-cols-4">
+            {hideStoreFilter ? (
+              <div className="mb-3 text-xs text-slate-400">
+                현재 범위: {storeCoverageLabel}
+              </div>
+            ) : null}
+            <div className={`grid gap-3 ${filterGridClassName}`}>
+              {!hideStoreFilter ? (
               <label className="space-y-2 text-sm">
                 <span className="font-medium text-slate-200">가맹점</span>
                 <select
@@ -1463,6 +1509,7 @@ export default function ClearanceManagementConsoleClient({ lang }: { lang: strin
                   })}
                 </select>
               </label>
+              ) : null}
 
               <label className="space-y-2 text-sm">
                 <span className="font-medium text-slate-200">날짜</span>
