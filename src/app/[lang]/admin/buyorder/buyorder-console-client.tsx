@@ -3940,7 +3940,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             <div className="mt-1 text-[11px] text-slate-400">-</div>
                           )}
                         </td>
-                        <td className="w-[220px] border-b border-slate-100 px-4 py-4 align-top">
+                        <td className="w-[220px] border-b border-slate-100 px-4 py-3.5 align-top">
                           {isSettlementPending ? (
                             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3">
                               <div className="text-sm font-semibold text-slate-950">결제중</div>
@@ -3949,35 +3949,31 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               </div>
                             </div>
                           ) : (
-                            <div className="flex flex-col items-end gap-2 text-right">
+                            <div className="flex flex-col items-end gap-1 text-right">
                               {hasSettlementAmountUsdt ? (
-                                <div className="w-full rounded-2xl border border-emerald-100 bg-emerald-50/55 px-3 py-2.5">
-                                  <div className="flex items-center justify-between gap-3">
+                                <div className="flex w-full flex-col items-end gap-1">
+                                  <div className="flex items-center justify-end gap-1.5">
                                     <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
                                       결제량
                                     </span>
-                                    <div className="flex justify-end gap-2">
-                                      <span className="text-[1.02rem] font-bold tracking-[-0.03em] text-emerald-600">
-                                        {formatUsdtValue(settlementAmountUsdt)}
-                                      </span>
-                                      <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-600">
-                                        USDT
-                                      </span>
-                                    </div>
+                                    <span className="text-[13px] font-semibold leading-none tracking-[-0.02em] text-emerald-600">
+                                      {formatUsdtValue(settlementAmountUsdt)}
+                                    </span>
+                                    <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">
+                                      USDT
+                                    </span>
                                   </div>
                                   {hasSettlementFeeAmountUsdt ? (
-                                    <div className="mt-1.5 flex items-center justify-between gap-3">
+                                    <div className="flex items-center justify-end gap-1.5">
                                       <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
                                         수수료
                                       </span>
-                                      <div className="flex justify-end gap-2">
-                                        <span className="text-[13px] font-semibold tracking-[-0.02em] text-emerald-700">
-                                          {formatUsdtValue(settlementFeeAmountUsdt)}
-                                        </span>
-                                        <span className="console-mono pt-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-600">
-                                          USDT
-                                        </span>
-                                      </div>
+                                      <span className="text-[12px] font-semibold leading-none tracking-[-0.02em] text-emerald-700">
+                                        {formatUsdtValue(settlementFeeAmountUsdt)}
+                                      </span>
+                                      <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">
+                                        USDT
+                                      </span>
                                     </div>
                                   ) : null}
                                 </div>
@@ -3988,9 +3984,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                   href={getBscscanTxUrl(settlementTxHash)}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-[11px] font-medium text-sky-700 transition hover:bg-sky-50"
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-medium text-sky-700 transition hover:bg-sky-50"
                                 >
-                                  <BscChainIcon className="h-4 w-4 shrink-0" />
+                                  <BscChainIcon className="h-3.5 w-3.5 shrink-0" />
                                   <span className="console-mono">{shortAddress(settlementTxHash)}</span>
                                 </a>
                               ) : hasSettlementAmountUsdt ? null : (
