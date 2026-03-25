@@ -3274,8 +3274,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           <div className="border-b border-slate-200/80 px-5 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div>
-                <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">Seller bank stats</div>
-                <h2 className={`${COMPACT_SECTION_TITLE_CLASS_NAME} mt-1`}>
+                <h2 className={COMPACT_SECTION_TITLE_CLASS_NAME}>
                   판매자 통장별 P2P 거래 통계
                 </h2>
               </div>
