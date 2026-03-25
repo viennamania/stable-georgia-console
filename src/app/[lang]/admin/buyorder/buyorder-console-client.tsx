@@ -291,6 +291,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const SUMMARY_VALUE_ANIMATION_MS = 700;
 const SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS = 2200;
+const UNMATCHED_CARD_PRESENCE_MS = 420;
 
 const createInputDate = (daysOffset = 0) => {
   const kstDate = new Date(Date.now() + KST_OFFSET_MS);
@@ -568,6 +569,145 @@ const useAnimatedNumber = (
   return animatedValue;
 };
 
+type AnimatedPresencePhase = "enter" | "present" | "exit";
+
+type AnimatedPresenceItem<T> = {
+  id: string;
+  item: T;
+  phase: AnimatedPresencePhase;
+};
+
+const useAnimatedPresenceList = <T,>(
+  items: T[],
+  getId: (item: T) => string,
+  durationMs = UNMATCHED_CARD_PRESENCE_MS,
+) => {
+  const [renderItems, setRenderItems] = useState<AnimatedPresenceItem<T>[]>(() => {
+    return items.map((item) => ({
+      id: getId(item),
+      item,
+      phase: "present",
+    }));
+  });
+  const isFirstSyncRef = useRef(true);
+  const enterAnimationFrameRef = useRef<number | null>(null);
+  const exitTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    return () => {
+      if (enterAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(enterAnimationFrameRef.current);
+      }
+      Object.values(exitTimersRef.current).forEach((timer) => clearTimeout(timer));
+      exitTimersRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextItems = items.map((item) => ({
+      id: getId(item),
+      item,
+    }));
+
+    setRenderItems((current) => {
+      const currentMap = new Map(current.map((entry) => [entry.id, entry]));
+      const nextIdSet = new Set(nextItems.map((entry) => entry.id));
+      const merged: AnimatedPresenceItem<T>[] = nextItems.map(({ id, item }) => {
+        const existing = currentMap.get(id);
+        if (!existing) {
+          return {
+            id,
+            item,
+            phase: isFirstSyncRef.current ? "present" : "enter",
+          };
+        }
+
+        return {
+          id,
+          item,
+          phase: existing.phase === "exit" ? "enter" : "present",
+        };
+      });
+
+      current.forEach((entry, index) => {
+        if (nextIdSet.has(entry.id)) {
+          return;
+        }
+
+        const insertIndex = Math.min(index, merged.length);
+        merged.splice(insertIndex, 0, {
+          ...entry,
+          phase: "exit",
+        });
+      });
+
+      return merged;
+    });
+
+    isFirstSyncRef.current = false;
+  }, [getId, items]);
+
+  useEffect(() => {
+    const hasEnteringItems = renderItems.some((entry) => entry.phase === "enter");
+    if (!hasEnteringItems) {
+      return;
+    }
+
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setRenderItems((current) => {
+        return current.map((entry) => (entry.phase === "enter" ? { ...entry, phase: "present" } : entry));
+      });
+      return;
+    }
+
+    if (enterAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(enterAnimationFrameRef.current);
+    }
+
+    enterAnimationFrameRef.current = requestAnimationFrame(() => {
+      enterAnimationFrameRef.current = requestAnimationFrame(() => {
+        setRenderItems((current) => {
+          return current.map((entry) => (entry.phase === "enter" ? { ...entry, phase: "present" } : entry));
+        });
+        enterAnimationFrameRef.current = null;
+      });
+    });
+  }, [renderItems]);
+
+  useEffect(() => {
+    const exitingIds = new Set(renderItems.filter((entry) => entry.phase === "exit").map((entry) => entry.id));
+
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (exitingIds.size > 0) {
+        setRenderItems((current) => current.filter((entry) => entry.phase !== "exit"));
+      }
+      return;
+    }
+
+    Object.keys(exitTimersRef.current).forEach((id) => {
+      if (exitingIds.has(id)) {
+        return;
+      }
+
+      clearTimeout(exitTimersRef.current[id]);
+      delete exitTimersRef.current[id];
+    });
+
+    exitingIds.forEach((id) => {
+      if (exitTimersRef.current[id]) {
+        return;
+      }
+
+      exitTimersRef.current[id] = setTimeout(() => {
+        setRenderItems((current) => current.filter((entry) => entry.id !== id));
+        delete exitTimersRef.current[id];
+      }, durationMs);
+    });
+  }, [durationMs, renderItems]);
+
+  return renderItems;
+};
+
 const maskName = (value?: string | null) => {
   const safe = String(value || "").trim();
   if (!safe) {
@@ -681,6 +821,27 @@ const getSellerBankTradeSummary = (item: SellerBankTradeStat): SellerBankTradeSu
     totalKrwAmount: Number(item.totalKrwAmount || 0),
     totalUsdtAmount: Number(item.totalUsdtAmount || 0),
   };
+};
+
+const getUnmatchedTransferStableId = (transfer: UnmatchedTransfer) => {
+  const explicitId = normalizeString(transfer._id);
+  if (explicitId) {
+    return explicitId;
+  }
+
+  const fallbackParts = [
+    normalizeString(transfer.transactionDateUtc),
+    normalizeString(transfer.processingDate),
+    normalizeString(transfer.regDate),
+    normalizeString(transfer.bankAccountNumber),
+    normalizeString(transfer.bankName),
+    normalizeString(transfer.accountHolder),
+    normalizeString(transfer.transactionName),
+    normalizeString(transfer.storeInfo?.storecode),
+    String(Number(transfer.amount || 0)),
+  ].filter(Boolean);
+
+  return fallbackParts.join("|") || "unmatched-transfer";
 };
 
 const SellerBankTradeSummaryCard = ({
@@ -2247,6 +2408,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const orders = data?.orders ?? EMPTY_ORDERS;
   const stores = data?.stores ?? EMPTY_STORES;
   const unmatchedTransfers = data?.unmatchedTransfers ?? EMPTY_UNMATCHED_TRANSFERS;
+  const animatedUnmatchedTransfers = useAnimatedPresenceList(
+    unmatchedTransfers,
+    getUnmatchedTransferStableId,
+    UNMATCHED_CARD_PRESENCE_MS,
+  );
   const filteredStoreOptions = useMemo(() => {
     const normalizedQuery = storeSearchQuery.trim().toLowerCase();
     const results = stores.filter((item) => {
@@ -3157,7 +3323,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="grid justify-center gap-1 [grid-template-columns:repeat(auto-fit,minmax(154px,168px))]">
                   {sellerBankTradeSummaries.map((item, index) => (
                     <SellerBankTradeSummaryCard
-                      key={`${item.accountNumber}-${index}`}
+                      key={`${item.accountNumber}-${item.bankName}-${item.accountHolder}`}
                       item={item}
                       index={index}
                     />
@@ -3210,7 +3376,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           {!unmatchedLiveCollapsed ? (
             <div className="relative px-4 py-4">
               <div className={`overflow-x-auto transition ${showUnmatchedLoadingOverlay ? "pointer-events-none opacity-45" : ""}`}>
-                {loading && unmatchedTransfers.length === 0 ? (
+                {loading && unmatchedTransfers.length === 0 && animatedUnmatchedTransfers.length === 0 ? (
                   <div className="flex min-w-full gap-3">
                     {Array.from({ length: 3 }).map((_, index) => (
                       <div
@@ -3234,14 +3400,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       </div>
                     ))}
                   </div>
-                ) : unmatchedTransfers.length === 0 ? (
+                ) : animatedUnmatchedTransfers.length === 0 ? (
                   <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
                     현재 필터에 해당하는 미신청입금이 없습니다.
                   </div>
                 ) : (
-                  <div className="flex min-w-full gap-3">
-                    {unmatchedTransfers.map((transfer, index) => {
-                      const id = String(transfer._id || `unmatched-${index}`);
+                  <div className="flex min-w-full">
+                    {animatedUnmatchedTransfers.map(({ id, item: transfer, phase }) => {
                       const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
                       const storeLabel =
                         transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
@@ -3253,47 +3418,51 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                         [unmatchedBankSummary, transfer.bankAccountNumber].filter(Boolean).join(" · ") || "-";
 
                       return (
-                        <article
+                        <div
                           key={id}
-                          className={`min-w-[260px] max-w-[300px] rounded-[24px] border px-4 py-3 shadow-sm transition ${
+                          className={`console-unmatched-card-shell console-unmatched-card-shell-${phase}`}
+                        >
+                          <article
+                            className={`console-unmatched-card h-full w-full rounded-[24px] border px-4 py-3 shadow-sm transition ${
                             isHighlighted
                               ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.16)]"
                               : "border-slate-200 bg-white"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-semibold text-slate-900">
-                                {transfer.transactionName || "-"}
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-semibold text-slate-900">
+                                  {transfer.transactionName || "-"}
+                                </div>
+                                <div className="mt-1 truncate text-sm text-slate-600">
+                                  {unmatchedAccountLabel}
+                                </div>
                               </div>
-                              <div className="mt-1 truncate text-sm text-slate-600">
-                                {unmatchedAccountLabel}
+                              <div className="shrink-0 text-right">
+                                <div className="text-xl font-semibold tracking-[-0.04em] text-rose-600">
+                                  {formatKrw(transfer.amount || 0)}
+                                </div>
+                                {isHighlighted ? (
+                                  <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                                    live updated
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
-                            <div className="shrink-0 text-right">
-                              <div className="text-xl font-semibold tracking-[-0.04em] text-rose-600">
-                                {formatKrw(transfer.amount || 0)}
-                              </div>
-                              {isHighlighted ? (
-                                <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                                  live updated
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
 
-                          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span
-                                className="h-6 w-6 shrink-0 rounded-xl border border-slate-200 bg-slate-100 bg-cover bg-center"
-                                style={{ backgroundImage: `url(${storeLogoSrc})` }}
-                                aria-hidden="true"
-                              />
-                              <span className="truncate">{storeLabel}</span>
+                            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className="h-6 w-6 shrink-0 rounded-xl border border-slate-200 bg-slate-100 bg-cover bg-center"
+                                  style={{ backgroundImage: `url(${storeLogoSrc})` }}
+                                  aria-hidden="true"
+                                />
+                                <span className="truncate">{storeLabel}</span>
+                              </div>
+                              <span className="shrink-0">{formatDateTime(transactionDate)}</span>
                             </div>
-                            <span className="shrink-0">{formatDateTime(transactionDate)}</span>
-                          </div>
-                        </article>
+                          </article>
+                        </div>
                       );
                     })}
                   </div>
