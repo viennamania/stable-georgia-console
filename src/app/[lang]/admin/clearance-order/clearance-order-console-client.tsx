@@ -49,6 +49,27 @@ type SellerBalanceItem = {
   pendingTransferUsdtAmount?: number;
 };
 
+type SellerBankTradeLookupInfo = {
+  bankName?: string;
+  accountHolder?: string;
+  accountNumber?: string;
+  realAccountNumber?: string;
+  defaultAccountNumber?: string;
+  balance?: number | string;
+};
+
+type SellerBankTradeStat = {
+  _id?: string;
+  bankUserInfo?: SellerBankTradeLookupInfo[];
+};
+
+type SellerBankBalanceSummary = {
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  balance: number | null;
+};
+
 type StoreContextResult = {
   store: StoreDetail | null;
   storeError?: string;
@@ -67,6 +88,7 @@ const SET_BUY_ORDER_FOR_CLEARANCE_SIGNING_PREFIX =
   "stable-georgia:set-buy-order-for-clearance:v1";
 const EMPTY_STORES: StoreListItem[] = [];
 const EMPTY_SELLER_BALANCES: SellerBalanceItem[] = [];
+const EMPTY_SELLER_BANK_BALANCES: SellerBankBalanceSummary[] = [];
 
 const NUMBER_FORMATTER = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 0,
@@ -142,6 +164,27 @@ const formatBankLabel = (bankInfo: BankInfo | null | undefined) => {
 
 const formatBankAccount = (bankInfo: BankInfo | null | undefined) => {
   return normalizeAccountNumber(bankInfo?.realAccountNumber || bankInfo?.accountNumber) || "-";
+};
+
+const getSellerBankBalanceSummary = (item: SellerBankTradeStat): SellerBankBalanceSummary => {
+  const bankInfo = Array.isArray(item.bankUserInfo) ? item.bankUserInfo[0] : null;
+  const bankName = normalizeText(bankInfo?.bankName);
+  const accountHolder = normalizeText(bankInfo?.accountHolder);
+  const accountNumber =
+    normalizeText(bankInfo?.defaultAccountNumber)
+    || normalizeText(bankInfo?.realAccountNumber)
+    || normalizeText(bankInfo?.accountNumber)
+    || normalizeText(item._id)
+    || "-";
+  const rawBalance = Number(bankInfo?.balance);
+  const balance = Number.isFinite(rawBalance) ? rawBalance : null;
+
+  return {
+    bankName: bankName || "은행명 없음",
+    accountHolder: accountHolder || "예금주 없음",
+    accountNumber,
+    balance,
+  };
 };
 
 const getStoreDisplayName = (store: StoreListItem | StoreDetail | null | undefined) => {
@@ -305,6 +348,60 @@ const BankOptionCard = ({
   );
 };
 
+const SellerBankBalanceCard = ({
+  item,
+}: {
+  item: SellerBankBalanceSummary;
+}) => {
+  return (
+    <article className="rounded-[16px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.92))] px-3 py-3 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1">
+            <div className="truncate text-[11px] font-semibold tracking-[-0.02em] text-slate-950">
+              {item.bankName}
+            </div>
+            <span className="shrink-0 text-[8px] text-slate-300">/</span>
+            <div className="truncate text-[11px] font-semibold tracking-[-0.02em] text-slate-950">
+              {item.accountHolder}
+            </div>
+          </div>
+          <div className="console-mono mt-1 truncate text-[11px] font-semibold tracking-[-0.04em] text-slate-600">
+            {item.accountNumber}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!item.accountNumber || item.accountNumber === "-") {
+              return;
+            }
+            void navigator.clipboard?.writeText(item.accountNumber);
+          }}
+          className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!item.accountNumber || item.accountNumber === "-"}
+        >
+          복사
+        </button>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2 rounded-[12px] border border-emerald-100 bg-emerald-50/80 px-3 py-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
+          잔고
+        </span>
+        <span
+          className="console-mono truncate text-right text-[14px] font-bold leading-none tracking-[-0.04em] text-emerald-700"
+          style={{ fontFamily: "monospace" }}
+          title={item.balance === null ? "잔고정보없음" : formatKrwValue(item.balance)}
+        >
+          {item.balance === null ? "잔고정보없음" : formatKrwValue(item.balance)}
+        </span>
+      </div>
+    </article>
+  );
+};
+
 export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -322,6 +419,9 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [storeContext, setStoreContext] = useState<StoreContextResult | null>(null);
   const [storeContextLoading, setStoreContextLoading] = useState(false);
   const [storeContextError, setStoreContextError] = useState("");
+  const [sellerBankBalances, setSellerBankBalances] = useState<SellerBankBalanceSummary[]>(EMPTY_SELLER_BANK_BALANCES);
+  const [sellerBankBalancesLoading, setSellerBankBalancesLoading] = useState(false);
+  const [sellerBankBalancesError, setSellerBankBalancesError] = useState("");
   const [buyerBankInfo, setBuyerBankInfo] = useState<BankInfo | null>(null);
   const [sellerBankInfo, setSellerBankInfo] = useState<BankInfo | null>(null);
   const [krwAmountInput, setKrwAmountInput] = useState("");
@@ -482,6 +582,68 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   useEffect(() => {
     void loadStoreContext();
   }, [loadStoreContext]);
+
+  const loadSellerBankBalances = useCallback(async () => {
+    if (!activeAccount) {
+      setSellerBankBalances(EMPTY_SELLER_BANK_BALANCES);
+      setSellerBankBalancesError("");
+      setSellerBankBalancesLoading(false);
+      return;
+    }
+
+    setSellerBankBalancesLoading(true);
+    setSellerBankBalancesError("");
+
+    try {
+      const signedBody = await createCenterStoreAdminSignedBody({
+        account: activeAccount,
+        route: "/api/order/getAllBuyOrders",
+        storecode: "admin",
+        requesterWalletAddress: activeAccount.address,
+        body: {
+          storecode: "",
+          limit: 1,
+          page: 1,
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/signed-order-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          route: "/api/order/getAllBuyOrders",
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "전체 판매자 통장 잔고를 불러오지 못했습니다.");
+      }
+
+      const nextBalances = Array.isArray(payload?.result?.totalBySellerBankAccountNumber)
+        ? payload.result.totalBySellerBankAccountNumber.map((item: SellerBankTradeStat) =>
+            getSellerBankBalanceSummary(item),
+          )
+        : EMPTY_SELLER_BANK_BALANCES;
+
+      setSellerBankBalances(nextBalances);
+    } catch (error) {
+      setSellerBankBalances(EMPTY_SELLER_BANK_BALANCES);
+      setSellerBankBalancesError(
+        error instanceof Error ? error.message : "전체 판매자 통장 잔고를 불러오지 못했습니다.",
+      );
+    } finally {
+      setSellerBankBalancesLoading(false);
+    }
+  }, [activeAccount]);
+
+  useEffect(() => {
+    void loadSellerBankBalances();
+  }, [embeddedRefreshKey, loadSellerBankBalances]);
 
   const moveStoreOrder = useCallback(async (storecode: string, offset: -1 | 1) => {
     if (updatingOrderStorecode || searchKeyword.trim()) {
@@ -956,6 +1118,74 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
           </aside>
 
           <section className="flex min-h-[72vh] min-w-0 flex-col gap-5">
+            <section className="console-panel overflow-hidden rounded-[30px]">
+              <div className="border-b border-slate-200/80 px-5 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                  <div>
+                    <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                      Seller bank balance
+                    </div>
+                    <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                      전체 판매자 통장 잔고
+                    </h2>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                    {sellerBankBalancesLoading ? (
+                      <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-sky-700">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" aria-hidden="true" />
+                        로딩중
+                      </span>
+                    ) : null}
+                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
+                      {NUMBER_FORMATTER.format(sellerBankBalances.length)} 계좌
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
+                      전체 가맹점
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void loadSellerBankBalances();
+                      }}
+                      disabled={!activeAccount || sellerBankBalancesLoading}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      새로고침
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-4">
+                {!activeAccount ? (
+                  <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
+                    전체 판매자 통장 잔고는 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
+                  </div>
+                ) : sellerBankBalancesLoading && sellerBankBalances.length === 0 ? (
+                  <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
+                    전체 판매자 통장 잔고를 불러오는 중입니다...
+                  </div>
+                ) : sellerBankBalancesError ? (
+                  <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                    {sellerBankBalancesError}
+                  </div>
+                ) : !sellerBankBalancesLoading && sellerBankBalances.length === 0 ? (
+                  <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
+                    표시할 판매자 통장 잔고가 없습니다.
+                  </div>
+                ) : (
+                  <div className="grid justify-center gap-2 [grid-template-columns:repeat(auto-fit,minmax(176px,188px))]">
+                    {sellerBankBalances.map((item) => (
+                      <SellerBankBalanceCard
+                        key={`${item.accountNumber}-${item.bankName}-${item.accountHolder}`}
+                        item={item}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
             {!selectedStorecode ? (
               <div className="console-panel flex min-h-[72vh] flex-col items-center justify-center rounded-[34px] px-6 py-10 text-center">
                 <div className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
