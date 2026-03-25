@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConnectButton, useActiveAccount } from "thirdweb/react";
 import { createWallet, inAppWallet } from "thirdweb/wallets";
@@ -86,6 +86,9 @@ const STORE_SETTINGS_MUTATION_SIGNING_PREFIX =
   "stable-georgia:store-settings-mutation:v1";
 const SET_BUY_ORDER_FOR_CLEARANCE_SIGNING_PREFIX =
   "stable-georgia:set-buy-order-for-clearance:v1";
+const BUYER_BANK_BALANCE_REFRESH_MS = 10_000;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const SUMMARY_VALUE_ANIMATION_MS = 700;
 const EMPTY_STORES: StoreListItem[] = [];
 const EMPTY_SELLER_BALANCES: SellerBalanceItem[] = [];
 const EMPTY_SELLER_BANK_BALANCES: SellerBankBalanceSummary[] = [];
@@ -104,6 +107,12 @@ const normalizeText = (value: unknown) => {
     return "";
   }
   return value.trim();
+};
+
+const createInputDate = (daysOffset = 0) => {
+  const kstDate = new Date(Date.now() + KST_OFFSET_MS);
+  kstDate.setUTCDate(kstDate.getUTCDate() + daysOffset);
+  return kstDate.toISOString().slice(0, 10);
 };
 
 const normalizeWalletAddress = (value: unknown) => {
@@ -133,6 +142,83 @@ const formatKrwValue = (value: unknown) => {
     return NUMBER_FORMATTER.format(0);
   }
   return NUMBER_FORMATTER.format(Math.round(safeValue));
+};
+
+const easeOutQuart = (progress: number) => {
+  return 1 - ((1 - progress) ** 4);
+};
+
+const useAnimatedNumber = (
+  value: number | null | undefined,
+  durationMs = SUMMARY_VALUE_ANIMATION_MS,
+  options?: { initialValue?: number | null },
+) => {
+  const targetValue = Number(value || 0);
+  const safeTargetValue = Number.isFinite(targetValue) ? targetValue : 0;
+  const initialValue = Number(options?.initialValue);
+  const safeInitialValue = Number.isFinite(initialValue) ? initialValue : safeTargetValue;
+  const [animatedValue, setAnimatedValue] = useState(safeInitialValue);
+  const animatedValueRef = useRef(safeInitialValue);
+  const animationFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    const startValue = animatedValueRef.current;
+    if (Math.abs(startValue - safeTargetValue) < 0.0005) {
+      animatedValueRef.current = safeTargetValue;
+      setAnimatedValue(safeTargetValue);
+      return;
+    }
+
+    if (
+      typeof window !== "undefined"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      animatedValueRef.current = safeTargetValue;
+      setAnimatedValue(safeTargetValue);
+      return;
+    }
+
+    const startTime = performance.now();
+
+    const animate = (timestamp: number) => {
+      const progress = Math.min(1, (timestamp - startTime) / durationMs);
+      const easedProgress = easeOutQuart(progress);
+      const nextValue = startValue + ((safeTargetValue - startValue) * easedProgress);
+      animatedValueRef.current = nextValue;
+      setAnimatedValue(nextValue);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      animatedValueRef.current = safeTargetValue;
+      setAnimatedValue(safeTargetValue);
+      animationFrameRef.current = null;
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [durationMs, safeTargetValue]);
+
+  return animatedValue;
 };
 
 const formatUsdtValue = (value: unknown) => {
@@ -353,6 +439,10 @@ const SellerBankBalanceCard = ({
 }: {
   item: SellerBankBalanceSummary;
 }) => {
+  const animatedBalance = useAnimatedNumber(item.balance ?? 0, SUMMARY_VALUE_ANIMATION_MS, {
+    initialValue: 0,
+  });
+
   return (
     <article className="rounded-[14px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.92))] px-2.5 py-2.5 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
       <div className="flex items-start justify-between gap-2">
@@ -395,7 +485,7 @@ const SellerBankBalanceCard = ({
           style={{ fontFamily: "monospace" }}
           title={item.balance === null ? "잔고정보없음" : formatKrwValue(item.balance)}
         >
-          {item.balance === null ? "잔고정보없음" : formatKrwValue(item.balance)}
+          {item.balance === null ? "잔고정보없음" : formatKrwValue(animatedBalance)}
         </span>
       </div>
     </article>
@@ -430,6 +520,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
   const [embeddedRefreshKey, setEmbeddedRefreshKey] = useState(0);
+  const [buyerBankBalanceDate, setBuyerBankBalanceDate] = useState(createInputDate(0));
   const visibleSellerBankBalances = useMemo(
     () => sellerBankBalances.filter((item) => Number(item.balance || 0) > 0),
     [sellerBankBalances],
@@ -608,6 +699,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
           storecode: "",
           limit: 1,
           page: 1,
+          fromDate: buyerBankBalanceDate,
+          toDate: buyerBankBalanceDate,
         },
       });
 
@@ -625,7 +718,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || "전체 판매자 통장 잔고를 불러오지 못했습니다.");
+        throw new Error(payload?.error || "구매자 통장 잔고를 불러오지 못했습니다.");
       }
 
       const nextBalances = Array.isArray(payload?.result?.totalBySellerBankAccountNumber)
@@ -638,16 +731,28 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     } catch (error) {
       setSellerBankBalances(EMPTY_SELLER_BANK_BALANCES);
       setSellerBankBalancesError(
-        error instanceof Error ? error.message : "전체 판매자 통장 잔고를 불러오지 못했습니다.",
+        error instanceof Error ? error.message : "구매자 통장 잔고를 불러오지 못했습니다.",
       );
     } finally {
       setSellerBankBalancesLoading(false);
     }
-  }, [activeAccount]);
+  }, [activeAccount, buyerBankBalanceDate]);
 
   useEffect(() => {
     void loadSellerBankBalances();
   }, [embeddedRefreshKey, loadSellerBankBalances]);
+
+  useEffect(() => {
+    if (!activeAccount) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      void loadSellerBankBalances();
+    }, BUYER_BANK_BALANCE_REFRESH_MS);
+
+    return () => clearInterval(interval);
+  }, [activeAccount, loadSellerBankBalances]);
 
   const moveStoreOrder = useCallback(async (storecode: string, offset: -1 | 1) => {
     if (updatingOrderStorecode || searchKeyword.trim()) {
@@ -1143,9 +1248,17 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                     <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                       {NUMBER_FORMATTER.format(visibleSellerBankBalances.length)} 계좌
                     </span>
-                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
-                      전체 가맹점
-                    </span>
+                    <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
+                      <span>날짜</span>
+                      <input
+                        type="date"
+                        value={buyerBankBalanceDate}
+                        onChange={(event) => {
+                          setBuyerBankBalanceDate(event.target.value || createInputDate(0));
+                        }}
+                        className="rounded-md border-0 bg-transparent p-0 text-xs font-medium text-slate-700 outline-none"
+                      />
+                    </label>
                     <button
                       type="button"
                       onClick={() => {
@@ -1167,7 +1280,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   </div>
                 ) : sellerBankBalancesLoading && visibleSellerBankBalances.length === 0 ? (
                   <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
-                    구매자 통장 잔고를 불러오는 중입니다...
+                    {buyerBankBalanceDate} 거래 기준 구매자 통장 잔고를 불러오는 중입니다...
                   </div>
                 ) : sellerBankBalancesError ? (
                   <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
@@ -1175,7 +1288,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   </div>
                 ) : !sellerBankBalancesLoading && visibleSellerBankBalances.length === 0 ? (
                   <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
-                    표시할 구매자 통장 잔고가 없습니다.
+                    {buyerBankBalanceDate} 거래 기준으로 표시할 구매자 통장 잔고가 없습니다.
                   </div>
                 ) : (
                   <div className="grid justify-center gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(148px,158px))]">
