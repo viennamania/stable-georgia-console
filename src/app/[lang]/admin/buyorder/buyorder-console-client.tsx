@@ -923,11 +923,11 @@ const SellerBankTradeSummaryCard = ({
             <span className="console-mono inline-flex h-[18px] shrink-0 items-center rounded-full bg-slate-100 px-[5px] text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-500">
               {String(index + 1).padStart(2, "0")}
             </span>
-            <div className="truncate text-[10px] font-bold tracking-[-0.02em] text-slate-950">
+            <div className="truncate text-[11px] font-bold tracking-[-0.02em] text-slate-950">
               {item.bankName}
             </div>
             <span className="shrink-0 text-[8px] text-slate-300">/</span>
-            <div className="truncate text-[10px] font-bold tracking-[-0.02em] text-slate-950">
+            <div className="truncate text-[11px] font-bold tracking-[-0.02em] text-slate-950">
               {item.accountHolder}
             </div>
           </div>
