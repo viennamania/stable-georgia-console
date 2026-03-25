@@ -3817,19 +3817,19 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                   </div>
                                 ) : null}
                               </div>
-                              <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
+                              <div className="mt-1.5 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-amber-700">
                                     입금계좌
                                   </div>
                                   <div
-                                    className="min-w-0 flex-1 truncate text-right text-xs font-medium text-slate-700"
+                                    className="min-w-0 flex-1 truncate text-right text-[11px] font-medium text-slate-700"
                                     title={sellerBankSummary.primary}
                                   >
                                     {sellerBankSummary.primary}
                                   </div>
                                 </div>
-                                <div className="console-mono mt-1 text-sm font-semibold tracking-[-0.01em] text-slate-950">
+                                <div className="console-mono mt-0.5 text-[13px] font-semibold leading-none tracking-[-0.01em] text-slate-950">
                                   {sellerBankSummary.accountNumber || "-"}
                                 </div>
                               </div>
