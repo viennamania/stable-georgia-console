@@ -18,6 +18,13 @@ const NAV_ITEMS = [
     marker: "02",
     description: "청산 주문 상황판",
   },
+  {
+    href: "/admin/clearance-order",
+    label: "청산주문 생성",
+    eyebrow: "Order Builder",
+    marker: "03",
+    description: "가맹점별 청산주문 생성",
+  },
 ];
 
 export default function AdminShell({
