@@ -146,6 +146,19 @@ const formatUsdtValue = (value: unknown) => {
   return USDT_FORMATTER.format(safeValue);
 };
 
+const normalizeKrwInput = (value: unknown) => {
+  return String(value || "").replace(/[^\d]/g, "");
+};
+
+const formatKrwInputValue = (value: unknown) => {
+  const normalized = normalizeKrwInput(value);
+  if (!normalized) {
+    return "";
+  }
+
+  return NUMBER_FORMATTER.format(Number.parseInt(normalized, 10) || 0);
+};
+
 const formatBankLabel = (bankInfo: BankInfo | null | undefined) => {
   const bankName = normalizeText(bankInfo?.bankName);
   const accountHolder = normalizeText(bankInfo?.accountHolder);
@@ -596,7 +609,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   );
   const buyerBankAccountKey = formatBankAccount(buyerBankInfo);
   const sellerBankAccountKey = formatBankAccount(sellerBankInfo);
-  const requestedKrwAmount = Number.parseInt(krwAmountInput || "0", 10) || 0;
+  const requestedKrwAmount = Number.parseInt(normalizeKrwInput(krwAmountInput) || "0", 10) || 0;
   const requestedUsdtAmount = rate > 0 ? Number((requestedKrwAmount / rate).toFixed(3)) : 0;
 
   useEffect(() => {
@@ -1253,31 +1266,16 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                       <label className="space-y-2 text-sm">
                         <span className="font-medium text-slate-700">청산금액 (KRW)</span>
                         <input
-                          type="number"
-                          min={0}
-                          step={1000}
+                          type="text"
+                          inputMode="numeric"
                           value={krwAmountInput}
                           onChange={(event) => {
-                            const nextValue = event.target.value.replace(/[^\d]/g, "");
-                            setKrwAmountInput(nextValue);
+                            setKrwAmountInput(formatKrwInputValue(event.target.value));
                           }}
-                          placeholder="예: 3000000"
+                          placeholder="예: 3,000,000"
                           className="h-14 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[18px] font-semibold text-slate-950 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
                         />
                       </label>
-
-                      <div className="flex flex-wrap gap-2">
-                        {[1000000, 3000000, 5000000, 10000000].map((amount) => (
-                          <button
-                            key={amount}
-                            type="button"
-                            onClick={() => setKrwAmountInput(String(amount))}
-                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-                          >
-                            {formatKrwValue(amount)}원
-                          </button>
-                        ))}
-                      </div>
 
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-4">

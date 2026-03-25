@@ -1924,13 +1924,13 @@ export default function ClearanceManagementConsoleClient({
             <table className="w-full table-fixed border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                  <th className="w-[20%] border-b border-slate-200 px-3 py-2.5">Trade / Created</th>
+                  <th className="w-[19%] border-b border-slate-200 px-3 py-2.5">Trade / Created</th>
                   <th className="w-[10%] border-b border-slate-200 px-3 py-2.5">Status</th>
-                  <th className="w-[16%] border-b border-slate-200 px-3 py-2.5">Buyer</th>
-                  <th className="w-[18%] border-b border-slate-200 px-3 py-2.5">Seller / 입금계좌</th>
+                  <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">Buyer</th>
+                  <th className="w-[17%] border-b border-slate-200 px-3 py-2.5">Seller / 입금계좌</th>
                   <th className="w-[12%] border-b border-slate-200 px-3 py-2.5 text-right">Amount</th>
                   <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">출금상태</th>
-                  <th className="w-[9%] border-b border-slate-200 px-3 py-2.5">USDT 전송</th>
+                  <th className="w-[12%] border-b border-slate-200 px-3 py-2.5">USDT 전송</th>
                 </tr>
               </thead>
               <tbody>
