@@ -1255,7 +1255,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                         <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
                           Rate
                         </div>
-                        <div className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                        <div className="mt-2 text-right text-2xl font-semibold tracking-[-0.05em] text-slate-950">
                           {rate > 0 ? `${formatKrwValue(rate)} KRW` : "Rate unavailable"}
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
@@ -1273,7 +1273,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                             setKrwAmountInput(formatKrwInputValue(event.target.value));
                           }}
                           placeholder="예: 3,000,000"
-                          className="h-14 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[18px] font-semibold text-slate-950 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                          className="h-14 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-right text-[18px] font-semibold text-slate-950 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
                         />
                       </label>
 
