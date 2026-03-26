@@ -11,8 +11,11 @@ import {
   type BuyOrderStatusRealtimeEvent,
 } from "@/lib/realtime/buyorder";
 import {
+  BANKTRANSFER_ABLY_CHANNEL,
+  BANKTRANSFER_ABLY_EVENT_NAME,
   BANKTRANSFER_UNMATCHED_ABLY_CHANNEL,
   BANKTRANSFER_UNMATCHED_ABLY_EVENT_NAME,
+  type BankTransferDashboardEvent,
   type BankTransferUnmatchedRealtimeEvent,
 } from "@/lib/realtime/banktransfer";
 import { thirdwebClient, thirdwebClientId } from "@/lib/thirdweb-client";
@@ -165,10 +168,28 @@ type OrderStatusPreviewPanelState = {
   statusLabel: string;
 };
 
+type BankTransferLiveLogItem = {
+  id: string;
+  transactionType: string;
+  amount: number;
+  balance: number | null;
+  transactionName: string;
+  bankAccountNumber: string;
+  transactionDate: string;
+  processingDate: string;
+  publishedAt: string;
+  storecode: string;
+  storeLabel: string;
+  match: string;
+  status: string;
+  errorMessage: string;
+};
+
 const EMPTY_ORDERS: BuyOrder[] = [];
 const EMPTY_STORES: StoreItem[] = [];
 const EMPTY_UNMATCHED_TRANSFERS: UnmatchedTransfer[] = [];
 const EMPTY_SELLER_BANK_TRADE_STATS: SellerBankTradeStat[] = [];
+const EMPTY_BANK_TRANSFER_LIVE_LOGS: BankTransferLiveLogItem[] = [];
 
 type DashboardResult = {
   fetchedAt: string;
@@ -305,6 +326,7 @@ const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const SUMMARY_VALUE_ANIMATION_MS = 700;
 const SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS = 2200;
 const UNMATCHED_CARD_PRESENCE_MS = 560;
+const BANK_TRANSFER_LIVE_LOG_LIMIT = 80;
 
 const createInputDate = (daysOffset = 0) => {
   const kstDate = new Date(Date.now() + KST_OFFSET_MS);
@@ -498,6 +520,81 @@ const formatKrw = (value?: number | null) => {
 const formatKrwValue = (value?: number | null) => {
   const numeric = Number(value || 0);
   return KRW_FORMATTER.format(numeric);
+};
+
+const normalizeBankTransferTransactionType = (value: unknown) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "withdrawn" || normalized === "withdrawal" || normalized === "출금") {
+    return "withdrawn";
+  }
+  if (normalized === "deposited" || normalized === "deposit" || normalized === "입금") {
+    return "deposited";
+  }
+  return normalized;
+};
+
+const getBankTransferTypeLabel = (value: string) => {
+  if (value === "withdrawn") {
+    return "출금";
+  }
+  if (value === "deposited") {
+    return "입금";
+  }
+  return value || "이벤트";
+};
+
+const getBankTransferLiveLogId = (
+  event: BankTransferDashboardEvent,
+  fallbackId?: string,
+) => {
+  const direct = normalizeString(event.eventId);
+  if (direct) {
+    return direct;
+  }
+
+  const trace = normalizeString(event.traceId);
+  if (trace) {
+    return trace;
+  }
+
+  const composed = [
+    normalizeString(event.transactionType),
+    normalizeString(event.transactionDate),
+    normalizeString(event.processingDate),
+    normalizeString(event.publishedAt),
+    normalizeString(event.bankAccountNumber),
+    normalizeString(event.storecode || event.store?.code),
+    String(Number(event.amount || 0)),
+    normalizeString(fallbackId),
+  ].join("|");
+
+  return composed;
+};
+
+const toBankTransferLiveLogItem = (
+  event: BankTransferDashboardEvent,
+  fallbackId?: string,
+): BankTransferLiveLogItem => {
+  return {
+    id: getBankTransferLiveLogId(event, fallbackId),
+    transactionType: normalizeBankTransferTransactionType(event.transactionType),
+    amount: Number(event.amount || 0),
+    balance: event.balance === null || event.balance === undefined ? null : Number(event.balance || 0),
+    transactionName: normalizeString(event.transactionName),
+    bankAccountNumber: normalizeString(event.bankAccountNumber),
+    transactionDate: normalizeString(event.transactionDate),
+    processingDate: normalizeString(event.processingDate),
+    publishedAt: normalizeString(event.publishedAt) || new Date().toISOString(),
+    storecode: normalizeString(event.storecode || event.store?.code),
+    storeLabel: normalizeString(event.store?.name || event.store?.code || event.storecode),
+    match: normalizeString(event.match),
+    status: normalizeString(event.status),
+    errorMessage: normalizeString(event.errorMessage),
+  };
+};
+
+const getBankTransferLiveLogTimestamp = (item: BankTransferLiveLogItem) => {
+  return item.transactionDate || item.processingDate || item.publishedAt;
 };
 
 const formatRateValue = (value?: number | null) => {
@@ -1656,6 +1753,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const [copiedTradeId, setCopiedTradeId] = useState("");
   const [orderStatusPreviewPanelState, setOrderStatusPreviewPanelState] = useState<OrderStatusPreviewPanelState | null>(null);
   const [orderStatusPreviewLoading, setOrderStatusPreviewLoading] = useState(false);
+  const [bankTransferLivePanelOpen, setBankTransferLivePanelOpen] = useState(false);
+  const [bankTransferLiveLogs, setBankTransferLiveLogs] = useState<BankTransferLiveLogItem[]>(EMPTY_BANK_TRANSFER_LIVE_LOGS);
+  const [lastBankTransferEventAt, setLastBankTransferEventAt] = useState("");
   const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
   const [sellerBankStatsCollapsed, setSellerBankStatsCollapsed] = useState(false);
   const [unmatchedLiveCollapsed, setUnmatchedLiveCollapsed] = useState(false);
@@ -1669,6 +1769,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRealtimeEventIdRef = useRef("");
   const lastUnmatchedRealtimeEventIdRef = useRef("");
+  const lastBankTransferRealtimeEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-buyorder-${Math.random().toString(36).slice(2, 10)}`);
   const storeSearchRef = useRef<HTMLDivElement | null>(null);
   const selectedDepositTotal = useMemo(() => {
@@ -1703,6 +1804,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     setOrderStatusPreviewPanelState(null);
     setOrderStatusPreviewLoading(false);
   }, []);
+  const closeBankTransferLivePanel = useCallback(() => {
+    setBankTransferLivePanelOpen(false);
+  }, []);
+  const openBankTransferLivePanel = useCallback(() => {
+    closeOrderStatusPreviewPanel();
+    setBankTransferLivePanelOpen(true);
+  }, [closeOrderStatusPreviewPanel]);
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -1971,6 +2079,21 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     },
     [filters.storecode],
   );
+
+  const appendBankTransferLiveLog = useCallback((event: BankTransferDashboardEvent, fallbackId?: string) => {
+    const nextItem = toBankTransferLiveLogItem(event, fallbackId);
+    if (!nextItem.id) {
+      return;
+    }
+
+    setLastBankTransferEventAt(nextItem.publishedAt || new Date().toISOString());
+    setBankTransferLiveLogs((current) => {
+      return [
+        nextItem,
+        ...current.filter((item) => item.id !== nextItem.id),
+      ].slice(0, BANK_TRANSFER_LIVE_LOG_LIMIT);
+    });
+  }, []);
 
   const patchOrderInDashboard = useCallback((matchKey: string, patch: Partial<BuyOrder>) => {
     if (!matchKey) {
@@ -2403,13 +2526,18 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   }, []);
 
   useEffect(() => {
-    if (!orderStatusPreviewPanelState) {
+    if (!orderStatusPreviewPanelState && !bankTransferLivePanelOpen) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        closeOrderStatusPreviewPanel();
+        if (orderStatusPreviewPanelState) {
+          closeOrderStatusPreviewPanel();
+          return;
+        }
+
+        closeBankTransferLivePanel();
       }
     };
 
@@ -2417,13 +2545,19 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [closeOrderStatusPreviewPanel, orderStatusPreviewPanelState]);
+  }, [
+    bankTransferLivePanelOpen,
+    closeBankTransferLivePanel,
+    closeOrderStatusPreviewPanel,
+    orderStatusPreviewPanelState,
+  ]);
 
   useEffect(() => {
     const realtime = new Ably.Realtime({
       authUrl: `/api/bff/realtime/ably-token?stream=ops-admin&clientId=${ablyClientIdRef.current}`,
     });
     const channel = realtime.channels.get(BUYORDER_STATUS_ABLY_CHANNEL);
+    const banktransferChannel = realtime.channels.get(BANKTRANSFER_ABLY_CHANNEL);
     const unmatchedChannel = realtime.channels.get(BANKTRANSFER_UNMATCHED_ABLY_CHANNEL);
 
     const onConnectionStateChange = (stateChange: Ably.ConnectionStateChange) => {
@@ -2465,8 +2599,28 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       requestRealtimeRefresh();
     };
 
+    const onBanktransferMessage = (message: Ably.Message) => {
+      const event = (message.data || {}) as BankTransferDashboardEvent;
+      const eventId = getBankTransferLiveLogId(event, String(message.id || ""));
+      if (eventId && lastBankTransferRealtimeEventIdRef.current === eventId) {
+        return;
+      }
+      if (eventId) {
+        lastBankTransferRealtimeEventIdRef.current = eventId;
+      }
+
+      const normalizedType = normalizeBankTransferTransactionType(event.transactionType);
+      if (normalizedType !== "deposited" && normalizedType !== "withdrawn") {
+        return;
+      }
+
+      appendBankTransferLiveLog(event, String(message.id || ""));
+      requestRealtimeRefresh();
+    };
+
     realtime.connection.on(onConnectionStateChange);
     void channel.subscribe(BUYORDER_STATUS_ABLY_EVENT_NAME, onMessage);
+    void banktransferChannel.subscribe(BANKTRANSFER_ABLY_EVENT_NAME, onBanktransferMessage);
     void unmatchedChannel.subscribe(BANKTRANSFER_UNMATCHED_ABLY_EVENT_NAME, onUnmatchedMessage);
 
     return () => {
@@ -2480,11 +2634,18 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
         clearTimeout(unmatchedHighlightResetTimerRef.current);
       }
       channel.unsubscribe(BUYORDER_STATUS_ABLY_EVENT_NAME, onMessage);
+      banktransferChannel.unsubscribe(BANKTRANSFER_ABLY_EVENT_NAME, onBanktransferMessage);
       unmatchedChannel.unsubscribe(BANKTRANSFER_UNMATCHED_ABLY_EVENT_NAME, onUnmatchedMessage);
       realtime.connection.off(onConnectionStateChange);
       realtime.close();
     };
-  }, [applyRealtimeEventToDashboard, applyUnmatchedRealtimeEventToDashboard, loadDashboard, requestRealtimeRefresh]);
+  }, [
+    appendBankTransferLiveLog,
+    applyRealtimeEventToDashboard,
+    applyUnmatchedRealtimeEventToDashboard,
+    loadDashboard,
+    requestRealtimeRefresh,
+  ]);
 
   const orders = data?.orders ?? EMPTY_ORDERS;
   const stores = data?.stores ?? EMPTY_STORES;
@@ -2494,6 +2655,14 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     getUnmatchedTransferStableId,
     UNMATCHED_CARD_PRESENCE_MS,
   );
+  const visibleBankTransferLiveLogs = useMemo(() => {
+    const selectedStorecode = normalizeString(filters.storecode);
+    if (!selectedStorecode) {
+      return bankTransferLiveLogs;
+    }
+
+    return bankTransferLiveLogs.filter((item) => item.storecode === selectedStorecode);
+  }, [bankTransferLiveLogs, filters.storecode]);
   const filteredStoreOptions = useMemo(() => {
     const normalizedQuery = storeSearchQuery.trim().toLowerCase();
     const results = stores.filter((item) => {
@@ -3817,6 +3986,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                   return;
                                 }
 
+                                closeBankTransferLivePanel();
                                 setOrderStatusPreviewLoading(true);
                                 setOrderStatusPreviewPanelState({
                                   url: orderPreviewUrl,
@@ -4187,6 +4357,166 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             </>
           ) : null}
         </section>
+
+        {!bankTransferLivePanelOpen && !orderStatusPreviewPanelState ? (
+          <button
+            type="button"
+            onClick={openBankTransferLivePanel}
+            className="fixed right-0 top-1/2 z-30 -translate-y-1/2 rounded-l-[22px] border border-slate-800 bg-[linear-gradient(180deg,rgba(7,17,31,0.96),rgba(15,23,42,0.96))] px-3 py-4 text-left text-white shadow-[-18px_18px_42px_-26px_rgba(15,23,42,0.78)] transition hover:bg-[linear-gradient(180deg,rgba(8,25,42,0.98),rgba(15,23,42,0.98))]"
+          >
+            <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-sky-200">
+              Ably live
+            </div>
+            <div className="mt-1 text-sm font-semibold tracking-[-0.03em]">
+              통장입출금
+            </div>
+          </button>
+        ) : null}
+
+        {bankTransferLivePanelOpen ? (
+          <div className="fixed inset-0 z-40">
+            <button
+              type="button"
+              aria-label="통장입출금 live 패널 닫기"
+              onClick={closeBankTransferLivePanel}
+              className="absolute inset-0 bg-slate-950/28 backdrop-blur-[2px]"
+            />
+            <aside className="absolute inset-y-0 right-0 z-10 flex w-full justify-end">
+              <div className="flex h-full w-full max-w-[480px] flex-col border-l border-slate-800 bg-[linear-gradient(180deg,#07111f_0%,#0b1727_54%,#0f1f35_100%)] text-white shadow-[-28px_0_72px_rgba(15,23,42,0.42)]">
+                <div className="border-b border-slate-800 px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-sky-200">
+                        Bank transfer live
+                      </div>
+                      <h3 className="mt-1 text-lg font-semibold tracking-[-0.04em] text-white">
+                        통장입출금 콘솔 로그
+                      </h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                        <span className={`rounded-full border px-2.5 py-1 ${liveTransportBadgeClassName}`}>
+                          {liveTransportLabel}
+                        </span>
+                        <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1">
+                          {NUMBER_FORMATTER.format(visibleBankTransferLiveLogs.length)} logs
+                        </span>
+                        <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1">
+                          {filters.storecode || "all stores"}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeBankTransferLivePanel}
+                      className="rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
+                    >
+                      닫기
+                    </button>
+                  </div>
+
+                  <div className="mt-3 rounded-[18px] border border-slate-800 bg-slate-950/55 px-3.5 py-3 text-xs text-slate-300">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        {lastBankTransferEventAt
+                          ? `Last event ${formatDateTime(lastBankTransferEventAt)}`
+                          : "이 세션에서 수신한 통장 이벤트를 표시합니다."}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBankTransferLiveLogs([]);
+                          setLastBankTransferEventAt("");
+                        }}
+                        className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:bg-slate-800"
+                      >
+                        로그 비우기
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+                  {visibleBankTransferLiveLogs.length === 0 ? (
+                    <div className="flex h-full min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-800 bg-slate-950/35 px-6 text-center text-sm leading-7 text-slate-400">
+                      {filters.storecode
+                        ? `${filters.storecode} 기준으로 수신한 통장 입출금 Ably 이벤트가 없습니다.`
+                        : "아직 수신한 통장 입출금 Ably 이벤트가 없습니다."}
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {visibleBankTransferLiveLogs.map((item) => {
+                        const isWithdraw = item.transactionType === "withdrawn";
+                        const itemTimestamp = getBankTransferLiveLogTimestamp(item);
+                        const typeBadgeClassName = isWithdraw
+                          ? "border-amber-400/30 bg-amber-400/12 text-amber-200"
+                          : "border-emerald-400/30 bg-emerald-400/12 text-emerald-200";
+                        const amountTextClassName = isWithdraw ? "text-amber-300" : "text-emerald-300";
+
+                        return (
+                          <article
+                            key={item.id}
+                            className="rounded-[22px] border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.76),rgba(15,23,42,0.84))] px-3.5 py-3 shadow-[0_20px_38px_-28px_rgba(15,23,42,0.9)]"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                {formatDateTime(itemTimestamp)}
+                              </div>
+                              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${typeBadgeClassName}`}>
+                                {getBankTransferTypeLabel(item.transactionType)}
+                              </span>
+                            </div>
+
+                            <div className="mt-2 flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className={`text-lg font-semibold tracking-[-0.04em] ${amountTextClassName}`}>
+                                  {formatKrw(item.amount)}
+                                </div>
+                                <div className="mt-1 truncate text-xs text-slate-300">
+                                  {item.transactionName || "거래명 없음"}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                  Balance
+                                </div>
+                                <div className="mt-1 text-sm font-semibold text-white">
+                                  {item.balance === null ? "-" : formatKrw(item.balance)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 grid gap-1.5 text-[11px] text-slate-300">
+                              <div className="flex items-center gap-2">
+                                <span className="console-mono text-slate-500">acct</span>
+                                <span className="truncate">{item.bankAccountNumber || "-"}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="console-mono text-slate-500">store</span>
+                                <span className="truncate">{item.storeLabel || item.storecode || "-"}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="console-mono text-slate-500">match</span>
+                                <span className="truncate">{item.match || item.status || "-"}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="console-mono text-slate-500">ago</span>
+                                <span className="truncate">{formatTimeAgo(itemTimestamp)}</span>
+                              </div>
+                              {item.errorMessage ? (
+                                <div className="mt-1 rounded-[14px] border border-rose-400/25 bg-rose-400/10 px-2.5 py-2 text-rose-200">
+                                  {item.errorMessage}
+                                </div>
+                              ) : null}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </aside>
+          </div>
+        ) : null}
 
         {orderStatusPreviewPanelState ? (
           <div className="fixed inset-0 z-40">
