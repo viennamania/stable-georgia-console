@@ -4362,13 +4362,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           <button
             type="button"
             onClick={openBankTransferLivePanel}
-            className="fixed right-0 top-1/2 z-30 -translate-y-1/2 rounded-l-[22px] border border-slate-800 bg-[linear-gradient(180deg,rgba(7,17,31,0.96),rgba(15,23,42,0.96))] px-3 py-4 text-left text-white shadow-[-18px_18px_42px_-26px_rgba(15,23,42,0.78)] transition hover:bg-[linear-gradient(180deg,rgba(8,25,42,0.98),rgba(15,23,42,0.98))]"
+            className="fixed right-0 top-1/2 z-30 -translate-y-1/2 border border-r-0 border-emerald-400/30 bg-[linear-gradient(180deg,rgba(2,6,23,0.98),rgba(3,7,18,1))] px-3 py-4 text-left text-emerald-100 shadow-[-18px_18px_42px_-26px_rgba(0,0,0,0.92)] transition hover:border-emerald-300/45 hover:bg-[linear-gradient(180deg,rgba(3,10,26,1),rgba(2,6,23,1))]"
           >
-            <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-sky-200">
-              Ably live
+            <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-emerald-300">
+              tail -f
             </div>
-            <div className="mt-1 text-sm font-semibold tracking-[-0.03em]">
-              통장입출금
+            <div className="console-mono mt-1 text-sm font-semibold tracking-[-0.03em]">
+              banktransfer.log
             </div>
           </button>
         ) : null}
@@ -4379,27 +4379,32 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               type="button"
               aria-label="통장입출금 live 패널 닫기"
               onClick={closeBankTransferLivePanel}
-              className="absolute inset-0 bg-slate-950/28 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-black/46 backdrop-blur-[2px]"
             />
             <aside className="absolute inset-y-0 right-0 z-10 flex w-full justify-end">
-              <div className="flex h-full w-full max-w-[480px] flex-col border-l border-slate-800 bg-[linear-gradient(180deg,#07111f_0%,#0b1727_54%,#0f1f35_100%)] text-white shadow-[-28px_0_72px_rgba(15,23,42,0.42)]">
-                <div className="border-b border-slate-800 px-5 py-4">
+              <div className="flex h-full w-full max-w-[500px] flex-col border-l border-emerald-400/16 bg-[linear-gradient(180deg,rgba(2,6,23,0.995),rgba(0,0,0,0.99)),repeating-linear-gradient(180deg,rgba(16,185,129,0.03)_0px,rgba(16,185,129,0.03)_1px,transparent_1px,transparent_4px)] text-emerald-50 shadow-[-28px_0_72px_rgba(0,0,0,0.62)]">
+                <div className="border-b border-emerald-400/14 px-5 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-sky-200">
-                        Bank transfer live
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
                       </div>
-                      <h3 className="mt-1 text-lg font-semibold tracking-[-0.04em] text-white">
-                        통장입출금 콘솔 로그
+                      <div className="console-mono mt-3 text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
+                        bank transfer live
+                      </div>
+                      <h3 className="console-mono mt-1 text-[18px] font-semibold tracking-[-0.04em] text-emerald-50">
+                        ~/ops/ably/banktransfer.log
                       </h3>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
-                        <span className={`rounded-full border px-2.5 py-1 ${liveTransportBadgeClassName}`}>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 console-mono text-[11px] text-emerald-100/88">
+                        <span className={`rounded-md border px-2 py-1 ${liveTransportBadgeClassName}`}>
                           {liveTransportLabel}
                         </span>
-                        <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1">
+                        <span className="rounded-md border border-emerald-400/18 bg-emerald-400/6 px-2 py-1 text-emerald-200">
                           {NUMBER_FORMATTER.format(visibleBankTransferLiveLogs.length)} logs
                         </span>
-                        <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1">
+                        <span className="rounded-md border border-emerald-400/18 bg-emerald-400/6 px-2 py-1 text-emerald-200">
                           {filters.storecode || "all stores"}
                         </span>
                       </div>
@@ -4407,18 +4412,18 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     <button
                       type="button"
                       onClick={closeBankTransferLivePanel}
-                      className="rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
+                      className="console-mono rounded-md border border-emerald-400/24 bg-emerald-400/6 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-400/10"
                     >
-                      닫기
+                      exit
                     </button>
                   </div>
 
-                  <div className="mt-3 rounded-[18px] border border-slate-800 bg-slate-950/55 px-3.5 py-3 text-xs text-slate-300">
+                  <div className="mt-4 rounded-[10px] border border-emerald-400/14 bg-black/42 px-3.5 py-3 text-xs text-emerald-100/84">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span>
+                      <span className="console-mono">
                         {lastBankTransferEventAt
-                          ? `Last event ${formatDateTime(lastBankTransferEventAt)}`
-                          : "이 세션에서 수신한 통장 이벤트를 표시합니다."}
+                          ? `$ last_event --at "${formatDateTime(lastBankTransferEventAt)}"`
+                          : "$ waiting for incoming bank transfer events..."}
                       </span>
                       <button
                         type="button"
@@ -4426,9 +4431,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           setBankTransferLiveLogs([]);
                           setLastBankTransferEventAt("");
                         }}
-                        className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:bg-slate-800"
+                        className="console-mono rounded-md border border-emerald-400/24 bg-emerald-400/6 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-400/10"
                       >
-                        로그 비우기
+                        clear
                       </button>
                     </div>
                   </div>
@@ -4436,74 +4441,84 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
                   {visibleBankTransferLiveLogs.length === 0 ? (
-                    <div className="flex h-full min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-800 bg-slate-950/35 px-6 text-center text-sm leading-7 text-slate-400">
+                    <div className="console-mono flex h-full min-h-[260px] items-center justify-center rounded-[12px] border border-dashed border-emerald-400/14 bg-black/28 px-6 text-center text-sm leading-7 text-emerald-100/52">
                       {filters.storecode
-                        ? `${filters.storecode} 기준으로 수신한 통장 입출금 Ably 이벤트가 없습니다.`
-                        : "아직 수신한 통장 입출금 Ably 이벤트가 없습니다."}
+                        ? `no incoming bank transfer events for store "${filters.storecode}"`
+                        : "no incoming bank transfer events yet"}
                     </div>
                   ) : (
-                    <div className="space-y-2.5">
+                    <div className="space-y-2 console-mono">
                       {visibleBankTransferLiveLogs.map((item) => {
                         const isWithdraw = item.transactionType === "withdrawn";
                         const itemTimestamp = getBankTransferLiveLogTimestamp(item);
                         const typeBadgeClassName = isWithdraw
-                          ? "border-amber-400/30 bg-amber-400/12 text-amber-200"
-                          : "border-emerald-400/30 bg-emerald-400/12 text-emerald-200";
+                          ? "border-amber-400/28 bg-amber-400/10 text-amber-200"
+                          : "border-emerald-400/28 bg-emerald-400/10 text-emerald-200";
                         const amountTextClassName = isWithdraw ? "text-amber-300" : "text-emerald-300";
 
                         return (
                           <article
                             key={item.id}
-                            className="rounded-[22px] border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.76),rgba(15,23,42,0.84))] px-3.5 py-3 shadow-[0_20px_38px_-28px_rgba(15,23,42,0.9)]"
+                            className="rounded-[10px] border border-emerald-400/12 bg-[linear-gradient(180deg,rgba(1,4,14,0.96),rgba(3,7,18,0.92))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(16,185,129,0.04)]"
                           >
                             <div className="flex items-center justify-between gap-3">
-                              <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                                {formatDateTime(itemTimestamp)}
+                              <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-100/42">
+                                [{formatDateTime(itemTimestamp)}]
                               </div>
-                              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${typeBadgeClassName}`}>
+                              <span className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${typeBadgeClassName}`}>
                                 {getBankTransferTypeLabel(item.transactionType)}
                               </span>
                             </div>
 
-                            <div className="mt-2 flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className={`text-lg font-semibold tracking-[-0.04em] ${amountTextClassName}`}>
-                                  {formatKrw(item.amount)}
+                            <div className="mt-2 grid gap-2">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className={`text-[28px] font-semibold tracking-[-0.05em] ${amountTextClassName}`}>
+                                    {formatKrwValue(item.amount)}
+                                    <span className="ml-2 text-[14px] uppercase tracking-[0.14em] text-emerald-100/58">
+                                      krw
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 truncate text-[12px] text-emerald-100/74">
+                                    {item.transactionName || "transaction_name: -"}
+                                  </div>
                                 </div>
-                                <div className="mt-1 truncate text-xs text-slate-300">
-                                  {item.transactionName || "거래명 없음"}
+                                <div className="text-right">
+                                  <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-100/38">
+                                    balance
+                                  </div>
+                                  <div className="mt-1 text-[14px] font-semibold text-emerald-50">
+                                    {item.balance === null ? "-" : formatKrw(item.balance)}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="console-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                                  Balance
-                                </div>
-                                <div className="mt-1 text-sm font-semibold text-white">
-                                  {item.balance === null ? "-" : formatKrw(item.balance)}
-                                </div>
-                              </div>
-                            </div>
 
-                            <div className="mt-3 grid gap-1.5 text-[11px] text-slate-300">
-                              <div className="flex items-center gap-2">
-                                <span className="console-mono text-slate-500">acct</span>
-                                <span className="truncate">{item.bankAccountNumber || "-"}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="console-mono text-slate-500">store</span>
-                                <span className="truncate">{item.storeLabel || item.storecode || "-"}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="console-mono text-slate-500">match</span>
-                                <span className="truncate">{item.match || item.status || "-"}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="console-mono text-slate-500">ago</span>
-                                <span className="truncate">{formatTimeAgo(itemTimestamp)}</span>
+                              <div className="rounded-[8px] border border-emerald-400/10 bg-emerald-400/[0.03] px-2.5 py-2 text-[11px] text-emerald-100/72">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-emerald-400/72">&gt;</span>
+                                  <div className="min-w-0 flex-1 space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-emerald-100/42">acct</span>
+                                      <span className="truncate text-emerald-50">{item.bankAccountNumber || "-"}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-emerald-100/42">store</span>
+                                      <span className="truncate text-emerald-50">{item.storeLabel || item.storecode || "-"}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-emerald-100/42">match</span>
+                                      <span className="truncate text-emerald-50">{item.match || item.status || "-"}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-emerald-100/42">ago</span>
+                                      <span className="truncate text-emerald-50">{formatTimeAgo(itemTimestamp)}</span>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                               {item.errorMessage ? (
-                                <div className="mt-1 rounded-[14px] border border-rose-400/25 bg-rose-400/10 px-2.5 py-2 text-rose-200">
-                                  {item.errorMessage}
+                                <div className="rounded-[8px] border border-rose-400/24 bg-rose-400/10 px-2.5 py-2 text-[11px] text-rose-200">
+                                  [error] {item.errorMessage}
                                 </div>
                               ) : null}
                             </div>
