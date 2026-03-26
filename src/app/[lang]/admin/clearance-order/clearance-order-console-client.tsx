@@ -481,7 +481,7 @@ const SellerBankBalanceCard = ({
           잔고
         </span>
         <span
-          className="console-mono truncate text-right text-[13px] font-bold leading-none tracking-[-0.04em] text-emerald-700"
+          className="console-mono truncate text-right text-[15px] font-bold leading-none tracking-[-0.04em] text-emerald-700"
           style={{ fontFamily: "monospace" }}
           title={item.balance === null ? "잔고정보없음" : formatKrwValue(item.balance)}
         >

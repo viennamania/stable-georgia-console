@@ -503,14 +503,21 @@ const getBuyerBankInfo = (order: ClearanceOrder) => {
 
 const getBuyerBankSummary = (order: ClearanceOrder) => {
   const bankInfo = getBuyerBankInfo(order);
+  if (!bankInfo && !order.buyer?.depositBankName && !order.buyer?.depositBankAccountNumber) {
+    return {
+      primary: "계좌정보 없음",
+      secondary: shortAddress(order.buyer?.walletAddress || order.walletAddress),
+    };
+  }
+
   const accountNumber =
     order.buyer?.depositBankAccountNumber || bankInfo?.realAccountNumber || bankInfo?.accountNumber || "";
   const bankName = order.buyer?.depositBankName || bankInfo?.bankName || "";
   const accountHolder = order.buyer?.depositName || bankInfo?.accountHolder || "";
 
   return {
-    primary: accountHolder || "계좌정보 없음",
-    secondary: [bankName, normalizeAccountNumber(accountNumber)].filter(Boolean).join(" · ") || "계좌정보 없음",
+    primary: [bankName, accountHolder].filter(Boolean).join(" / ") || "계좌정보 없음",
+    secondary: normalizeAccountNumber(accountNumber) || shortAddress(order.buyer?.walletAddress || order.walletAddress),
   };
 };
 
