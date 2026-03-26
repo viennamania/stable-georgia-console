@@ -233,6 +233,10 @@ const createOrdersLoadSignature = (filters: FilterState, walletAddress?: string 
   ].join("|");
 };
 
+const getBscscanTxUrl = (txHash: string) => {
+  return `https://bscscan.com/tx/${txHash}`;
+};
+
 const buildPaginationItems = (
   currentPage: number,
   totalPages: number,
@@ -2126,10 +2130,11 @@ export default function ClearanceManagementConsoleClient({
                         <td className="border-b border-slate-100 px-3 py-3 align-top">
                           <div className="space-y-1 break-words">
                             <div className="break-words font-medium text-slate-950">{buyerLabel}</div>
-                            <div className="break-all text-[11px] text-slate-600">{buyerBankSummary.secondary}</div>
-                            <div className="break-words text-[11px] text-slate-500">{buyerBankSummary.primary}</div>
-                            <div className="console-mono break-all text-[11px] text-slate-500">
-                              {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
+                            <div className="break-words text-[12px] font-semibold text-slate-900">
+                              {buyerBankSummary.primary}
+                            </div>
+                            <div className="break-all text-[12px] font-medium text-slate-700">
+                              {buyerBankSummary.secondary}
                             </div>
                           </div>
                         </td>
@@ -2138,10 +2143,11 @@ export default function ClearanceManagementConsoleClient({
                             <div className="break-words font-medium text-slate-950">
                               {order.seller?.nickname || shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)}
                             </div>
-                            <div className="break-words text-[11px] text-slate-600">{sellerBankSummary.primary}</div>
-                            <div className="break-all text-[11px] text-slate-500">{sellerBankSummary.secondary}</div>
-                            <div className="console-mono break-all text-[11px] text-slate-500">
-                              {shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)}
+                            <div className="break-words text-[12px] font-semibold text-slate-900">
+                              {sellerBankSummary.primary}
+                            </div>
+                            <div className="break-all text-[12px] font-medium text-slate-700">
+                              {sellerBankSummary.secondary}
                             </div>
                           </div>
                         </td>
@@ -2215,7 +2221,14 @@ export default function ClearanceManagementConsoleClient({
                               <div className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                                 전송완료
                               </div>
-                              <div className="console-mono mt-1 break-all text-[11px] text-slate-500">{shortAddress(transactionHash)}</div>
+                              <a
+                                href={getBscscanTxUrl(transactionHash)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="console-mono mt-1 inline-flex break-all text-[11px] text-slate-500 underline decoration-dotted underline-offset-2 transition hover:text-sky-700"
+                              >
+                                {shortAddress(transactionHash)}
+                              </a>
                               <div className="mt-0.5 break-words text-[11px] text-slate-500">
                                 {formatDateTime(order.paymentConfirmedAt || order.updatedAt)}
                               </div>
