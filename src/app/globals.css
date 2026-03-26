@@ -82,6 +82,47 @@ a {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
+  .clearance-order-cta {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    transition:
+      transform 180ms ease,
+      box-shadow 220ms ease,
+      filter 220ms ease,
+      opacity 180ms ease;
+  }
+
+  .clearance-order-cta::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(108deg, transparent 12%, rgba(255, 255, 255, 0.38) 44%, transparent 76%);
+    transform: translateX(-135%);
+    opacity: 0;
+  }
+
+  .clearance-order-cta-ready {
+    animation: clearance-order-cta-glow 3.4s ease-in-out infinite;
+  }
+
+  .clearance-order-cta-ready::after {
+    opacity: 1;
+    animation: clearance-order-cta-sheen 3.8s ease-in-out infinite;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .clearance-order-cta:hover {
+      transform: translateY(-2px) scale(1.018);
+      filter: brightness(1.03);
+      box-shadow:
+        0 26px 48px -24px rgba(14, 165, 233, 0.34),
+        0 20px 40px -24px rgba(5, 150, 105, 0.34);
+    }
+  }
+
   .console-new-order-row > td {
     position: relative;
     animation: console-new-order-glow 6.5s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -323,6 +364,47 @@ a {
   100% {
     transform: translateY(0) scale(0.98);
     opacity: 0.9;
+  }
+}
+
+@keyframes clearance-order-cta-glow {
+  0% {
+    box-shadow:
+      0 18px 34px -20px rgba(5, 150, 105, 0.46),
+      0 8px 18px -14px rgba(14, 165, 233, 0.3);
+  }
+
+  38% {
+    box-shadow:
+      0 22px 44px -20px rgba(14, 165, 233, 0.42),
+      0 12px 24px -16px rgba(16, 185, 129, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.14) inset;
+  }
+
+  70% {
+    box-shadow:
+      0 24px 48px -20px rgba(16, 185, 129, 0.4),
+      0 14px 28px -18px rgba(14, 165, 233, 0.32);
+  }
+
+  100% {
+    box-shadow:
+      0 18px 34px -20px rgba(5, 150, 105, 0.46),
+      0 8px 18px -14px rgba(14, 165, 233, 0.3);
+  }
+}
+
+@keyframes clearance-order-cta-sheen {
+  0% {
+    transform: translateX(-135%);
+  }
+
+  18% {
+    transform: translateX(112%);
+  }
+
+  100% {
+    transform: translateX(112%);
   }
 }
 
@@ -597,6 +679,10 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .clearance-order-cta,
+  .clearance-order-cta::after,
+  .clearance-order-cta-ready,
+  .clearance-order-cta-ready::after,
   .console-new-order-row > td,
   .console-new-order-row > td::after,
   .console-new-order-badge,

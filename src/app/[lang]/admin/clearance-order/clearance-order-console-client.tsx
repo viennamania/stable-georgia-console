@@ -98,6 +98,30 @@ const SUMMARY_VALUE_ANIMATION_MS = 700;
 const EMPTY_STORES: StoreListItem[] = [];
 const EMPTY_SELLER_BALANCES: SellerBalanceItem[] = [];
 const EMPTY_SELLER_BANK_BALANCES: SellerBankBalanceSummary[] = [];
+const BANK_OPTION_TONE_STYLES = {
+  sky: {
+    selectedContainer:
+      "border-sky-300/90 bg-[linear-gradient(180deg,rgba(224,242,254,0.92),rgba(255,255,255,0.98))] shadow-[0_18px_32px_-24px_rgba(14,165,233,0.72)]",
+    idleContainer:
+      "border-slate-200/80 bg-white/90 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(240,249,255,0.92),rgba(255,255,255,0.98))]",
+    badgeSelected: "bg-sky-100 text-sky-700",
+    badgeIdle: "border border-sky-100 bg-white/85 text-sky-700",
+    dotSelected: "bg-sky-500",
+    dotIdle: "bg-sky-200",
+    label: "text-sky-700",
+  },
+  emerald: {
+    selectedContainer:
+      "border-emerald-300/90 bg-[linear-gradient(180deg,rgba(220,252,231,0.88),rgba(255,255,255,0.98))] shadow-[0_18px_32px_-24px_rgba(16,185,129,0.68)]",
+    idleContainer:
+      "border-slate-200/80 bg-white/90 hover:border-emerald-200 hover:bg-[linear-gradient(180deg,rgba(236,253,245,0.88),rgba(255,255,255,0.98))]",
+    badgeSelected: "bg-emerald-100 text-emerald-700",
+    badgeIdle: "border border-emerald-100 bg-white/85 text-emerald-700",
+    dotSelected: "bg-emerald-500",
+    dotIdle: "bg-emerald-200",
+    label: "text-emerald-700",
+  },
+} as const;
 
 const NUMBER_FORMATTER = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 0,
@@ -399,38 +423,51 @@ const BankOptionCard = ({
   bankInfo,
   selected,
   onClick,
+  tone,
 }: {
   bankInfo: BankInfo;
   selected: boolean;
   onClick: () => void;
+  tone: keyof typeof BANK_OPTION_TONE_STYLES;
 }) => {
+  const toneStyle = BANK_OPTION_TONE_STYLES[tone];
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-[22px] border px-4 py-3 text-left transition ${
+      className={`w-full rounded-[20px] border px-3.5 py-3 text-left transition ${
         selected
-          ? "border-sky-300 bg-sky-50 shadow-[0_16px_30px_-24px_rgba(14,165,233,0.9)]"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+          ? toneStyle.selectedContainer
+          : toneStyle.idleContainer
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-            {normalizeText(bankInfo.bankName) || "은행명 없음"}
+      <div className="flex items-start justify-between gap-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${
+                selected ? toneStyle.dotSelected : toneStyle.dotIdle
+              }`}
+              aria-hidden="true"
+            />
+            <div className="truncate text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
+              {(normalizeText(bankInfo.bankName) || "은행명 없음")
+                + " / "
+                + (normalizeText(bankInfo.accountHolder) || "예금주 없음")}
+            </div>
           </div>
-          <div className="mt-1 break-all text-sm font-semibold text-slate-950">
+          <div className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${toneStyle.label}`}>
+            Payment account
+          </div>
+          <div className="console-mono mt-1 truncate text-[12px] font-semibold tracking-[-0.04em] text-slate-600">
             {formatBankAccount(bankInfo)}
-          </div>
-          <div className="mt-1 text-sm text-slate-600">
-            {normalizeText(bankInfo.accountHolder) || "예금주 없음"}
           </div>
         </div>
         <span
-          className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
             selected
-              ? "bg-sky-100 text-sky-700"
-              : "border border-slate-200 bg-white text-slate-500"
+              ? toneStyle.badgeSelected
+              : toneStyle.badgeIdle
           }`}
         >
           {selected ? "Selected" : "Select"}
@@ -450,9 +487,12 @@ const SellerBankBalanceCard = ({
   });
 
   return (
-    <article className="rounded-[14px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,250,252,0.92))] px-2.5 py-2.5 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+    <article className="rounded-[16px] border border-emerald-100/90 bg-[linear-gradient(180deg,_rgba(244,253,249,0.98),_rgba(255,255,255,0.96))] px-2.5 py-2.5 shadow-[0_18px_36px_-30px_rgba(5,150,105,0.24)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
+          <div className="mb-1 inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+            Live
+          </div>
           <div className="flex min-w-0 items-center gap-1">
             <div className="truncate text-[10px] font-semibold tracking-[-0.02em] text-slate-950">
               {item.bankName}
@@ -1088,17 +1128,21 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   }, [activeAccount, buildClearanceOrderBody, canPreviewOrder, loadStoreContext]);
 
   return (
-    <div className="console-shell px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-[1520px] flex-col gap-5">
+    <div className="console-shell relative overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_28%),radial-gradient(circle_at_84%_12%,rgba(16,185,129,0.14),transparent_24%),linear-gradient(180deg,#f6f9fc_0%,#edf4fb_100%)] px-4 py-6 sm:px-6 lg:px-8">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_12%_8%,rgba(59,130,246,0.18),transparent_22%),radial-gradient(circle_at_72%_16%,rgba(245,158,11,0.12),transparent_16%),radial-gradient(circle_at_92%_20%,rgba(16,185,129,0.14),transparent_18%)]" />
+      <div className="relative mx-auto flex w-full max-w-[1520px] flex-col gap-5">
         <section className="console-hero overflow-hidden rounded-[34px] text-white">
           <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.9fr)_360px] lg:px-8 lg:py-8">
             <div className="space-y-5">
               <div className="console-mono flex flex-wrap items-center gap-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300">
-                <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1">
+                <span className="rounded-full border border-sky-200/20 bg-sky-300/10 px-3 py-1 text-sky-100">
                   Stable Georgia / Clearance Order Console
                 </span>
-                <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1">
+                <span className="rounded-full border border-emerald-200/20 bg-emerald-300/10 px-3 py-1 text-emerald-100">
                   Store scoped order workflow
+                </span>
+                <span className="rounded-full border border-amber-200/20 bg-amber-300/10 px-3 py-1 text-amber-100">
+                  Live balance sync
                 </span>
               </div>
 
@@ -1114,7 +1158,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
               </div>
             </div>
 
-            <div className="rounded-[30px] border border-white/10 bg-slate-950/66 p-5 text-white backdrop-blur">
+            <div className="console-dark-card relative overflow-hidden rounded-[30px] p-5 text-white backdrop-blur">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.22),transparent_58%)]" />
               <div className="space-y-2">
                 <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
                   Signed access
@@ -1151,7 +1196,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
         </section>
 
         <div className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start">
-          <aside className="console-panel sticky top-4 rounded-[30px] p-4">
+          <aside className="console-panel sticky top-4 rounded-[30px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.98),rgba(240,247,255,0.94))] p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
@@ -1229,8 +1274,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                     key={storecode}
                     className={`flex items-center gap-2 rounded-[22px] border px-3 py-3 transition ${
                       selected
-                        ? "border-slate-900 bg-slate-900 text-white shadow-[0_18px_34px_-24px_rgba(15,23,42,0.75)]"
-                        : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
+                        ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
+                        : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
                     }`}
                   >
                     <button
@@ -1242,7 +1287,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                         src={getStoreLogoSrc(store)}
                         alt={storeLabel}
                         className={`h-12 w-12 shrink-0 rounded-2xl border ${
-                          selected ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-50"
+                          selected ? "border-white/15 bg-white/10" : "border-sky-100 bg-sky-50/70"
                         }`}
                       />
                       <div className="min-w-0 flex-1">
@@ -1294,11 +1339,11 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
           </aside>
 
           <section className="flex min-h-[72vh] min-w-0 flex-col gap-5">
-            <section className="console-panel overflow-hidden rounded-[30px]">
-              <div className="border-b border-slate-200/80 px-5 py-4">
+            <section className="console-panel overflow-hidden rounded-[30px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(247,254,250,0.96),rgba(255,255,255,0.98))]">
+              <div className="border-b border-emerald-100/80 px-5 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-2.5">
                   <div>
-                    <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                    <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-emerald-700">
                       Buyer bank balance
                     </div>
                     <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
@@ -1312,10 +1357,10 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                         로딩중
                       </span>
                     ) : null}
-                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
+                    <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-emerald-700">
                       {NUMBER_FORMATTER.format(visibleSellerBankBalances.length)} 계좌
                     </span>
-                    <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
+                    <label className="flex items-center gap-2 rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-xs text-slate-600">
                       <span>날짜</span>
                       <input
                         type="date"
@@ -1332,7 +1377,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                         void loadSellerBankBalances();
                       }}
                       disabled={!activeAccount || sellerBankBalancesLoading}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       새로고침
                     </button>
@@ -1371,7 +1416,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
             </section>
 
             {!selectedStorecode ? (
-              <div className="console-panel flex min-h-[72vh] flex-col items-center justify-center rounded-[34px] px-6 py-10 text-center">
+              <div className="console-panel flex min-h-[72vh] flex-col items-center justify-center rounded-[34px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(244,250,255,0.98),rgba(255,255,255,0.96))] px-6 py-10 text-center">
                 <div className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
                   가맹점을 선택하세요
                 </div>
@@ -1400,12 +1445,12 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   </div>
                 ) : null}
 
-                <section className="grid gap-5 2xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-                  <div className="space-y-5">
-                    <article className="console-panel rounded-[30px] p-6">
+                <div className="space-y-4">
+                  <section className="grid gap-4 xl:grid-cols-2">
+                    <article className="console-panel rounded-[30px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(240,249,255,0.94),rgba(255,255,255,0.98))] p-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                          <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-sky-700">
                             Buyer bank
                           </div>
                           <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
@@ -1413,15 +1458,15 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                           </h2>
                         </div>
                         {storeContextLoading ? (
-                          <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                          <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700">
                             불러오는 중...
                           </span>
                         ) : null}
                       </div>
 
-                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                      <div className="mt-3 grid gap-2.5 lg:grid-cols-2">
                         {buyerBankOptions.length === 0 ? (
-                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                          <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
                             선택 가능한 구매자 계좌 정보가 없습니다.
                           </div>
                         ) : (
@@ -1431,22 +1476,25 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                               bankInfo={item}
                               selected={hasSameBankAccount(item, buyerBankInfo)}
                               onClick={() => setBuyerBankInfo(item)}
+                              tone="sky"
                             />
                           ))
                         )}
                       </div>
                     </article>
 
-                    <article className="console-panel rounded-[30px] p-6">
-                      <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                        Seller bank
+                    <article className="console-panel rounded-[30px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(236,253,245,0.92),rgba(255,255,255,0.98))] p-5">
+                      <div>
+                        <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-emerald-700">
+                          Seller bank
+                        </div>
+                        <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                          판매자 결제계좌
+                        </h2>
                       </div>
-                      <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
-                        판매자 결제계좌
-                      </h2>
-                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                      <div className="mt-3 grid gap-2.5 lg:grid-cols-2">
                         {sellerBankOptions.length === 0 ? (
-                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                          <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
                             선택 가능한 판매자 결제계좌가 없습니다.
                           </div>
                         ) : (
@@ -1456,118 +1504,122 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                               bankInfo={item}
                               selected={hasSameBankAccount(item, sellerBankInfo)}
                               onClick={() => setSellerBankInfo(item)}
+                              tone="emerald"
                             />
                           ))
                         )}
                       </div>
                     </article>
+                  </section>
 
-                  </div>
-
-                  <article className="console-panel rounded-[30px] p-6">
+                  <article className="console-panel rounded-[30px] border border-amber-100/90 bg-[linear-gradient(180deg,rgba(255,251,235,0.92),rgba(255,255,255,0.98))] p-5">
                     <div className="flex flex-wrap items-end justify-between gap-3">
                       <div>
-                        <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                        <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-amber-700">
                           Create order
                         </div>
                         <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
                           청산주문 생성
                         </h2>
                       </div>
-                      <div className="text-right text-lg font-semibold tracking-[-0.05em] text-slate-950">
+                      <div className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-right text-lg font-semibold tracking-[-0.05em] text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                         {rate > 0 ? `${formatKrwValue(rate)} KRW` : "Rate unavailable"}
                       </div>
                     </div>
 
-                    <div className="mt-5 grid gap-4">
-                      <label className="space-y-2 text-sm">
-                        <span className="font-medium text-slate-700">청산금액 (KRW)</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={krwAmountInput}
-                          onChange={(event) => {
-                            setKrwAmountInput(formatKrwInputValue(event.target.value));
-                          }}
-                          placeholder="예: 3,000,000"
-                          className="h-14 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-right text-[18px] font-semibold text-slate-950 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                        />
-                      </label>
+                    <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
+                      <div className="grid gap-3">
+                        <label className="space-y-2 text-sm">
+                          <span className="font-medium text-slate-700">청산금액 (KRW)</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={krwAmountInput}
+                            onChange={(event) => {
+                              setKrwAmountInput(formatKrwInputValue(event.target.value));
+                            }}
+                            placeholder="예: 3,000,000"
+                            className="h-12 w-full rounded-[18px] border border-amber-200/90 bg-white/90 px-4 text-right text-[17px] font-semibold text-slate-950 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
+                          />
+                        </label>
 
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-4">
-                          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                            Buyer account
+                        <div className="grid gap-2.5 sm:grid-cols-2">
+                          <div className="rounded-[20px] border border-sky-100 bg-[linear-gradient(180deg,rgba(240,249,255,0.92),rgba(255,255,255,0.98))] px-3.5 py-3">
+                            <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-sky-700">
+                              Buyer account
+                            </div>
+                            <div className="mt-1.5 text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
+                              {formatBankLabel(buyerBankInfo)}
+                            </div>
+                            <div className="console-mono mt-1 truncate text-[11px] font-semibold tracking-[-0.04em] text-slate-600">
+                              {formatBankAccount(buyerBankInfo)}
+                            </div>
                           </div>
-                          <div className="mt-2 text-sm font-semibold text-slate-950">
-                            {formatBankLabel(buyerBankInfo)}
-                          </div>
-                          <div className="mt-1 break-all text-[12px] text-slate-500">
-                            {formatBankAccount(buyerBankInfo)}
-                          </div>
-                        </div>
-                        <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-4">
-                          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                            Seller account
-                          </div>
-                          <div className="mt-2 text-sm font-semibold text-slate-950">
-                            {formatBankLabel(sellerBankInfo)}
-                          </div>
-                          <div className="mt-1 break-all text-[12px] text-slate-500">
-                            {formatBankAccount(sellerBankInfo)}
+                          <div className="rounded-[20px] border border-emerald-100 bg-[linear-gradient(180deg,rgba(236,253,245,0.9),rgba(255,255,255,0.98))] px-3.5 py-3">
+                            <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-emerald-700">
+                              Seller account
+                            </div>
+                            <div className="mt-1.5 text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
+                              {formatBankLabel(sellerBankInfo)}
+                            </div>
+                            <div className="console-mono mt-1 truncate text-[11px] font-semibold tracking-[-0.04em] text-slate-600">
+                              {formatBankAccount(sellerBankInfo)}
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4">
-                        <div className="flex flex-wrap items-end justify-between gap-4">
-                          <div>
-                            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                              Estimated
+                      <div className="grid gap-3">
+                        <div className="rounded-[22px] border border-slate-900/10 bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_60%,#0f766e_100%)] px-4 py-3.5 text-white shadow-[0_22px_48px_-26px_rgba(15,23,42,0.6)]">
+                          <div className="flex flex-wrap items-end justify-between gap-4">
+                            <div>
+                              <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-sky-100/85">
+                                Estimated
+                              </div>
+                              <div className="mt-2 text-[28px] font-semibold tracking-[-0.05em] text-white">
+                                {formatUsdtValue(requestedUsdtAmount)} USDT
+                              </div>
                             </div>
-                            <div className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                              {formatUsdtValue(requestedUsdtAmount)} USDT
+                            <div className="text-right text-[13px] text-sky-50/90">
+                              <div>{formatKrwValue(requestedKrwAmount)} KRW</div>
+                              <div className="mt-1">청산지갑 {shortAddress(clearanceWalletAddress)}</div>
                             </div>
                           </div>
-                          <div className="text-right text-sm text-slate-500">
-                            <div>{formatKrwValue(requestedKrwAmount)} KRW</div>
-                            <div className="mt-1">청산지갑 {shortAddress(clearanceWalletAddress)}</div>
+                        </div>
+
+                        {actionError ? (
+                          <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                            {actionError}
                           </div>
-                        </div>
-                      </div>
+                        ) : null}
 
-                      {actionError ? (
-                        <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                          {actionError}
-                        </div>
-                      ) : null}
+                        {actionSuccess ? (
+                          <div className="rounded-[22px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                            {actionSuccess}
+                          </div>
+                        ) : null}
 
-                      {actionSuccess ? (
-                        <div className="rounded-[22px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                          {actionSuccess}
+                        <div className="flex flex-wrap items-center justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleCreateOrder();
+                            }}
+                            disabled={!canPreviewOrder || submitLoading}
+                            className={`clearance-order-cta rounded-full px-6 py-3 text-[15px] font-semibold text-white ${
+                              !canPreviewOrder || submitLoading
+                                ? "cursor-not-allowed bg-slate-300"
+                                : "clearance-order-cta-ready bg-[linear-gradient(135deg,#059669_0%,#0f766e_52%,#0284c7_100%)] shadow-[0_18px_34px_-20px_rgba(5,150,105,0.6)]"
+                            }`}
+                          >
+                            {submitLoading ? "생성중..." : "청산주문 생성"}
+                          </button>
                         </div>
-                      ) : null}
-
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleCreateOrder();
-                          }}
-                          disabled={!canPreviewOrder || submitLoading}
-                          className={`rounded-full px-5 py-3 text-sm font-semibold text-white transition ${
-                            !canPreviewOrder || submitLoading
-                              ? "cursor-not-allowed bg-slate-300"
-                              : "bg-emerald-600 hover:bg-emerald-700"
-                          }`}
-                        >
-                          {submitLoading ? "생성중..." : "청산주문 생성"}
-                        </button>
                       </div>
                     </div>
 
                   </article>
-                </section>
+                </div>
 
                 <ClearanceManagementConsoleClient
                   key={`${selectedStorecode}-${embeddedRefreshKey}`}
