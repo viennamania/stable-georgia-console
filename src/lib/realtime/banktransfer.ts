@@ -8,6 +8,7 @@ export type BankTransferDashboardEvent = {
   traceId?: string | null;
   transactionType?: string | null;
   amount?: number;
+  balance?: number | null;
   transactionName?: string | null;
   bankAccountNumber?: string | null;
   transactionDate?: string | null;

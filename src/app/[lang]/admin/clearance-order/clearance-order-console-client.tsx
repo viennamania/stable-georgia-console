@@ -1,5 +1,6 @@
 "use client";
 
+import * as Ably from "ably";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConnectButton, useActiveAccount } from "thirdweb/react";
@@ -8,6 +9,11 @@ import { createWallet, inAppWallet } from "thirdweb/wallets";
 import ClearanceManagementConsoleClient from "@/app/[lang]/admin/clearance-management/clearance-management-console-client";
 import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
+import {
+  BANKTRANSFER_ABLY_CHANNEL,
+  BANKTRANSFER_ABLY_EVENT_NAME,
+  type BankTransferDashboardEvent,
+} from "@/lib/realtime/banktransfer";
 import { thirdwebClient } from "@/lib/thirdweb-client";
 
 type BankInfo = {
@@ -521,10 +527,13 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [actionSuccess, setActionSuccess] = useState("");
   const [embeddedRefreshKey, setEmbeddedRefreshKey] = useState(0);
   const [buyerBankBalanceDate, setBuyerBankBalanceDate] = useState(createInputDate(0));
+  const buyerBankBalanceAblyClientIdRef = useRef(`console-clearance-order-${Math.random().toString(36).slice(2, 10)}`);
+  const lastBuyerBankBalanceEventIdRef = useRef("");
   const visibleSellerBankBalances = useMemo(
     () => sellerBankBalances.filter((item) => Number(item.balance || 0) > 0),
     [sellerBankBalances],
   );
+  const isTodayBuyerBankBalanceDate = buyerBankBalanceDate === createInputDate(0);
 
   const fetchStores = useCallback(async () => {
     setStoresLoading(true);
@@ -753,6 +762,68 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
 
     return () => clearInterval(interval);
   }, [activeAccount, loadSellerBankBalances]);
+
+  const applyRealtimeSellerBankBalance = useCallback((event: BankTransferDashboardEvent) => {
+    const normalizedAccountNumber = normalizeAccountNumber(event.bankAccountNumber);
+    const nextBalance = Number(event.balance);
+
+    if (!normalizedAccountNumber || !Number.isFinite(nextBalance)) {
+      return;
+    }
+
+    setSellerBankBalances((current) => {
+      let changed = false;
+
+      const next = current.map((item) => {
+        if (normalizeAccountNumber(item.accountNumber) !== normalizedAccountNumber) {
+          return item;
+        }
+
+        if (item.balance === nextBalance) {
+          return item;
+        }
+
+        changed = true;
+        return {
+          ...item,
+          balance: nextBalance,
+        };
+      });
+
+      return changed ? next : current;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!activeAccount || !isTodayBuyerBankBalanceDate) {
+      return;
+    }
+
+    const realtime = new Ably.Realtime({
+      authUrl: `/api/bff/realtime/ably-token?stream=ops-admin&clientId=${buyerBankBalanceAblyClientIdRef.current}`,
+    });
+    const channel = realtime.channels.get(BANKTRANSFER_ABLY_CHANNEL);
+
+    const onMessage = (message: Ably.Message) => {
+      const event = (message.data || {}) as BankTransferDashboardEvent;
+      const eventId = String(event.eventId || message.id || "").trim();
+      if (eventId && lastBuyerBankBalanceEventIdRef.current === eventId) {
+        return;
+      }
+      if (eventId) {
+        lastBuyerBankBalanceEventIdRef.current = eventId;
+      }
+
+      applyRealtimeSellerBankBalance(event);
+    };
+
+    void channel.subscribe(BANKTRANSFER_ABLY_EVENT_NAME, onMessage);
+
+    return () => {
+      channel.unsubscribe(BANKTRANSFER_ABLY_EVENT_NAME, onMessage);
+      realtime.close();
+    };
+  }, [activeAccount, applyRealtimeSellerBankBalance, isTodayBuyerBankBalanceDate]);
 
   const moveStoreOrder = useCallback(async (storecode: string, offset: -1 | 1) => {
     if (updatingOrderStorecode || searchKeyword.trim()) {
