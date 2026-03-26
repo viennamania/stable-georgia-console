@@ -2053,12 +2053,12 @@ export default function ClearanceManagementConsoleClient({
             <table className="w-full table-fixed border-separate border-spacing-0">
               <thead>
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                  <th className="w-[19%] border-b border-slate-200 px-3 py-2.5">Trade / Created</th>
+                  <th className="w-[21%] border-b border-slate-200 px-3 py-2.5">Trade / Created</th>
                   <th className="w-[10%] border-b border-slate-200 px-3 py-2.5">Status</th>
                   <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">Buyer</th>
-                  <th className="w-[17%] border-b border-slate-200 px-3 py-2.5">Seller / 입금계좌</th>
+                  <th className="w-[16%] border-b border-slate-200 px-3 py-2.5">Seller / 입금계좌</th>
                   <th className="w-[12%] border-b border-slate-200 px-3 py-2.5 text-right">Amount</th>
-                  <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">출금상태</th>
+                  <th className="w-[14%] border-b border-slate-200 px-3 py-2.5">출금상태</th>
                   <th className="w-[12%] border-b border-slate-200 px-3 py-2.5">USDT 전송</th>
                 </tr>
               </thead>
@@ -2128,25 +2128,25 @@ export default function ClearanceManagementConsoleClient({
                           </span>
                         </td>
                         <td className="border-b border-slate-100 px-3 py-3 align-top">
-                          <div className="space-y-1 break-words">
+                          <div className="space-y-1.5 break-words">
                             <div className="break-words font-medium text-slate-950">{buyerLabel}</div>
-                            <div className="break-words text-[12px] font-semibold text-slate-900">
+                            <div className="break-words text-[13px] font-bold leading-snug text-slate-950">
                               {buyerBankSummary.primary}
                             </div>
-                            <div className="break-all text-[12px] font-medium text-slate-700">
+                            <div className="break-all text-[13px] font-semibold leading-snug text-slate-800">
                               {buyerBankSummary.secondary}
                             </div>
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-3 py-3 align-top">
-                          <div className="space-y-1 break-words">
+                          <div className="space-y-1.5 break-words">
                             <div className="break-words font-medium text-slate-950">
                               {order.seller?.nickname || shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)}
                             </div>
-                            <div className="break-words text-[12px] font-semibold text-slate-900">
+                            <div className="break-words text-[13px] font-bold leading-snug text-slate-950">
                               {sellerBankSummary.primary}
                             </div>
-                            <div className="break-all text-[12px] font-medium text-slate-700">
+                            <div className="break-all text-[13px] font-semibold leading-snug text-slate-800">
                               {sellerBankSummary.secondary}
                             </div>
                           </div>
