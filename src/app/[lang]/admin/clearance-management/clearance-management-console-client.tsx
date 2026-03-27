@@ -798,11 +798,16 @@ export default function ClearanceManagementConsoleClient({
     async (options?: { sinceCursor?: string | null; highlightNew?: boolean }) => {
       const params = new URLSearchParams({
         limit: String(WITHDRAWAL_RESYNC_LIMIT),
+        transactionType: "withdrawn",
+        sort: "asc",
       });
 
       const nextCursor = options?.sinceCursor ?? withdrawalRealtimeCursorRef.current;
       if (nextCursor) {
         params.set("since", nextCursor);
+      }
+      if (isStoreScoped && normalizedForcedStorecode) {
+        params.set("storecode", normalizedForcedStorecode);
       }
 
       try {
@@ -817,9 +822,7 @@ export default function ClearanceManagementConsoleClient({
 
         const payload = await response.json().catch(() => ({}));
         const incomingEvents = Array.isArray(payload?.events)
-          ? (payload.events as BankTransferDashboardEvent[]).filter((event) => {
-            return normalizeBankTransferTransactionType(event?.transactionType) === "withdrawn";
-          })
+          ? (payload.events as BankTransferDashboardEvent[])
           : [];
 
         upsertWithdrawalRealtimeEvents(incomingEvents, {
@@ -837,7 +840,7 @@ export default function ClearanceManagementConsoleClient({
         );
       }
     },
-    [upsertWithdrawalRealtimeEvents],
+    [isStoreScoped, normalizedForcedStorecode, upsertWithdrawalRealtimeEvents],
   );
 
   const loadDashboard = useCallback(

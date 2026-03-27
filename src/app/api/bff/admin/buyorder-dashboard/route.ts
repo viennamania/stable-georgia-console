@@ -86,9 +86,14 @@ export async function POST(request: NextRequest) {
       toDate: unmatchedToDate,
       storecode: unmatchedStorecode,
     }),
-    getRemoteJson("/api/realtime/banktransfer/summary", {
-      public: "1",
-    }),
+    getRemoteJson("/api/realtime/banktransfer/summary", selectedStorecode
+      ? {
+          public: "1",
+          storecode: selectedStorecode,
+        }
+      : {
+          public: "1",
+        }),
   ];
 
   if (selectedStorecode) {
@@ -153,13 +158,13 @@ export async function POST(request: NextRequest) {
         ? signedOrdersResult.totalBySellerBankAccountNumber
         : [],
       banktransferTodaySummary: {
-        dateKst: String(banktransferSummaryResponse.json?.summary?.dateKst || ""),
-        depositedAmount: Number(banktransferSummaryResponse.json?.summary?.depositedAmount || 0),
-        withdrawnAmount: Number(banktransferSummaryResponse.json?.summary?.withdrawnAmount || 0),
-        depositedCount: Number(banktransferSummaryResponse.json?.summary?.depositedCount || 0),
-        withdrawnCount: Number(banktransferSummaryResponse.json?.summary?.withdrawnCount || 0),
-        totalCount: Number(banktransferSummaryResponse.json?.summary?.totalCount || 0),
-        updatedAt: String(banktransferSummaryResponse.json?.summary?.updatedAt || ""),
+        dateKst: String(banktransferSummaryResponse?.json?.summary?.dateKst || ""),
+        depositedAmount: Number(banktransferSummaryResponse?.json?.summary?.depositedAmount || 0),
+        withdrawnAmount: Number(banktransferSummaryResponse?.json?.summary?.withdrawnAmount || 0),
+        depositedCount: Number(banktransferSummaryResponse?.json?.summary?.depositedCount || 0),
+        withdrawnCount: Number(banktransferSummaryResponse?.json?.summary?.withdrawnCount || 0),
+        totalCount: Number(banktransferSummaryResponse?.json?.summary?.totalCount || 0),
+        updatedAt: String(banktransferSummaryResponse?.json?.summary?.updatedAt || ""),
       },
       orders: signedOrdersResponse?.json?.result?.orders || [],
       orderTotalCount: signedOrdersResponse?.json?.result?.totalCount || 0,

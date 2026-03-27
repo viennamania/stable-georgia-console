@@ -11,12 +11,24 @@ export async function GET(request: NextRequest) {
 
   const since = request.nextUrl.searchParams.get("since")?.trim();
   const limit = request.nextUrl.searchParams.get("limit")?.trim();
+  const transactionType = request.nextUrl.searchParams.get("transactionType")?.trim();
+  const storecode = request.nextUrl.searchParams.get("storecode")?.trim();
+  const sort = request.nextUrl.searchParams.get("sort")?.trim();
 
   if (since) {
     query.set("since", since);
   }
   if (limit) {
     query.set("limit", limit);
+  }
+  if (transactionType) {
+    query.set("transactionType", transactionType);
+  }
+  if (storecode) {
+    query.set("storecode", storecode);
+  }
+  if (sort) {
+    query.set("sort", sort);
   }
 
   const result = await getRemoteJson("/api/realtime/banktransfer/events", query);

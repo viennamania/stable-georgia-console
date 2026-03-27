@@ -30,34 +30,6 @@ const asPlainObject = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
-const normalizeBankTransferTransactionType = (value: unknown) => {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "withdrawn" || normalized === "withdrawal" || normalized === "출금") {
-    return "withdrawn";
-  }
-  if (normalized === "deposited" || normalized === "deposit" || normalized === "입금") {
-    return "deposited";
-  }
-  return normalized;
-};
-
-const getBankTransferEventTimestamp = (event: any) => {
-  const candidates = [
-    event?.processingDate,
-    event?.transactionDate,
-    event?.publishedAt,
-  ];
-
-  for (const value of candidates) {
-    const timestamp = Date.parse(String(value || "").trim());
-    if (!Number.isNaN(timestamp)) {
-      return timestamp;
-    }
-  }
-
-  return 0;
-};
-
 const resolveRemoteError = (payload: any, fallback: string) => {
   return normalizeString(payload?.error)
     || normalizeString(payload?.message)
@@ -80,7 +52,6 @@ export async function POST(request: NextRequest) {
   const storesLimit = Math.min(parsePositiveInt(body.storesLimit, 200), 300);
   const storesPage = Math.max(parsePositiveInt(body.storesPage, 1), 1);
   const withdrawalLimit = Math.min(parsePositiveInt(body.withdrawalLimit, 24), 80);
-  const withdrawalSnapshotFetchLimit = Math.max(withdrawalLimit * 4, 96);
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
 
   const hasSignedStoreBody = Object.keys(signedStoreBody).length > 0;
@@ -97,7 +68,10 @@ export async function POST(request: NextRequest) {
     ),
     getRemoteJson("/api/realtime/banktransfer/events", {
       public: "1",
-      limit: String(withdrawalSnapshotFetchLimit),
+      limit: String(withdrawalLimit),
+      transactionType: "withdrawn",
+      sort: "asc",
+      ...(selectedStorecode ? { storecode: selectedStorecode } : {}),
     }),
   ];
 
@@ -131,11 +105,6 @@ export async function POST(request: NextRequest) {
 
   const withdrawalEvents = Array.isArray(withdrawalEventsResponse.json?.events)
     ? withdrawalEventsResponse.json.events
-      .filter((event: any) => {
-        return normalizeBankTransferTransactionType(event?.transactionType) === "withdrawn";
-      })
-      .sort((left: any, right: any) => getBankTransferEventTimestamp(right) - getBankTransferEventTimestamp(left))
-      .slice(0, withdrawalLimit)
     : [];
 
   return NextResponse.json({
