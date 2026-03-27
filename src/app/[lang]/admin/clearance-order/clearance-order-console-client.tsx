@@ -1128,7 +1128,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   }, [activeAccount, buildClearanceOrderBody, canPreviewOrder, loadStoreContext]);
 
   return (
-    <div className="console-shell relative overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_28%),radial-gradient(circle_at_84%_12%,rgba(16,185,129,0.14),transparent_24%),linear-gradient(180deg,#f6f9fc_0%,#edf4fb_100%)] px-4 py-6 sm:px-6 lg:px-8">
+    <div className="console-shell relative overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_28%),radial-gradient(circle_at_84%_12%,rgba(16,185,129,0.14),transparent_24%),linear-gradient(180deg,#f6f9fc_0%,#edf4fb_100%)] px-4 py-6 sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_12%_8%,rgba(59,130,246,0.18),transparent_22%),radial-gradient(circle_at_72%_16%,rgba(245,158,11,0.12),transparent_16%),radial-gradient(circle_at_92%_20%,rgba(16,185,129,0.14),transparent_18%)]" />
       <div className="relative mx-auto flex w-full max-w-[1520px] flex-col gap-5">
         <section className="console-hero overflow-hidden rounded-[34px] text-white">
@@ -1196,7 +1196,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
         </section>
 
         <div className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start">
-          <aside className="console-panel sticky top-4 rounded-[30px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.98),rgba(240,247,255,0.94))] p-4">
+          <aside className="console-panel rounded-[30px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.98),rgba(240,247,255,0.94))] p-4 xl:sticky xl:top-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
