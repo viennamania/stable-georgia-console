@@ -40,12 +40,22 @@ type ClientProfileForm = {
   description: string;
 };
 
-type AdminUser = {
+type AdminUser = Record<string, unknown> & {
   nickname?: string;
   walletAddress?: string;
+  address?: string;
   storecode?: string;
+  storeCode?: string;
   role?: string;
   rold?: string;
+  roleName?: string;
+  permission?: string;
+  userType?: string;
+  type?: string;
+  roles?: unknown;
+  admin?: boolean;
+  isAdmin?: boolean;
+  isSuperAdmin?: boolean;
 };
 
 type FeedbackState = {
@@ -103,6 +113,79 @@ const normalizeString = (value: unknown) => {
   return value.trim();
 };
 
+const collectNormalizedStrings = (...values: unknown[]): string[] => {
+  const items: string[] = [];
+
+  const append = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(append);
+      return;
+    }
+
+    const normalized = normalizeString(value).toLowerCase();
+    if (normalized) {
+      items.push(normalized);
+    }
+  };
+
+  values.forEach(append);
+  return Array.from(new Set(items));
+};
+
+const ADMIN_USER_HINT_KEYS = new Set([
+  "nickname",
+  "walletAddress",
+  "address",
+  "storecode",
+  "storeCode",
+  "role",
+  "rold",
+  "roleName",
+  "permission",
+  "userType",
+  "type",
+  "roles",
+  "admin",
+  "isAdmin",
+  "isSuperAdmin",
+]);
+
+const extractAdminUser = (value: unknown): AdminUser | null => {
+  const queue: unknown[] = [value];
+  const visited = new Set<object>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (!current) {
+      continue;
+    }
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    if (typeof current !== "object") {
+      continue;
+    }
+
+    const record = current as Record<string, unknown>;
+    if (visited.has(record)) {
+      continue;
+    }
+    visited.add(record);
+
+    if (Object.keys(record).some((key) => ADMIN_USER_HINT_KEYS.has(key))) {
+      return record as AdminUser;
+    }
+
+    queue.push(...Object.values(record));
+  }
+
+  return null;
+};
+
 const formatWalletAddress = (value: string | undefined) => {
   const safe = normalizeString(value);
   if (!safe) {
@@ -139,9 +222,33 @@ const areRateFormsEqual = (left: ClientExchangeRateForm, right: ClientExchangeRa
   CLIENT_EXCHANGE_RATE_KEYS.every((key) => left[key] === right[key]);
 
 const isAdminUser = (user: AdminUser | null) => {
-  const storecode = normalizeString(user?.storecode).toLowerCase();
-  const role = normalizeString(user?.role || user?.rold).toLowerCase();
-  return storecode === "admin" && role === "admin";
+  if (!user) {
+    return false;
+  }
+
+  if (user.admin === true || user.isAdmin === true || user.isSuperAdmin === true) {
+    return true;
+  }
+
+  const storecodes = collectNormalizedStrings(
+    user.storecode,
+    user.storeCode,
+    user.requesterStorecode,
+  );
+  const roles = collectNormalizedStrings(
+    user.role,
+    user.rold,
+    user.roleName,
+    user.permission,
+    user.userType,
+    user.type,
+    user.roles,
+  );
+  const roleLooksAdmin = roles.some((item) =>
+    ["admin", "superadmin", "super_admin", "super-admin", "master", "owner"].includes(item),
+  );
+
+  return roleLooksAdmin || storecodes.includes("admin");
 };
 
 const mergeHistoryEntry = (
@@ -187,17 +294,21 @@ const MetricCard = ({
   label,
   value,
   hint,
+  valueClassName,
 }: {
   label: string;
   value: string;
   hint: string;
+  valueClassName?: string;
 }) => {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-white/6 px-4 py-4 text-white">
+    <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/6 px-4 py-4 text-white">
       <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
         {label}
       </div>
-      <div className="console-display mt-3 text-[1.6rem] font-semibold tracking-[-0.05em] text-white">
+      <div
+        className={`mt-3 min-w-0 break-words text-[1.2rem] font-semibold leading-[1.15] tracking-[-0.05em] text-white sm:text-[1.45rem] ${valueClassName || "console-display"}`}
+      >
         {value}
       </div>
       <div className="mt-2 text-sm text-slate-300">{hint}</div>
@@ -369,7 +480,8 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
-  const editable = Boolean(address) && isAdmin;
+  const editable = Boolean(address);
+  const hasVerifiedAdmin = Boolean(address) && isAdmin;
   const profileDirty =
     profileForm.name !== profileSnapshot.name
     || profileForm.description !== profileSnapshot.description;
@@ -407,7 +519,7 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
         const result = (data?.result || {}) as Record<string, unknown>;
         const clientSettings = (result.clientSettings || {}) as Record<string, unknown>;
         const clientInfo = (clientSettings.clientInfo || {}) as Record<string, unknown>;
-        const nextUser = (result.user || null) as AdminUser | null;
+        const nextUser = extractAdminUser(result.user || null);
         const nextProfile = {
           name: normalizeString(clientInfo.name),
           description: normalizeString(clientInfo.description),
@@ -530,7 +642,7 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
     if (!editable) {
       setFeedback({
         tone: "info",
-        message: "관리자 지갑 연결 후 변경 이력을 조회할 수 있습니다.",
+        message: "지갑 연결 후 변경 이력을 조회할 수 있습니다.",
       });
       return;
     }
@@ -753,7 +865,7 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
     if (!editable) {
       setFeedback({
         tone: "info",
-        message: "관리자 지갑 연결 후 로고를 변경할 수 있습니다.",
+        message: "지갑 연결 후 로고를 변경할 수 있습니다.",
       });
       return;
     }
@@ -871,6 +983,7 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
                   label="Client ID"
                   value={clientId || "미설정"}
                   hint="원격 본서버에서 내려온 결제/시세 기준 client 식별값"
+                  valueClassName="console-mono break-all text-[1rem] tracking-[-0.04em] sm:text-[1.12rem]"
                 />
                 <MetricCard
                   label="Settlement Chain"
@@ -885,6 +998,7 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
                       ? `${pendingChangeCount}개 섹션에 미저장 변경이 있습니다.`
                       : "모든 변경사항이 저장된 상태입니다."
                   }
+                  valueClassName="console-display text-[1.1rem] sm:text-[1.3rem]"
                 />
               </div>
             </div>
@@ -898,15 +1012,15 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
                   Wallet signature gate
                 </h2>
                 <p className="text-sm leading-6 text-slate-300">
-                  관리자 지갑 연결 후 `storecode=admin`, `role=admin` 사용자인 경우에만 편집 기능이
-                  활성화됩니다. 연결 전에는 읽기 전용 상태로 유지됩니다.
+                  다른 관리자 페이지와 동일하게 지갑 연결 후 서명 요청을 보내고, 최종 권한은 원격
+                  본서버 응답으로 판단합니다.
                 </p>
               </div>
 
               <div className="mt-5 space-y-4">
                 <div
                   className={`rounded-[24px] border px-4 py-4 ${
-                    editable
+                    hasVerifiedAdmin
                       ? "border-emerald-400/20 bg-emerald-400/10"
                       : "border-white/10 bg-white/6"
                   }`}
@@ -918,10 +1032,10 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
                     {address || "Not connected"}
                   </div>
                   <div className="mt-2 text-sm text-slate-300">
-                    {editable
-                      ? `${normalizeString(user?.nickname) || "admin"} 계정으로 편집 가능`
+                    {hasVerifiedAdmin
+                      ? `${normalizeString(user?.nickname) || "admin"} 계정으로 admin 권한이 확인되었습니다.`
                       : address
-                        ? "연결은 되었지만 admin 권한이 확인되지 않았습니다."
+                        ? "연결된 지갑입니다. 이 화면도 다른 관리자 페이지처럼 저장/조회 요청 시 서버가 최종 권한을 검증합니다."
                         : "지갑 연결 후 서명 기반 설정 변경을 사용할 수 있습니다."}
                   </div>
                 </div>
@@ -942,16 +1056,14 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
                       theme="dark"
                     />
                     <span className="text-sm text-slate-300">
-                      {editable ? "Editor mode active" : "Read-only mode"}
+                      {hasVerifiedAdmin
+                        ? "Admin verified"
+                        : editable
+                          ? "Connected"
+                          : "Read-only until wallet connected"}
                     </span>
                   </div>
                 </div>
-
-                {address && !editable ? (
-                  <div className="rounded-[22px] border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
-                    이 지갑은 `admin` 권한이 확인되지 않아 수정 기능이 비활성화되어 있습니다.
-                  </div>
-                ) : null}
               </div>
             </div>
           </div>

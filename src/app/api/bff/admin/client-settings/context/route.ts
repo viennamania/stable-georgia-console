@@ -23,6 +23,18 @@ const resolveRemoteError = (payload: unknown, fallback: string) => {
     || fallback;
 };
 
+const hasMeaningfulResult = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (value && typeof value === "object") {
+    return Object.keys(value as Record<string, unknown>).length > 0;
+  }
+
+  return Boolean(value);
+};
+
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown> = {};
 
@@ -33,21 +45,27 @@ export async function POST(request: NextRequest) {
   }
 
   const walletAddress = normalizeString(body.walletAddress).toLowerCase();
+  const emptyUserResponse = {
+    ok: true,
+    status: 200,
+    json: {
+      result: null,
+    },
+  };
 
-  const [clientInfoResponse, userResponse] = await Promise.all([
+  const [clientInfoResponse, adminScopedUserResponse, walletOnlyUserResponse] = await Promise.all([
     postRemoteJson("/api/client/getClientInfo", {}),
     walletAddress
       ? postRemoteJson("/api/user/getUser", {
           storecode: "admin",
           walletAddress,
         })
-      : Promise.resolve({
-          ok: true,
-          status: 200,
-          json: {
-            result: null,
-          },
-        }),
+      : Promise.resolve(emptyUserResponse),
+    walletAddress
+      ? postRemoteJson("/api/user/getUser", {
+          walletAddress,
+        })
+      : Promise.resolve(emptyUserResponse),
   ]);
 
   if (!clientInfoResponse.ok) {
@@ -59,10 +77,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const adminScopedUser = adminScopedUserResponse.json?.result || null;
+  const walletOnlyUser = walletOnlyUserResponse.json?.result || null;
+  const resolvedUser = hasMeaningfulResult(adminScopedUser)
+    ? adminScopedUser
+    : hasMeaningfulResult(walletOnlyUser)
+      ? walletOnlyUser
+      : null;
+
   return NextResponse.json({
     result: {
       clientSettings: clientInfoResponse.json?.result || null,
-      user: userResponse.ok ? userResponse.json?.result || null : null,
+      user: resolvedUser,
     },
   });
 }
