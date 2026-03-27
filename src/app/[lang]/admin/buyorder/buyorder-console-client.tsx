@@ -3856,9 +3856,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
                     const buyerLabel = getBuyerLabel(order);
                     const buyerDepositName = getBuyerDepositName(order);
-                    const shouldShowBuyerDepositName = Boolean(
-                      buyerDepositName && buyerDepositName !== buyerLabel,
-                    );
+                    const buyerDisplayName = buyerDepositName || buyerLabel;
+                    const buyerIdentifier = buyerLabel !== buyerDisplayName
+                      ? buyerLabel
+                      : "";
                     const buyerGradeMeta = getBuyerGradeMeta(order);
                     const canCompleteOrder = isSignedIn && status === "paymentRequested";
                     const isConfirmingThisOrder = Boolean(confirmingTradeId && rowMatchKey === confirmingTradeId);
@@ -4023,13 +4024,13 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                                 >
                                   {buyerGradeMeta.label}
                                 </span>
-                                <div className="truncate text-[15px] font-semibold text-slate-950">
-                                  {buyerLabel}
+                                <div className="min-w-0 break-words text-[16px] font-semibold leading-tight text-slate-950">
+                                  {buyerDisplayName}
                                 </div>
                               </div>
-                              {shouldShowBuyerDepositName ? (
+                              {buyerIdentifier ? (
                                 <div className="mt-1 truncate text-sm font-medium text-slate-600">
-                                  {buyerDepositName}
+                                  {buyerIdentifier}
                                 </div>
                               ) : null}
                               <div className="console-mono mt-1 text-xs text-slate-500">
