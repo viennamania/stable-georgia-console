@@ -1401,8 +1401,11 @@ export default function ClearanceManagementConsoleClient({
 
     const targetOrder = actionModalState.order;
     const orderId = String(targetOrder._id || "").trim();
+    const actionStorecode = normalizeText(
+      targetOrder.storecode || targetOrder.store?.storecode || normalizedForcedStorecode || filters.storecode,
+    );
 
-    if (!orderId) {
+    if (!orderId || !actionStorecode) {
       setActionModalError("주문 식별 정보가 부족합니다.");
       return;
     }
@@ -1419,9 +1422,11 @@ export default function ClearanceManagementConsoleClient({
       actionModalState.mode === "complete"
         ? {
             orderId,
+            storecode: actionStorecode,
           }
         : {
             orderId,
+            storecode: actionStorecode,
             cancelReason: "cancelled_by_admin_clearance_management",
           };
 
@@ -1430,14 +1435,22 @@ export default function ClearanceManagementConsoleClient({
     setProcessingOrderId(orderId);
 
     try {
-      const signedBody = await createAdminSignedBody({
-        account: activeAccount,
-        route,
-        signingPrefix,
-        requesterStorecode: normalizedForcedStorecode || "admin",
-        requesterWalletAddress: activeAccount.address,
-        actionFields,
-      });
+      const signedBody = isStoreScoped
+        ? await createCenterStoreAdminSignedBody({
+            account: activeAccount,
+            route,
+            storecode: actionStorecode,
+            requesterWalletAddress: activeAccount.address,
+            body: actionFields,
+          })
+        : await createAdminSignedBody({
+            account: activeAccount,
+            route,
+            signingPrefix,
+            requesterStorecode: "admin",
+            requesterWalletAddress: activeAccount.address,
+            actionFields,
+          });
 
       const response = await fetch("/api/bff/admin/signed-order-action", {
         method: "POST",
@@ -1499,6 +1512,8 @@ export default function ClearanceManagementConsoleClient({
     actionModalState,
     canSubmitActionModal,
     closeActionModal,
+    filters.storecode,
+    isStoreScoped,
     loadOrdersDashboard,
     normalizedForcedStorecode,
     patchOrderInDashboard,

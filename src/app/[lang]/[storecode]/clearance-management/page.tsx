@@ -15,7 +15,6 @@ export default function StoreClearanceManagementPage({
       hideStoreFilter
       hideWithdrawalLiveSection
       ordersQueryMode="collectOrdersForSeller"
-      allowOrderActions={false}
     />
   );
 }
