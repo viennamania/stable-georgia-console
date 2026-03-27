@@ -2,7 +2,7 @@
 
 import * as Ably from "ably";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 
 import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
@@ -725,14 +725,21 @@ export default function ClearanceManagementConsoleClient({
   allowOrderActions = true,
 }: ClearanceManagementConsoleClientProps) {
   const activeAccount = useActiveAccount();
+  const walletConnectionStatus = useActiveWalletConnectionStatus();
   const normalizedForcedStorecode = normalizeText(forcedStorecode);
   const isStoreScoped = Boolean(normalizedForcedStorecode);
+  const isWalletRecovering =
+    walletConnectionStatus === "unknown" || walletConnectionStatus === "connecting";
+  const canReadSignedData = Boolean(activeAccount) && walletConnectionStatus === "connected";
   const accessActorLabel = isStoreScoped ? "가맹점 관리자" : "관리자";
   const walletAccessLabel = isStoreScoped ? "Store signed access" : "Signed access";
   const walletTitle = isStoreScoped ? "Store wallet" : "Admin wallet";
   const disconnectedMessage = isStoreScoped
     ? "지갑을 연결하고 서명하면 해당 가맹점 청산 조회가 열립니다."
     : "지갑을 연결하면 보호된 청산 조회가 열립니다.";
+  const walletCardMessage = isWalletRecovering
+    ? "지갑 연결 상태를 확인하는 중입니다."
+    : disconnectedMessage;
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters(normalizedForcedStorecode));
   const effectiveStorecode = normalizedForcedStorecode || filters.storecode;
   const [data, setData] = useState<ClearanceDashboardResult | null>(null);
@@ -899,7 +906,14 @@ export default function ClearanceManagementConsoleClient({
       );
       const selectedStorecode = normalizedForcedStorecode || filters.storecode;
 
-      if (isStoreScoped && !activeAccount) {
+      if (isStoreScoped && !canReadSignedData) {
+        if (isWalletRecovering) {
+          setError("");
+          setLoading(true);
+          setRefreshing(false);
+          return;
+        }
+
         setData((current) => ({
           ...(current || EMPTY_CLEARANCE_DASHBOARD),
           stores: EMPTY_STORES,
@@ -1012,12 +1026,21 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [activeAccount, filters.storecode, isStoreScoped, normalizedForcedStorecode, replaceWithdrawalRealtimeItems],
+    [
+      activeAccount,
+      canReadSignedData,
+      filters.storecode,
+      isStoreScoped,
+      isWalletRecovering,
+      normalizedForcedStorecode,
+      replaceWithdrawalRealtimeItems,
+    ],
   );
 
   const loadOrdersDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
+      const shouldWaitForSignedOrders = !canReadSignedData && isWalletRecovering;
       const loadSignature = createOrdersLoadSignature(
         {
           ...filters,
@@ -1025,6 +1048,14 @@ export default function ClearanceManagementConsoleClient({
         },
         activeAccount?.address,
       );
+
+      if (shouldWaitForSignedOrders) {
+        if (!silent) {
+          setOrdersLoading(true);
+        }
+        setOrdersRefreshing(false);
+        return;
+      }
 
       if (inflightOrdersLoadRef.current) {
         queuedSilentOrdersRefreshRef.current = true;
@@ -1039,7 +1070,7 @@ export default function ClearanceManagementConsoleClient({
       }
 
       try {
-        if (!activeAccount) {
+        if (!canReadSignedData) {
           if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
             queuedSilentOrdersRefreshRef.current = true;
             return;
@@ -1160,7 +1191,7 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [activeAccount, effectiveStorecode, filters, ordersQueryMode],
+    [activeAccount, canReadSignedData, effectiveStorecode, filters, isWalletRecovering, ordersQueryMode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
@@ -1671,7 +1702,7 @@ export default function ClearanceManagementConsoleClient({
               address={activeAccount?.address}
               accessLabel={walletAccessLabel}
               title={walletTitle}
-              disconnectedMessage={disconnectedMessage}
+              disconnectedMessage={walletCardMessage}
               errorMessage={connectionError}
             />
           </div>
@@ -2157,7 +2188,9 @@ export default function ClearanceManagementConsoleClient({
                 {orders.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
-                      {!activeAccount
+                      {isWalletRecovering
+                        ? "Loading clearance orders..."
+                        : !canReadSignedData
                         ? disconnectedMessage
                         : ordersLoading
                           ? "Loading clearance orders..."

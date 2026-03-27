@@ -569,6 +569,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [buyerBankBalanceDate, setBuyerBankBalanceDate] = useState(createInputDate(0));
   const buyerBankBalanceAblyClientIdRef = useRef(`console-clearance-order-${Math.random().toString(36).slice(2, 10)}`);
   const lastBuyerBankBalanceEventIdRef = useRef("");
+  const storeContextRequestIdRef = useRef(0);
+  const sellerBankBalancesRequestIdRef = useRef(0);
   const visibleSellerBankBalances = useMemo(
     () => sellerBankBalances.filter((item) => Number(item.balance || 0) > 0),
     [sellerBankBalances],
@@ -656,10 +658,13 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   }, [selectedStorecode]);
 
   const loadStoreContext = useCallback(async () => {
+    const requestId = ++storeContextRequestIdRef.current;
+
     if (!selectedStorecode) {
       setStoreContext(null);
       setStoreContextError("");
       setRate(0);
+      setStoreContextLoading(false);
       return;
     }
 
@@ -700,6 +705,10 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
         throw new Error(payload?.error || "Failed to load clearance store context");
       }
 
+      if (requestId !== storeContextRequestIdRef.current) {
+        return;
+      }
+
       const result = (payload?.result || {}) as StoreContextResult;
       setStoreContext({
         store: result.store || null,
@@ -713,13 +722,19 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
       });
       setRate(Number(result.rate || 0));
     } catch (error) {
+      if (requestId !== storeContextRequestIdRef.current) {
+        return;
+      }
+
       setStoreContext(null);
       setRate(0);
       setStoreContextError(
         error instanceof Error ? error.message : "가맹점 청산 정보를 불러오지 못했습니다.",
       );
     } finally {
-      setStoreContextLoading(false);
+      if (requestId === storeContextRequestIdRef.current) {
+        setStoreContextLoading(false);
+      }
     }
   }, [activeAccount, selectedStorecode]);
 
@@ -728,6 +743,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   }, [loadStoreContext]);
 
   const loadSellerBankBalances = useCallback(async () => {
+    const requestId = ++sellerBankBalancesRequestIdRef.current;
+
     if (!activeAccount) {
       setSellerBankBalances(EMPTY_SELLER_BANK_BALANCES);
       setSellerBankBalancesError("");
@@ -776,14 +793,24 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
           )
         : EMPTY_SELLER_BANK_BALANCES;
 
+      if (requestId !== sellerBankBalancesRequestIdRef.current) {
+        return;
+      }
+
       setSellerBankBalances(nextBalances);
     } catch (error) {
+      if (requestId !== sellerBankBalancesRequestIdRef.current) {
+        return;
+      }
+
       setSellerBankBalances(EMPTY_SELLER_BANK_BALANCES);
       setSellerBankBalancesError(
         error instanceof Error ? error.message : "구매자 통장 잔고를 불러오지 못했습니다.",
       );
     } finally {
-      setSellerBankBalancesLoading(false);
+      if (requestId === sellerBankBalancesRequestIdRef.current) {
+        setSellerBankBalancesLoading(false);
+      }
     }
   }, [activeAccount, buyerBankBalanceDate]);
 

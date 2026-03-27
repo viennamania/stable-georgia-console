@@ -434,7 +434,7 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, []);
 
   const updateRateField = (
     setter: React.Dispatch<React.SetStateAction<ClientExchangeRateForm>>,
