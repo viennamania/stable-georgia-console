@@ -96,22 +96,28 @@ export async function POST(request: NextRequest) {
     : {
       totalCount: Number(signedOrdersResult.totalCount || 0),
       totalClearanceCount: Number(
-        signedOrdersResult.totalSettlementCount
+        signedOrdersResult.totalTransferCount
+          ?? signedOrdersResult.totalSettlementCount
           ?? signedOrdersResult.totalClearanceCount
+          ?? tradeSummaryResult.totalTransferCount
           ?? tradeSummaryResult.totalSettlementCount
           ?? 0,
       ),
       totalClearanceAmount: Number(
-        signedOrdersResult.totalSettlementAmount
+        signedOrdersResult.totalTransferAmount
+          ?? signedOrdersResult.totalSettlementAmount
           ?? signedOrdersResult.totalClearanceAmount
+          ?? tradeSummaryResult.totalTransferAmount
           ?? tradeSummaryResult.totalSettlementAmount
           ?? signedOrdersResult.totalUsdtAmount
           ?? tradeSummaryResult.totalUsdtAmount
           ?? 0,
       ),
       totalClearanceAmountKRW: Number(
-        signedOrdersResult.totalSettlementAmountKRW
+        signedOrdersResult.totalTransferAmountKRW
+          ?? signedOrdersResult.totalSettlementAmountKRW
           ?? signedOrdersResult.totalClearanceAmountKRW
+          ?? tradeSummaryResult.totalTransferAmountKRW
           ?? tradeSummaryResult.totalSettlementAmountKRW
           ?? signedOrdersResult.totalKrwAmount
           ?? tradeSummaryResult.totalKrwAmount
