@@ -13,6 +13,7 @@ export default function StoreBuyorderPage({
       lang={params.lang}
       forcedStorecode={params.storecode}
       hideStoreFilter
+      hideBankTransferLivePanel
     />
   );
 }

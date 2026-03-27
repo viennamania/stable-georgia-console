@@ -286,6 +286,7 @@ type BuyorderConsoleClientProps = {
   lang: string;
   forcedStorecode?: string;
   hideStoreFilter?: boolean;
+  hideBankTransferLivePanel?: boolean;
 };
 
 const normalizeString = (value: unknown) => {
@@ -1760,6 +1761,7 @@ export default function BuyorderConsoleClient({
   lang,
   forcedStorecode = "",
   hideStoreFilter = false,
+  hideBankTransferLivePanel = false,
 }: BuyorderConsoleClientProps) {
   const activeAccount = useActiveAccount();
   const normalizedForcedStorecode = normalizeString(forcedStorecode);
@@ -4459,7 +4461,7 @@ export default function BuyorderConsoleClient({
           ) : null}
         </section>
 
-        {!bankTransferLivePanelOpen && !orderStatusPreviewPanelState ? (
+        {!hideBankTransferLivePanel && !bankTransferLivePanelOpen && !orderStatusPreviewPanelState ? (
           <button
             type="button"
             onClick={openBankTransferLivePanel}
@@ -4474,7 +4476,7 @@ export default function BuyorderConsoleClient({
           </button>
         ) : null}
 
-        {bankTransferLivePanelOpen ? (
+        {!hideBankTransferLivePanel && bankTransferLivePanelOpen ? (
           <div className="fixed inset-0 z-40">
             <button
               type="button"
