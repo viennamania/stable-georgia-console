@@ -25,6 +25,13 @@ const NAV_ITEMS = [
     marker: "03",
     description: "가맹점별 청산주문 생성",
   },
+  {
+    href: "/admin/client-settings",
+    label: "센터설정",
+    eyebrow: "Client Settings",
+    marker: "04",
+    description: "센터 프로필, 환율, 로고, 연동 설정",
+  },
 ];
 
 export default function AdminShell({
