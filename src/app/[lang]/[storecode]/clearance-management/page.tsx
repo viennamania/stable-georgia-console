@@ -13,6 +13,7 @@ export default function StoreClearanceManagementPage({
       lang={params.lang}
       forcedStorecode={params.storecode}
       hideStoreFilter
+      hideWithdrawalLiveSection
       ordersQueryMode="collectOrdersForSeller"
       allowOrderActions={false}
     />
