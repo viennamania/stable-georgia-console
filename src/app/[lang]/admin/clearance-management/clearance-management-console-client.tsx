@@ -210,8 +210,8 @@ const createInputDate = (daysOffset = 0) => {
   return kstDate.toISOString().slice(0, 10);
 };
 
-const createDefaultFilters = (): FilterState => ({
-  storecode: "",
+const createDefaultFilters = (storecode = ""): FilterState => ({
+  storecode,
   limit: 30,
   page: 1,
   fromDate: createInputDate(0),
@@ -680,7 +680,8 @@ export default function ClearanceManagementConsoleClient({
   const disconnectedMessage = isStoreScoped
     ? "지갑을 연결하고 서명하면 해당 가맹점 청산 조회가 열립니다."
     : "지갑을 연결하면 보호된 청산 조회가 열립니다.";
-  const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
+  const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters(normalizedForcedStorecode));
+  const effectiveStorecode = normalizedForcedStorecode || filters.storecode;
   const [data, setData] = useState<ClearanceDashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -710,7 +711,13 @@ export default function ClearanceManagementConsoleClient({
   const desiredOrdersLoadSignatureRef = useRef("");
 
   desiredBaseLoadSignatureRef.current = createBaseLoadSignature(activeAccount?.address);
-  desiredOrdersLoadSignatureRef.current = createOrdersLoadSignature(filters, activeAccount?.address);
+  desiredOrdersLoadSignatureRef.current = createOrdersLoadSignature(
+    {
+      ...filters,
+      storecode: effectiveStorecode,
+    },
+    activeAccount?.address,
+  );
 
   const sortWithdrawalRealtimeItems = useCallback((items: WithdrawalRealtimeItem[]) => {
     return [...items]
@@ -962,7 +969,13 @@ export default function ClearanceManagementConsoleClient({
   const loadOrdersDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const loadSignature = createOrdersLoadSignature(filters, activeAccount?.address);
+      const loadSignature = createOrdersLoadSignature(
+        {
+          ...filters,
+          storecode: effectiveStorecode,
+        },
+        activeAccount?.address,
+      );
 
       if (inflightOrdersLoadRef.current) {
         if (silent) {
@@ -1006,7 +1019,7 @@ export default function ClearanceManagementConsoleClient({
           ? "/api/order/getAllCollectOrdersForSeller"
           : "/api/order/getAllBuyOrders";
         const signingStorecode = ordersQueryMode === "collectOrdersForSeller"
-          ? filters.storecode
+          ? effectiveStorecode
           : "admin";
 
         try {
@@ -1016,7 +1029,7 @@ export default function ClearanceManagementConsoleClient({
             storecode: signingStorecode,
             requesterWalletAddress: activeAccount.address,
             body: {
-              storecode: filters.storecode,
+              storecode: effectiveStorecode,
               limit: filters.limit,
               page: filters.page,
               walletAddress: activeAccount.address,
@@ -1106,7 +1119,7 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [activeAccount, filters, ordersQueryMode],
+    [activeAccount, effectiveStorecode, filters, ordersQueryMode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
