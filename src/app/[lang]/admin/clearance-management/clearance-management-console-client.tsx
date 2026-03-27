@@ -2263,7 +2263,7 @@ export default function ClearanceManagementConsoleClient({
                         </td>
                         <td className="border-b border-slate-100 px-3 py-3 align-top">
                           {transactionHash && transactionHash !== "0x" ? (
-                            <div className="min-w-0 break-words">
+                            <div className="flex min-w-0 flex-col items-start gap-1 break-words">
                               <div className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                                 전송완료
                               </div>
@@ -2271,11 +2271,11 @@ export default function ClearanceManagementConsoleClient({
                                 href={getBscscanTxUrl(transactionHash)}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="console-mono mt-1 inline-flex break-all text-[11px] text-slate-500 underline decoration-dotted underline-offset-2 transition hover:text-sky-700"
+                                className="console-mono block w-full break-all text-[11px] text-slate-500 underline decoration-dotted underline-offset-2 transition hover:text-sky-700"
                               >
                                 {shortAddress(transactionHash)}
                               </a>
-                              <div className="mt-0.5 break-words text-[11px] text-slate-500">
+                              <div className="break-words text-[11px] text-slate-500">
                                 {formatDateTime(order.paymentConfirmedAt || order.updatedAt)}
                               </div>
                             </div>
