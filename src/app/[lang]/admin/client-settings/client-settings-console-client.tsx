@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
-import { ConnectButton, useActiveAccount } from "thirdweb/react";
-import { createWallet, inAppWallet } from "thirdweb/wallets";
+import { useActiveAccount } from "thirdweb/react";
 
 import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
+import AdminWalletCard from "@/components/admin/admin-wallet-card";
 import {
   CLIENT_EXCHANGE_RATE_KEYS,
   clientExchangeRateMapToForm,
@@ -29,7 +29,6 @@ import {
   CLIENT_SETTINGS_UPDATE_PROFILE_ROUTE,
   CLIENT_SETTINGS_UPDATE_SELL_RATE_ROUTE,
 } from "@/lib/security/client-settings-admin";
-import { thirdwebClient } from "@/lib/thirdweb-client";
 
 type ClientSettingsConsoleClientProps = {
   lang: string;
@@ -38,24 +37,6 @@ type ClientSettingsConsoleClientProps = {
 type ClientProfileForm = {
   name: string;
   description: string;
-};
-
-type AdminUser = Record<string, unknown> & {
-  nickname?: string;
-  walletAddress?: string;
-  address?: string;
-  storecode?: string;
-  storeCode?: string;
-  role?: string;
-  rold?: string;
-  roleName?: string;
-  permission?: string;
-  userType?: string;
-  type?: string;
-  roles?: unknown;
-  admin?: boolean;
-  isAdmin?: boolean;
-  isSuperAdmin?: boolean;
 };
 
 type FeedbackState = {
@@ -113,79 +94,6 @@ const normalizeString = (value: unknown) => {
   return value.trim();
 };
 
-const collectNormalizedStrings = (...values: unknown[]): string[] => {
-  const items: string[] = [];
-
-  const append = (value: unknown) => {
-    if (Array.isArray(value)) {
-      value.forEach(append);
-      return;
-    }
-
-    const normalized = normalizeString(value).toLowerCase();
-    if (normalized) {
-      items.push(normalized);
-    }
-  };
-
-  values.forEach(append);
-  return Array.from(new Set(items));
-};
-
-const ADMIN_USER_HINT_KEYS = new Set([
-  "nickname",
-  "walletAddress",
-  "address",
-  "storecode",
-  "storeCode",
-  "role",
-  "rold",
-  "roleName",
-  "permission",
-  "userType",
-  "type",
-  "roles",
-  "admin",
-  "isAdmin",
-  "isSuperAdmin",
-]);
-
-const extractAdminUser = (value: unknown): AdminUser | null => {
-  const queue: unknown[] = [value];
-  const visited = new Set<object>();
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-
-    if (!current) {
-      continue;
-    }
-
-    if (Array.isArray(current)) {
-      queue.push(...current);
-      continue;
-    }
-
-    if (typeof current !== "object") {
-      continue;
-    }
-
-    const record = current as Record<string, unknown>;
-    if (visited.has(record)) {
-      continue;
-    }
-    visited.add(record);
-
-    if (Object.keys(record).some((key) => ADMIN_USER_HINT_KEYS.has(key))) {
-      return record as AdminUser;
-    }
-
-    queue.push(...Object.values(record));
-  }
-
-  return null;
-};
-
 const formatWalletAddress = (value: string | undefined) => {
   const safe = normalizeString(value);
   if (!safe) {
@@ -220,36 +128,6 @@ const formatRateValue = (value: number) => {
 
 const areRateFormsEqual = (left: ClientExchangeRateForm, right: ClientExchangeRateForm) =>
   CLIENT_EXCHANGE_RATE_KEYS.every((key) => left[key] === right[key]);
-
-const isAdminUser = (user: AdminUser | null) => {
-  if (!user) {
-    return false;
-  }
-
-  if (user.admin === true || user.isAdmin === true || user.isSuperAdmin === true) {
-    return true;
-  }
-
-  const storecodes = collectNormalizedStrings(
-    user.storecode,
-    user.storeCode,
-    user.requesterStorecode,
-  );
-  const roles = collectNormalizedStrings(
-    user.role,
-    user.rold,
-    user.roleName,
-    user.permission,
-    user.userType,
-    user.type,
-    user.roles,
-  );
-  const roleLooksAdmin = roles.some((item) =>
-    ["admin", "superadmin", "super_admin", "super-admin", "master", "owner"].includes(item),
-  );
-
-  return roleLooksAdmin || storecodes.includes("admin");
-};
 
 const mergeHistoryEntry = (
   current: ClientExchangeRateHistoryItem[],
@@ -450,8 +328,6 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
 
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
-  const [user, setUser] = useState<AdminUser | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [chain, setChain] = useState("arbitrum");
   const [clientId, setClientId] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
@@ -481,7 +357,6 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
   const editable = Boolean(address);
-  const hasVerifiedAdmin = Boolean(address) && isAdmin;
   const profileDirty =
     profileForm.name !== profileSnapshot.name
     || profileForm.description !== profileSnapshot.description;
@@ -502,9 +377,7 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            walletAddress: address,
-          }),
+          body: "{}",
         });
 
         const data = await response.json().catch(() => null);
@@ -519,7 +392,6 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
         const result = (data?.result || {}) as Record<string, unknown>;
         const clientSettings = (result.clientSettings || {}) as Record<string, unknown>;
         const clientInfo = (clientSettings.clientInfo || {}) as Record<string, unknown>;
-        const nextUser = extractAdminUser(result.user || null);
         const nextProfile = {
           name: normalizeString(clientInfo.name),
           description: normalizeString(clientInfo.description),
@@ -527,8 +399,6 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
         const nextBuyRates = clientExchangeRateMapToForm(clientInfo.exchangeRateUSDT);
         const nextSellRates = clientExchangeRateMapToForm(clientInfo.exchangeRateUSDTSell);
 
-        setUser(nextUser);
-        setIsAdmin(isAdminUser(nextUser));
         setChain(normalizeString(clientSettings.chain) || "arbitrum");
         setClientId(normalizeString(clientSettings.clientId));
         setAvatarUrl(normalizeString(clientInfo.avatar));
@@ -1003,69 +873,10 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
               </div>
             </div>
 
-            <div className="rounded-[30px] border border-white/10 bg-slate-950/66 p-5 text-white backdrop-blur">
-              <div className="space-y-2">
-                <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                  Signed access
-                </div>
-                <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-white">
-                  Wallet signature gate
-                </h2>
-                <p className="text-sm leading-6 text-slate-300">
-                  다른 관리자 페이지와 동일하게 지갑 연결 후 서명 요청을 보내고, 최종 권한은 원격
-                  본서버 응답으로 판단합니다.
-                </p>
-              </div>
-
-              <div className="mt-5 space-y-4">
-                <div
-                  className={`rounded-[24px] border px-4 py-4 ${
-                    hasVerifiedAdmin
-                      ? "border-emerald-400/20 bg-emerald-400/10"
-                      : "border-white/10 bg-white/6"
-                  }`}
-                >
-                  <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                    Connected wallet
-                  </div>
-                  <div className="mt-2 break-all text-sm font-medium text-white">
-                    {address || "Not connected"}
-                  </div>
-                  <div className="mt-2 text-sm text-slate-300">
-                    {hasVerifiedAdmin
-                      ? `${normalizeString(user?.nickname) || "admin"} 계정으로 admin 권한이 확인되었습니다.`
-                      : address
-                        ? "연결된 지갑입니다. 이 화면도 다른 관리자 페이지처럼 저장/조회 요청 시 서버가 최종 권한을 검증합니다."
-                        : "지갑 연결 후 서명 기반 설정 변경을 사용할 수 있습니다."}
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <ConnectButton
-                      client={thirdwebClient}
-                      wallets={[
-                        inAppWallet({
-                          auth: {
-                            options: ["email", "google", "apple"],
-                          },
-                        }),
-                        createWallet("io.metamask"),
-                        createWallet("com.coinbase.wallet"),
-                      ]}
-                      theme="dark"
-                    />
-                    <span className="text-sm text-slate-300">
-                      {hasVerifiedAdmin
-                        ? "Admin verified"
-                        : editable
-                          ? "Connected"
-                          : "Read-only until wallet connected"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AdminWalletCard
+              address={address}
+              disconnectedMessage="지갑을 연결하면 서명 기반 센터 설정 변경이 열립니다."
+            />
           </div>
         </section>
 

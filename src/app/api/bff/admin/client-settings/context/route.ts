@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { postRemoteJson } from "@/lib/server/remote-backend";
 
@@ -23,50 +23,8 @@ const resolveRemoteError = (payload: unknown, fallback: string) => {
     || fallback;
 };
 
-const hasMeaningfulResult = (value: unknown) => {
-  if (Array.isArray(value)) {
-    return value.length > 0;
-  }
-
-  if (value && typeof value === "object") {
-    return Object.keys(value as Record<string, unknown>).length > 0;
-  }
-
-  return Boolean(value);
-};
-
-export async function POST(request: NextRequest) {
-  let body: Record<string, unknown> = {};
-
-  try {
-    body = (await request.json()) as Record<string, unknown>;
-  } catch {
-    body = {};
-  }
-
-  const walletAddress = normalizeString(body.walletAddress).toLowerCase();
-  const emptyUserResponse = {
-    ok: true,
-    status: 200,
-    json: {
-      result: null,
-    },
-  };
-
-  const [clientInfoResponse, adminScopedUserResponse, walletOnlyUserResponse] = await Promise.all([
-    postRemoteJson("/api/client/getClientInfo", {}),
-    walletAddress
-      ? postRemoteJson("/api/user/getUser", {
-          storecode: "admin",
-          walletAddress,
-        })
-      : Promise.resolve(emptyUserResponse),
-    walletAddress
-      ? postRemoteJson("/api/user/getUser", {
-          walletAddress,
-        })
-      : Promise.resolve(emptyUserResponse),
-  ]);
+export async function POST() {
+  const clientInfoResponse = await postRemoteJson("/api/client/getClientInfo", {});
 
   if (!clientInfoResponse.ok) {
     return NextResponse.json(
@@ -77,18 +35,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const adminScopedUser = adminScopedUserResponse.json?.result || null;
-  const walletOnlyUser = walletOnlyUserResponse.json?.result || null;
-  const resolvedUser = hasMeaningfulResult(adminScopedUser)
-    ? adminScopedUser
-    : hasMeaningfulResult(walletOnlyUser)
-      ? walletOnlyUser
-      : null;
-
   return NextResponse.json({
     result: {
       clientSettings: clientInfoResponse.json?.result || null,
-      user: resolvedUser,
     },
   });
 }

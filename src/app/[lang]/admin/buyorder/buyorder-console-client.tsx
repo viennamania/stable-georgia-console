@@ -2,9 +2,9 @@
 
 import * as Ably from "ably";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ConnectButton, useActiveAccount } from "thirdweb/react";
-import { createWallet, inAppWallet } from "thirdweb/wallets";
+import { useActiveAccount } from "thirdweb/react";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
+import AdminWalletCard from "@/components/admin/admin-wallet-card";
 import {
   BUYORDER_STATUS_ABLY_CHANNEL,
   BUYORDER_STATUS_ABLY_EVENT_NAME,
@@ -18,7 +18,7 @@ import {
   type BankTransferDashboardEvent,
   type BankTransferUnmatchedRealtimeEvent,
 } from "@/lib/realtime/banktransfer";
-import { thirdwebClient, thirdwebClientId } from "@/lib/thirdweb-client";
+import { thirdwebClientId } from "@/lib/thirdweb-client";
 
 type BankInfo = {
   bankName?: string;
@@ -2953,65 +2953,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
               </div>
             </div>
 
-            <div className="rounded-[30px] border border-white/10 bg-slate-950/66 p-5 text-white backdrop-blur">
-              <div className="space-y-2">
-                <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
-                  Signed access
-                </p>
-                <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-white">
-                  Wallet signature gate
-                </h2>
-                <p className="text-sm leading-6 text-slate-300">
-                  관리자 서명 이후에만 보호된 주문 피드가 열립니다. 연결 전에는 요약 수치와 범위 정보만
-                  유지됩니다.
-                </p>
-              </div>
-
-              <div className="mt-5 space-y-4">
-                <div
-                  className={`rounded-[24px] border px-4 py-4 ${
-                    isSignedIn
-                      ? "border-emerald-400/20 bg-emerald-400/10"
-                      : "border-white/10 bg-white/6"
-                  }`}
-                >
-                  <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                    Connected wallet
-                  </div>
-                  <div className="mt-2 break-all text-sm font-medium text-white">
-                    {activeAccount?.address || "Not connected"}
-                  </div>
-                  <div className="mt-2 text-sm text-slate-300">
-                    {isSignedIn
-                      ? "Signed requests are available now."
-                      : "Connect to unlock protected order queries."}
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <ConnectButton
-                      client={thirdwebClient}
-                      wallets={[
-                        inAppWallet({
-                          auth: {
-                            options: ["email", "google", "apple"],
-                          },
-                        }),
-                        createWallet("io.metamask"),
-                        createWallet("com.coinbase.wallet"),
-                      ]}
-                      theme="dark"
-                    />
-                    <span className="text-sm text-slate-300">
-                      {isSignedIn
-                        ? "Signed mode active"
-                        : "Summary-only mode until a wallet is connected"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AdminWalletCard
+              address={activeAccount?.address}
+              disconnectedMessage="지갑을 연결하면 보호된 주문 조회가 열립니다."
+            />
           </div>
         </section>
 
