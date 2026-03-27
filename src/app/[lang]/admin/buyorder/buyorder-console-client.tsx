@@ -1627,6 +1627,38 @@ const getBuyerDepositName = (order: BuyOrder) => {
   return String(order.buyer?.depositName || "").trim();
 };
 
+const getBuyerGradeMeta = (order: BuyOrder) => {
+  const userType = String(order.userType || "").trim().toUpperCase();
+
+  switch (userType) {
+    case "AAA":
+      return {
+        label: "1등급",
+        className: "border border-rose-200 bg-rose-50 text-rose-700",
+      };
+    case "BBB":
+      return {
+        label: "2등급",
+        className: "border border-orange-200 bg-orange-50 text-orange-700",
+      };
+    case "CCC":
+      return {
+        label: "3등급",
+        className: "border border-amber-200 bg-amber-50 text-amber-700",
+      };
+    case "DDD":
+      return {
+        label: "4등급",
+        className: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+      };
+    default:
+      return {
+        label: "일반",
+        className: "border border-slate-200 bg-slate-100 text-slate-600",
+      };
+  }
+};
+
 const getSellerLabel = (order: BuyOrder) => {
   return (
     order.seller?.nickname
@@ -3743,7 +3775,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
                   <th className="border-b border-slate-200 px-4 py-3">거래번호</th>
                   <th className="w-[156px] border-b border-slate-200 px-4 py-3">상태</th>
-                  <th className="w-[280px] border-b border-slate-200 px-4 py-3">구매자 / 가맹점</th>
+                  <th className="w-[304px] border-b border-slate-200 px-4 py-3">구매자 / 가맹점</th>
                   <th className="border-b border-slate-200 px-4 py-3 text-right">구매금액 / 구매량</th>
                   <th className="w-[220px] border-b border-slate-200 px-4 py-3">판매자</th>
                   <th className="w-[208px] border-b border-slate-200 px-4 py-3">입금처리</th>
@@ -3824,7 +3856,10 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
                     const buyerLabel = getBuyerLabel(order);
                     const buyerDepositName = getBuyerDepositName(order);
-                    const shouldShowBuyerLabel = !buyerDepositName || buyerDepositName !== buyerLabel;
+                    const shouldShowBuyerDepositName = Boolean(
+                      buyerDepositName && buyerDepositName !== buyerLabel,
+                    );
+                    const buyerGradeMeta = getBuyerGradeMeta(order);
                     const canCompleteOrder = isSignedIn && status === "paymentRequested";
                     const isConfirmingThisOrder = Boolean(confirmingTradeId && rowMatchKey === confirmingTradeId);
                     const canCancelOrder = isSignedIn && (status === "accepted" || status === "paymentRequested");
@@ -3979,29 +4014,38 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                             ) : null}
                           </div>
                         </td>
-                        <td className="w-[280px] border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="grid grid-cols-[minmax(0,1fr)_132px] items-start gap-3">
+                        <td className="w-[304px] border-b border-slate-100 px-4 py-4 align-top">
+                          <div className="grid grid-cols-[minmax(0,1fr)_104px] items-start gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-[15px] font-semibold text-slate-950">
-                                {buyerDepositName || buyerLabel}
-                              </div>
-                              {buyerDepositName && shouldShowBuyerLabel ? (
-                                <div className="mt-1 truncate text-sm font-medium text-slate-600">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${buyerGradeMeta.className}`}
+                                >
+                                  {buyerGradeMeta.label}
+                                </span>
+                                <div className="truncate text-[15px] font-semibold text-slate-950">
                                   {buyerLabel}
+                                </div>
+                              </div>
+                              {shouldShowBuyerDepositName ? (
+                                <div className="mt-1 truncate text-sm font-medium text-slate-600">
+                                  예금주 {buyerDepositName}
                                 </div>
                               ) : null}
                               <div className="console-mono mt-1 text-xs text-slate-500">
                                 {shortAddress(order.buyer?.walletAddress || order.walletAddress)}
                               </div>
                             </div>
-                            <div className="flex w-full min-w-0 items-center gap-2 text-left">
+                            <div className="flex w-full min-w-0 flex-col items-center gap-1.5 text-center">
                               <img
                                 src={storeLogoSrc}
                                 alt={storeLabel}
-                                className="h-8 w-8 shrink-0 rounded-xl border border-slate-200 bg-slate-100 object-cover"
+                                className="h-9 w-9 shrink-0 rounded-xl border border-slate-200 bg-slate-100 object-cover"
                               />
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm font-medium text-slate-700">{storeLabel}</div>
+                              <div className="min-w-0 w-full">
+                                <div className="text-[12px] font-medium leading-4 text-slate-700 break-words">
+                                  {storeLabel}
+                                </div>
                               </div>
                             </div>
                           </div>
