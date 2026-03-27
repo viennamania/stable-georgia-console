@@ -2,7 +2,7 @@
 
 import * as Ably from "ably";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 import AdminWalletCard from "@/components/admin/admin-wallet-card";
 import {
@@ -341,8 +341,8 @@ const createInputDate = (daysOffset = 0) => {
   return kstDate.toISOString().slice(0, 10);
 };
 
-const createDefaultFilters = (): FilterState => ({
-  storecode: "",
+const createDefaultFilters = (storecode = ""): FilterState => ({
+  storecode,
   limit: 50,
   page: 1,
   fromDate: createInputDate(0),
@@ -1764,9 +1764,13 @@ export default function BuyorderConsoleClient({
   hideBankTransferLivePanel = false,
 }: BuyorderConsoleClientProps) {
   const activeAccount = useActiveAccount();
+  const walletConnectionStatus = useActiveWalletConnectionStatus();
   const normalizedForcedStorecode = normalizeString(forcedStorecode);
   const isStoreScoped = Boolean(normalizedForcedStorecode);
   const shouldHideStoreFilter = hideStoreFilter || isStoreScoped;
+  const isWalletRecovering =
+    walletConnectionStatus === "unknown" || walletConnectionStatus === "connecting";
+  const canReadSignedData = Boolean(activeAccount) && walletConnectionStatus === "connected";
   const accessActorLabel = isStoreScoped ? "가맹점 관리자" : "관리자";
   const walletAccessLabel = isStoreScoped ? "Store signed access" : "Signed access";
   const walletTitle = isStoreScoped ? "Store wallet" : "Admin wallet";
@@ -1776,8 +1780,11 @@ export default function BuyorderConsoleClient({
   const ordersDisconnectedMessage = isStoreScoped
     ? "지갑을 연결하고 서명하면 해당 가맹점 주문 조회가 열립니다."
     : "지갑을 연결하면 보호된 주문 조회가 열립니다.";
-  const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
-  const [draftFilters, setDraftFilters] = useState<FilterState>(() => createDefaultFilters());
+  const walletCardMessage = isWalletRecovering
+    ? "지갑 연결 상태를 확인하는 중입니다."
+    : ordersDisconnectedMessage;
+  const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters(normalizedForcedStorecode));
+  const [draftFilters, setDraftFilters] = useState<FilterState>(() => createDefaultFilters(normalizedForcedStorecode));
   const [storeSearchQuery, setStoreSearchQuery] = useState("");
   const [storeSearchOpen, setStoreSearchOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
@@ -1871,12 +1878,18 @@ export default function BuyorderConsoleClient({
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const shouldLoadOrders = Boolean(activeAccount);
-      const selectedStorecode = shouldHideStoreFilter
-        ? normalizedForcedStorecode
-        : filters.storecode;
+      const shouldLoadOrders = canReadSignedData;
+      const selectedStorecode = normalizedForcedStorecode || filters.storecode;
 
-      if (isStoreScoped && !activeAccount) {
+      if (isStoreScoped && !canReadSignedData) {
+        if (isWalletRecovering) {
+          setError("");
+          setLoading(true);
+          setRefreshing(false);
+          setOrdersQueryState("loading");
+          return;
+        }
+
         setData(null);
         setError("");
         setLoading(false);
@@ -1904,7 +1917,7 @@ export default function BuyorderConsoleClient({
       }
 
       try {
-        const signedOrdersBody = activeAccount
+        const signedOrdersBody = canReadSignedData && activeAccount
           ? await createCenterStoreAdminSignedBody({
               account: activeAccount,
               route: "/api/order/getAllBuyOrders",
@@ -1973,7 +1986,7 @@ export default function BuyorderConsoleClient({
         }
       }
     },
-    [activeAccount, filters, isStoreScoped, normalizedForcedStorecode, shouldHideStoreFilter],
+    [activeAccount, canReadSignedData, filters, isStoreScoped, isWalletRecovering, normalizedForcedStorecode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
@@ -2807,7 +2820,7 @@ export default function BuyorderConsoleClient({
     ? "해당 가맹점 범위의 구매주문, 미신청입금, 판매자 계좌 흐름을 서명 기반으로 확인합니다."
     : "입금 이벤트, 주문 큐, 판매자 계좌 흐름을 하나의 운영 콘솔에서 실시간으로 추적합니다.";
 
-  const isSignedIn = Boolean(activeAccount);
+  const isSignedIn = canReadSignedData;
   const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
   const animatedTradeSummaryTotalCount = useAnimatedNumber(tradeSummary.totalCount);
   const animatedTradeSummaryTotalUsdtAmount = useAnimatedNumber(tradeSummary.totalUsdtAmount);
@@ -2849,7 +2862,12 @@ export default function BuyorderConsoleClient({
     }).length;
   }, [orders]);
   const shouldShowOrdersSpinner = orders.length === 0 && (loading || ordersQueryState === "loading");
-  const shouldShowOrdersConnectPrompt = orders.length === 0 && !isSignedIn && ordersQueryState === "idle" && !loading;
+  const shouldShowOrdersConnectPrompt =
+    orders.length === 0
+    && !isSignedIn
+    && !isWalletRecovering
+    && ordersQueryState === "idle"
+    && !loading;
   const shouldShowOrdersErrorState = orders.length === 0 && ordersQueryState === "error" && !loading;
   const depositedRatio = useMemo(() => {
     if (banktransferTodaySummary.depositedAmount <= 0) {
@@ -3091,7 +3109,7 @@ export default function BuyorderConsoleClient({
               address={activeAccount?.address}
               accessLabel={walletAccessLabel}
               title={walletTitle}
-              disconnectedMessage={ordersDisconnectedMessage}
+              disconnectedMessage={walletCardMessage}
             />
           </div>
         </section>
@@ -3644,7 +3662,7 @@ export default function BuyorderConsoleClient({
 
           {!sellerBankStatsCollapsed ? (
             <div className="px-5 py-4">
-              {!isSignedIn ? (
+              {!isSignedIn && !isWalletRecovering ? (
                 <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
                   판매자 통장별 P2P 거래 통계는 {accessActorLabel} 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
                   위 영역에서 지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`의 계좌별 집계가
@@ -3863,9 +3881,9 @@ export default function BuyorderConsoleClient({
 
           {!buyOrdersCollapsed ? (
             <>
-              {!isSignedIn || error ? (
+              {((!isSignedIn && !isWalletRecovering) || error) ? (
                 <div className="space-y-4 px-6 pt-4 pb-3">
-                  {!isSignedIn ? (
+                  {!isSignedIn && !isWalletRecovering ? (
                     <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
                       주문 목록은 {accessActorLabel} 지갑을 연결한 뒤 서명해야 불러올 수 있습니다. 위 영역에서
                       지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`가 로컬 BFF를 통해
