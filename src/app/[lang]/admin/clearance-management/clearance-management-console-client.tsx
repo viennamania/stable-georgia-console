@@ -330,6 +330,56 @@ const toSafeTimestamp = (value?: string | null) => {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
+const toCursorTimestamp = (cursor?: string | null) => {
+  const normalized = String(cursor || "").trim();
+  if (!/^[a-fA-F0-9]{24}$/.test(normalized)) {
+    return 0;
+  }
+
+  const seconds = Number.parseInt(normalized.slice(0, 8), 16);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return 0;
+  }
+
+  return seconds * 1000;
+};
+
+const getWithdrawalRealtimePrimaryTimestamp = (
+  event: {
+    cursor?: string | null;
+    publishedAt?: string | null;
+    processingDate?: string | null;
+    transactionDate?: string | null;
+  },
+  receivedAt?: string | null,
+) => {
+  return Math.max(
+    toCursorTimestamp(event.cursor),
+    toSafeTimestamp(event.publishedAt),
+    toSafeTimestamp(receivedAt),
+    toSafeTimestamp(event.processingDate),
+    toSafeTimestamp(event.transactionDate),
+  );
+};
+
+const getWithdrawalRealtimePrimaryDateTime = (
+  event: {
+    cursor?: string | null;
+    publishedAt?: string | null;
+    processingDate?: string | null;
+    transactionDate?: string | null;
+  },
+  receivedAt?: string | null,
+) => {
+  return (
+    event.publishedAt
+    || receivedAt
+    || event.processingDate
+    || event.transactionDate
+    || null
+  );
+};
+
 const formatRealtimeDateTime = (value?: string | null) => {
   const timestamp = toSafeTimestamp(value);
   if (!timestamp) {
@@ -728,18 +778,8 @@ export default function ClearanceManagementConsoleClient({
   const sortWithdrawalRealtimeItems = useCallback((items: WithdrawalRealtimeItem[]) => {
     return [...items]
       .sort((left, right) => {
-        const rightTimestamp = Math.max(
-          toSafeTimestamp(right.data.processingDate),
-          toSafeTimestamp(right.data.transactionDate),
-          toSafeTimestamp(right.data.publishedAt),
-          toSafeTimestamp(right.receivedAt),
-        );
-        const leftTimestamp = Math.max(
-          toSafeTimestamp(left.data.processingDate),
-          toSafeTimestamp(left.data.transactionDate),
-          toSafeTimestamp(left.data.publishedAt),
-          toSafeTimestamp(left.receivedAt),
-        );
+        const rightTimestamp = getWithdrawalRealtimePrimaryTimestamp(right.data, right.receivedAt);
+        const leftTimestamp = getWithdrawalRealtimePrimaryTimestamp(left.data, left.receivedAt);
         return rightTimestamp - leftTimestamp;
       })
       .slice(0, 24);
@@ -1292,11 +1332,12 @@ export default function ClearanceManagementConsoleClient({
     return sum + Number(item.data.amount || 0);
   }, 0);
   const latestWithdrawalRealtimeAt =
-    filteredWithdrawalRealtimeItems[0]?.data.processingDate
-    || filteredWithdrawalRealtimeItems[0]?.data.transactionDate
-    || filteredWithdrawalRealtimeItems[0]?.data.publishedAt
-    || filteredWithdrawalRealtimeItems[0]?.receivedAt
-    || null;
+    filteredWithdrawalRealtimeItems[0]
+      ? getWithdrawalRealtimePrimaryDateTime(
+          filteredWithdrawalRealtimeItems[0].data,
+          filteredWithdrawalRealtimeItems[0].receivedAt,
+        )
+      : null;
   const connectionIndicatorClassName =
     connectionState === "connected"
       ? "bg-emerald-500"
@@ -1912,8 +1953,7 @@ export default function ClearanceManagementConsoleClient({
                   {filteredWithdrawalRealtimeItems.map((item) => {
                     const event = item.data;
                     const isHighlighted = item.highlightUntil > withdrawalRealtimeNowMs;
-                    const publishedAt =
-                      event.processingDate || event.transactionDate || event.publishedAt || item.receivedAt;
+                    const publishedAt = getWithdrawalRealtimePrimaryDateTime(event, item.receivedAt);
                     const matchedStore =
                       stores.find((store) => {
                         return String(store.storecode || "").trim() === String(event.storecode || "").trim();
