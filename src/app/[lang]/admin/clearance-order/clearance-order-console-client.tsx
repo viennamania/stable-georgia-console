@@ -494,11 +494,11 @@ const SellerBankBalanceCard = ({
             Live
           </div>
           <div className="flex min-w-0 items-center gap-1">
-            <div className="truncate text-[10px] font-semibold tracking-[-0.02em] text-slate-950">
+            <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-slate-950">
               {item.bankName}
             </div>
             <span className="shrink-0 text-[8px] text-slate-300">/</span>
-            <div className="truncate text-[10px] font-semibold tracking-[-0.02em] text-slate-950">
+            <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-slate-950">
               {item.accountHolder}
             </div>
           </div>
