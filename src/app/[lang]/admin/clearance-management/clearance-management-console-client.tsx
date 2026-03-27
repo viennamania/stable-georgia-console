@@ -99,6 +99,7 @@ type ClearanceBaseResult = {
   stores: StoreItem[];
   storeTotalCount: number;
   storesError?: string;
+  selectedStore?: StoreItem | null;
   withdrawalEvents: BankTransferDashboardEvent[];
   withdrawalNextCursor: string | null;
 };
@@ -132,6 +133,7 @@ type ClearanceManagementConsoleClientProps = {
   hideStoreFilter?: boolean;
   hideWithdrawalLiveSection?: boolean;
   ordersQueryMode?: ClearanceOrdersQueryMode;
+  allowOrderActions?: boolean;
 };
 
 type WithdrawalRealtimeItem = {
@@ -159,6 +161,7 @@ const EMPTY_CLEARANCE_DASHBOARD: ClearanceDashboardResult = {
   stores: EMPTY_STORES,
   storeTotalCount: 0,
   storesError: "",
+  selectedStore: null,
   withdrawalEvents: EMPTY_WITHDRAWALS,
   withdrawalNextCursor: null,
   ordersError: "",
@@ -666,9 +669,17 @@ export default function ClearanceManagementConsoleClient({
   hideStoreFilter = false,
   hideWithdrawalLiveSection = false,
   ordersQueryMode = "buyOrders",
+  allowOrderActions = true,
 }: ClearanceManagementConsoleClientProps) {
   const activeAccount = useActiveAccount();
   const normalizedForcedStorecode = normalizeText(forcedStorecode);
+  const isStoreScoped = Boolean(normalizedForcedStorecode);
+  const accessActorLabel = isStoreScoped ? "가맹점 관리자" : "관리자";
+  const walletAccessLabel = isStoreScoped ? "Store signed access" : "Signed access";
+  const walletTitle = isStoreScoped ? "Store wallet" : "Admin wallet";
+  const disconnectedMessage = isStoreScoped
+    ? "지갑을 연결하고 서명하면 해당 가맹점 청산 조회가 열립니다."
+    : "지갑을 연결하면 보호된 청산 조회가 열립니다.";
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
   const [data, setData] = useState<ClearanceDashboardResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -826,6 +837,25 @@ export default function ClearanceManagementConsoleClient({
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
       const loadSignature = createBaseLoadSignature(activeAccount?.address);
+      const selectedStorecode = normalizedForcedStorecode || filters.storecode;
+
+      if (isStoreScoped && !activeAccount) {
+        setData((current) => ({
+          ...(current || EMPTY_CLEARANCE_DASHBOARD),
+          stores: EMPTY_STORES,
+          storeTotalCount: 0,
+          storesError: "",
+          selectedStore: null,
+          withdrawalEvents: EMPTY_WITHDRAWALS,
+          withdrawalNextCursor: null,
+        }));
+        replaceWithdrawalRealtimeItems(EMPTY_WITHDRAWALS);
+        setWithdrawalSyncError("");
+        setError("");
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
 
       if (inflightLoadRef.current) {
         if (silent) {
@@ -844,7 +874,7 @@ export default function ClearanceManagementConsoleClient({
       try {
         let signedStoreBody: Record<string, unknown> | null = null;
 
-        if (activeAccount) {
+        if (activeAccount && !isStoreScoped) {
           try {
             signedStoreBody = await createCenterStoreAdminSignedBody({
               account: activeAccount,
@@ -869,9 +899,10 @@ export default function ClearanceManagementConsoleClient({
           },
           cache: "no-store",
           body: JSON.stringify({
-            storesLimit: 300,
+            storesLimit: isStoreScoped ? 1 : 300,
             storesPage: 1,
             withdrawalLimit: 24,
+            selectedStorecode,
             signedStoreBody,
           }),
         });
@@ -896,6 +927,7 @@ export default function ClearanceManagementConsoleClient({
           stores: Array.isArray(result?.stores) ? result.stores : EMPTY_STORES,
           storeTotalCount: Number(result?.storeTotalCount || 0),
           storesError: normalizeText(result?.storesError),
+          selectedStore: result?.selectedStore || null,
           withdrawalEvents: Array.isArray(result?.withdrawalEvents) ? result.withdrawalEvents : EMPTY_WITHDRAWALS,
           withdrawalNextCursor: typeof result?.withdrawalNextCursor === "string" ? result.withdrawalNextCursor : null,
         }));
@@ -924,7 +956,7 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [activeAccount, replaceWithdrawalRealtimeItems],
+    [activeAccount, filters.storecode, isStoreScoped, normalizedForcedStorecode, replaceWithdrawalRealtimeItems],
   );
 
   const loadOrdersDashboard = useCallback(
@@ -1222,9 +1254,10 @@ export default function ClearanceManagementConsoleClient({
 
     return (
       stores.find((store) => String(store.storecode || "").trim() === filters.storecode)
+      || data?.selectedStore
       || null
     );
-  }, [filters.storecode, stores]);
+  }, [data?.selectedStore, filters.storecode, stores]);
   const storeCoverageLabel = filters.storecode
     ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
     : "전체 가맹점";
@@ -1263,6 +1296,13 @@ export default function ClearanceManagementConsoleClient({
     ? "flex w-full flex-col gap-5"
     : "mx-auto flex w-full max-w-[1480px] flex-col gap-5";
   const filterGridClassName = hideStoreFilter ? "lg:grid-cols-3" : "lg:grid-cols-4";
+  const heroBadgeLabel = isStoreScoped
+    ? "Stable Georgia / Store Clearance Console"
+    : "Stable Georgia / Clearance Console";
+  const heroTitle = isStoreScoped ? storeCoverageLabel : "Clearance Management";
+  const heroDescription = isStoreScoped
+    ? "해당 가맹점 범위의 청산 주문과 출금 webhook 흐름을 서명 기반으로 조회합니다."
+    : "청산 주문 목록과 출금 webhook 흐름을 한 화면에서 확인합니다. 현재 선택한 가맹점 범위 기준으로 동작하며 주문 목록은 `buyorder.status.changed`, 출금 live는 `banktransfer.updated`를 구독합니다.";
 
   const patchOrderInDashboard = useCallback(
     (orderId: string, updater: (order: ClearanceOrder) => ClearanceOrder) => {
@@ -1284,6 +1324,11 @@ export default function ClearanceManagementConsoleClient({
 
   const openActionModal = useCallback(
     (mode: ClearanceActionMode, order: ClearanceOrder) => {
+      if (!allowOrderActions) {
+        setError("이 화면에서는 조회만 가능합니다. 청산 완료/취소는 전체 관리자 콘솔에서 처리하세요.");
+        return;
+      }
+
       const orderId = String(order._id || "").trim();
       if (!orderId) {
         setError("주문 식별 정보가 부족합니다.");
@@ -1291,7 +1336,7 @@ export default function ClearanceManagementConsoleClient({
       }
 
       if (!activeAccount) {
-        setError("관리자 지갑을 연결해야 출금 처리를 진행할 수 있습니다.");
+        setError(`${accessActorLabel} 지갑을 연결해야 출금 처리를 진행할 수 있습니다.`);
         return;
       }
 
@@ -1302,7 +1347,7 @@ export default function ClearanceManagementConsoleClient({
         order,
       });
     },
-    [activeAccount],
+    [accessActorLabel, activeAccount, allowOrderActions],
   );
 
   const closeActionModal = useCallback(() => {
@@ -1373,6 +1418,7 @@ export default function ClearanceManagementConsoleClient({
         account: activeAccount,
         route,
         signingPrefix,
+        requesterStorecode: normalizedForcedStorecode || "admin",
         requesterWalletAddress: activeAccount.address,
         actionFields,
       });
@@ -1438,6 +1484,7 @@ export default function ClearanceManagementConsoleClient({
     canSubmitActionModal,
     closeActionModal,
     loadOrdersDashboard,
+    normalizedForcedStorecode,
     patchOrderInDashboard,
   ]);
 
@@ -1503,7 +1550,7 @@ export default function ClearanceManagementConsoleClient({
             <div className="space-y-6">
               <div className="console-mono flex flex-wrap items-center gap-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300">
                 <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1">
-                  Stable Georgia / Clearance Console
+                  {heroBadgeLabel}
                 </span>
                 <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1">
                   {refreshing ? "Live refresh running" : "Live clearance board"}
@@ -1512,12 +1559,10 @@ export default function ClearanceManagementConsoleClient({
 
               <div className="space-y-3">
                 <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
-                  Clearance Management
+                  {heroTitle}
                 </h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                  청산 주문 목록과 출금 webhook 흐름을 한 화면에서 확인합니다. 현재 선택한 가맹점
-                  범위 기준으로 동작하며 주문 목록은 `buyorder.status.changed`, 출금 live는
-                  `banktransfer.updated`를 구독합니다.
+                  {heroDescription}
                 </p>
               </div>
 
@@ -1554,7 +1599,9 @@ export default function ClearanceManagementConsoleClient({
 
             <AdminWalletCard
               address={activeAccount?.address}
-              disconnectedMessage="지갑을 연결하면 보호된 청산 조회가 열립니다."
+              accessLabel={walletAccessLabel}
+              title={walletTitle}
+              disconnectedMessage={disconnectedMessage}
               errorMessage={connectionError}
             />
           </div>
@@ -1564,14 +1611,14 @@ export default function ClearanceManagementConsoleClient({
         <section className="console-panel rounded-[30px] p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="space-y-1">
-              <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                Filters
-              </p>
-              <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                Clearance query
-              </h2>
+                <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                  Filters
+                </p>
+                <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                  {isStoreScoped ? "Store clearance query" : "Clearance query"}
+                </h2>
+              </div>
             </div>
-          </div>
 
           <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
             {hideStoreFilter ? (
@@ -2042,7 +2089,7 @@ export default function ClearanceManagementConsoleClient({
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
                       {!activeAccount
-                        ? "관리자 지갑 연결 후 Clearance stream 을 조회할 수 있습니다."
+                        ? disconnectedMessage
                         : ordersLoading
                           ? "Loading clearance orders..."
                           : "No clearance orders returned for the current filter."}
@@ -2158,34 +2205,42 @@ export default function ClearanceManagementConsoleClient({
                               </div>
                             ) : (
                               <div className="flex w-full flex-col gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => openActionModal("complete", order)}
-                                  disabled={isProcessingThisOrder || actionModalSubmitting}
-                                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition ${
-                                    isProcessingThisOrder || actionModalSubmitting
-                                      ? "cursor-not-allowed bg-emerald-300"
-                                      : "bg-emerald-600 hover:bg-emerald-700"
-                                  }`}
-                                >
-                                  {isProcessingThisOrder && actionModalState?.mode === "complete"
-                                    ? "처리중..."
-                                    : "완료하기"}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openActionModal("cancel", order)}
-                                  disabled={isProcessingThisOrder || actionModalSubmitting}
-                                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition ${
-                                    isProcessingThisOrder || actionModalSubmitting
-                                      ? "cursor-not-allowed bg-rose-300"
-                                      : "bg-rose-600 hover:bg-rose-700"
-                                  }`}
-                                >
-                                  {isProcessingThisOrder && actionModalState?.mode === "cancel"
-                                    ? "취소중..."
-                                    : "취소하기"}
-                                </button>
+                                {allowOrderActions ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openActionModal("complete", order)}
+                                      disabled={isProcessingThisOrder || actionModalSubmitting}
+                                      className={`rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition ${
+                                        isProcessingThisOrder || actionModalSubmitting
+                                          ? "cursor-not-allowed bg-emerald-300"
+                                          : "bg-emerald-600 hover:bg-emerald-700"
+                                      }`}
+                                    >
+                                      {isProcessingThisOrder && actionModalState?.mode === "complete"
+                                        ? "처리중..."
+                                        : "완료하기"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openActionModal("cancel", order)}
+                                      disabled={isProcessingThisOrder || actionModalSubmitting}
+                                      className={`rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition ${
+                                        isProcessingThisOrder || actionModalSubmitting
+                                          ? "cursor-not-allowed bg-rose-300"
+                                          : "bg-rose-600 hover:bg-rose-700"
+                                      }`}
+                                    >
+                                      {isProcessingThisOrder && actionModalState?.mode === "cancel"
+                                        ? "취소중..."
+                                        : "취소하기"}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                                    이 화면에서는 조회만 가능합니다.
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -2323,8 +2378,8 @@ export default function ClearanceManagementConsoleClient({
                     </h3>
                     <p className="text-sm text-slate-600">
                       {actionModalState.mode === "complete"
-                        ? "관리자 서명으로 `buyer.depositCompleted=true`를 기록합니다."
-                        : "관리자 서명으로 주문 상태를 `cancelled`로 변경하고 연결된 입금 매칭을 해제합니다."}
+                        ? `${accessActorLabel} 서명으로 \`buyer.depositCompleted=true\`를 기록합니다.`
+                        : `${accessActorLabel} 서명으로 주문 상태를 \`cancelled\`로 변경하고 연결된 입금 매칭을 해제합니다.`}
                     </p>
                   </div>
                   <button

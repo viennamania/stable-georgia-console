@@ -9,6 +9,8 @@ type AdminWalletCardProps = {
   address?: string | null;
   disconnectedMessage: string;
   errorMessage?: string | null;
+  accessLabel?: string;
+  title?: string;
 };
 
 const normalizeText = (value: unknown) => {
@@ -35,6 +37,8 @@ export default function AdminWalletCard({
   address,
   disconnectedMessage,
   errorMessage,
+  accessLabel = "Signed access",
+  title = "Admin wallet",
 }: AdminWalletCardProps) {
   const normalizedAddress = normalizeText(address);
 
@@ -43,10 +47,10 @@ export default function AdminWalletCard({
       <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.22),transparent_58%)]" />
       <div className="space-y-2">
         <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
-          Signed access
+          {accessLabel}
         </p>
         <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-white">
-          Admin wallet
+          {title}
         </h2>
       </div>
 

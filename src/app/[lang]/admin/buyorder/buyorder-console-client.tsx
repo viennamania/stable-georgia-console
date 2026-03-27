@@ -282,6 +282,12 @@ type FilterState = {
 
 type OrdersQueryState = "idle" | "loading" | "ready" | "error";
 
+type BuyorderConsoleClientProps = {
+  lang: string;
+  forcedStorecode?: string;
+  hideStoreFilter?: boolean;
+};
+
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") {
     return "";
@@ -1750,8 +1756,24 @@ const buildPaymentReversePreviewUrl = ({
   return `${PAYMENT_REVERSE_PREVIEW_ORIGIN}/${encodeURIComponent(safeLang)}/${encodeURIComponent(safeClientId)}/${encodeURIComponent(safeStorecode)}/pay-usdt-reverse/${encodeURIComponent(safeOrderId)}`;
 };
 
-export default function BuyorderConsoleClient({ lang }: { lang: string }) {
+export default function BuyorderConsoleClient({
+  lang,
+  forcedStorecode = "",
+  hideStoreFilter = false,
+}: BuyorderConsoleClientProps) {
   const activeAccount = useActiveAccount();
+  const normalizedForcedStorecode = normalizeString(forcedStorecode);
+  const isStoreScoped = Boolean(normalizedForcedStorecode);
+  const shouldHideStoreFilter = hideStoreFilter || isStoreScoped;
+  const accessActorLabel = isStoreScoped ? "가맹점 관리자" : "관리자";
+  const walletAccessLabel = isStoreScoped ? "Store signed access" : "Signed access";
+  const walletTitle = isStoreScoped ? "Store wallet" : "Admin wallet";
+  const heroProductLabel = isStoreScoped
+    ? "Stable Georgia / Store Buyorder Console"
+    : "Stable Georgia / Ops Read Console";
+  const ordersDisconnectedMessage = isStoreScoped
+    ? "지갑을 연결하고 서명하면 해당 가맹점 주문 조회가 열립니다."
+    : "지갑을 연결하면 보호된 주문 조회가 열립니다.";
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters());
   const [draftFilters, setDraftFilters] = useState<FilterState>(() => createDefaultFilters());
   const [storeSearchQuery, setStoreSearchQuery] = useState("");
@@ -1848,6 +1870,18 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
       const shouldLoadOrders = Boolean(activeAccount);
+      const selectedStorecode = shouldHideStoreFilter
+        ? normalizedForcedStorecode
+        : filters.storecode;
+
+      if (isStoreScoped && !activeAccount) {
+        setData(null);
+        setError("");
+        setLoading(false);
+        setRefreshing(false);
+        setOrdersQueryState("idle");
+        return;
+      }
 
       if (inflightLoadRef.current) {
         if (silent) {
@@ -1872,9 +1906,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           ? await createCenterStoreAdminSignedBody({
               account: activeAccount,
               route: "/api/order/getAllBuyOrders",
-              storecode: "admin",
+              storecode: normalizedForcedStorecode || "admin",
               body: {
-                storecode: filters.storecode,
+                storecode: selectedStorecode,
                 limit: filters.limit,
                 page: filters.page,
                 fromDate: filters.fromDate,
@@ -1896,15 +1930,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
           cache: "no-store",
           body: JSON.stringify({
             signedOrdersBody,
-            selectedStorecode: filters.storecode,
-            storesLimit: 200,
+            selectedStorecode,
+            storesLimit: isStoreScoped ? 1 : 200,
             storesPage: 1,
             unmatchedFilters: {
               limit: 24,
               page: 1,
               fromDate: filters.fromDate,
               toDate: filters.toDate,
-              storecode: filters.storecode,
+              storecode: selectedStorecode,
             },
           }),
         });
@@ -1937,7 +1971,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
         }
       }
     },
-    [activeAccount, filters],
+    [activeAccount, filters, isStoreScoped, normalizedForcedStorecode, shouldHideStoreFilter],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
@@ -2270,7 +2304,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
   const openDepositModalForOrder = useCallback(async (order: BuyOrder) => {
     if (!activeAccount) {
-      setError("관리자 지갑을 연결해야 완료 처리할 수 있습니다.");
+      setError(`${accessActorLabel} 지갑을 연결해야 완료 처리할 수 있습니다.`);
       return;
     }
 
@@ -2287,7 +2321,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     setDepositModalError("");
     setDepositModalOpen(true);
     await fetchDepositsForOrder(order);
-  }, [activeAccount, fetchDepositsForOrder]);
+  }, [accessActorLabel, activeAccount, fetchDepositsForOrder]);
 
   const closeDepositModal = useCallback(() => {
     if (depositModalSubmitting) {
@@ -2403,7 +2437,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
   const openCancelModalForOrder = useCallback((order: BuyOrder) => {
     if (!activeAccount) {
-      setError("관리자 지갑을 연결해야 거래취소를 처리할 수 있습니다.");
+      setError(`${accessActorLabel} 지갑을 연결해야 거래취소를 처리할 수 있습니다.`);
       return;
     }
 
@@ -2412,7 +2446,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     setCancelReason("");
     setTargetCancelOrder(order);
     setCancelModalOpen(true);
-  }, [activeAccount]);
+  }, [accessActorLabel, activeAccount]);
 
   const closeCancelModal = useCallback(() => {
     if (cancelModalSubmitting) {
@@ -2440,9 +2474,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     const matchKey = getOrderMatchKey(targetCancelOrder);
     const orderId = String(targetCancelOrder._id || "").trim();
     const walletAddress = String(activeAccount.address || "").trim().toLowerCase();
+    const actionStorecode = String(
+      targetCancelOrder.storecode
+        || targetCancelOrder.store?.storecode
+        || normalizedForcedStorecode
+        || filters.storecode,
+    ).trim();
     const hasEscrowWallet = Boolean(String(targetCancelOrder.escrowWallet?.transactionHash || "").trim());
 
-    if (!orderId) {
+    if (!orderId || !actionStorecode) {
       setCancelModalError("주문 식별 정보가 부족합니다.");
       return;
     }
@@ -2462,7 +2502,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             route: "/api/order/cancelTradeBySellerWithEscrow",
             body: {
               orderId,
-              storecode: "admin",
+              storecode: actionStorecode,
               walletAddress,
               cancelTradeReason: cancelReason,
             },
@@ -2477,11 +2517,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
         const signedBody = await createCenterStoreAdminSignedBody({
           account: activeAccount,
           route: "/api/order/cancelTradeBySeller",
-          storecode: "admin",
+          storecode: actionStorecode,
           requesterWalletAddress: activeAccount.address,
           body: {
             orderId,
-            storecode: "admin",
+            storecode: actionStorecode,
             walletAddress,
             cancelTradeReason: cancelReason,
           },
@@ -2518,7 +2558,16 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       setCancelModalSubmitting(false);
       setCancellingTradeId("");
     }
-  }, [activeAccount, cancelReason, closeCancelModal, loadDashboard, patchOrderInDashboard, targetCancelOrder]);
+  }, [
+    activeAccount,
+    cancelReason,
+    closeCancelModal,
+    filters.storecode,
+    loadDashboard,
+    normalizedForcedStorecode,
+    patchOrderInDashboard,
+    targetCancelOrder,
+  ]);
 
   useEffect(() => {
     void loadDashboard();
@@ -2746,6 +2795,15 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
       || null
     );
   }, [draftFilters.storecode, filters.storecode, selectedStoreSummary, stores]);
+  const storeCoverageLabel = filters.storecode
+    ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
+    : "전체 가맹점";
+  const heroTitle = isStoreScoped
+    ? storeCoverageLabel
+    : "Stable Georgia";
+  const heroDescription = isStoreScoped
+    ? "해당 가맹점 범위의 구매주문, 미신청입금, 판매자 계좌 흐름을 서명 기반으로 확인합니다."
+    : "입금 이벤트, 주문 큐, 판매자 계좌 흐름을 하나의 운영 콘솔에서 실시간으로 추적합니다.";
 
   const isSignedIn = Boolean(activeAccount);
   const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
@@ -2839,24 +2897,43 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
     : connectionState === "connecting" || connectionState === "initialized"
       ? "border-sky-400/30 bg-sky-400/12 text-sky-200"
       : "border-amber-400/30 bg-amber-400/12 text-amber-200";
-  const liveQueueCards = [
-    {
-      label: "Processing buy orders",
-      value: `${NUMBER_FORMATTER.format(data?.processingBuyOrders.length || 0)}건`,
-    },
-    {
-      label: "Clearance waiting",
-      value: `${NUMBER_FORMATTER.format(data?.processingClearanceOrders.length || 0)}건`,
-    },
-    {
-      label: "Loaded rows",
-      value: `${NUMBER_FORMATTER.format(orders.length)} / ${NUMBER_FORMATTER.format(data?.orderTotalCount || 0)}`,
-    },
-    {
-      label: "Unmatched deposits",
-      value: `${NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}건`,
-    },
-  ];
+  const liveQueueCards = isStoreScoped
+    ? [
+        {
+          label: "Visible orders",
+          value: `${NUMBER_FORMATTER.format(orders.length)} / ${NUMBER_FORMATTER.format(data?.orderTotalCount || 0)}`,
+        },
+        {
+          label: "Pending USDT",
+          value: `${NUMBER_FORMATTER.format(pendingUsdtTransferCount)}건`,
+        },
+        {
+          label: "Settlement wait",
+          value: `${NUMBER_FORMATTER.format(pendingSettlementCount)}건`,
+        },
+        {
+          label: "Unmatched deposits",
+          value: `${NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}건`,
+        },
+      ]
+    : [
+        {
+          label: "Processing buy orders",
+          value: `${NUMBER_FORMATTER.format(data?.processingBuyOrders.length || 0)}건`,
+        },
+        {
+          label: "Clearance waiting",
+          value: `${NUMBER_FORMATTER.format(data?.processingClearanceOrders.length || 0)}건`,
+        },
+        {
+          label: "Loaded rows",
+          value: `${NUMBER_FORMATTER.format(orders.length)} / ${NUMBER_FORMATTER.format(data?.orderTotalCount || 0)}`,
+        },
+        {
+          label: "Unmatched deposits",
+          value: `${NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}건`,
+        },
+      ];
   const orderLimit = Math.max(1, Number(filters.limit) || 1);
   const totalOrderCount = Math.max(0, Number(data?.orderTotalCount || 0));
   const totalOrderPages = Math.max(1, Math.ceil(totalOrderCount / orderLimit));
@@ -2899,6 +2976,26 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
   }, [draftFilters]);
 
   useEffect(() => {
+    if (!shouldHideStoreFilter && !normalizedForcedStorecode) {
+      return;
+    }
+
+    setStoreSearchOpen(false);
+    setStoreSearchQuery("");
+    setDraftFilters((prev) => {
+      if (prev.storecode === normalizedForcedStorecode) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        storecode: normalizedForcedStorecode,
+        page: 1,
+      };
+    });
+  }, [normalizedForcedStorecode, shouldHideStoreFilter]);
+
+  useEffect(() => {
     if (filters.page <= totalOrderPages) {
       return;
     }
@@ -2914,7 +3011,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             <div className="space-y-6">
               <div className="console-mono flex flex-wrap items-center gap-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300">
                 <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1">
-                  Stable Georgia / Ops Read Console
+                  {heroProductLabel}
                 </span>
                 <span className={`rounded-full border border-white/12 bg-white/8 px-3 py-1 ${syncStatusTone}`}>
                   {syncStatusLabel}
@@ -2925,8 +3022,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="space-y-5">
                   <div className="max-w-4xl space-y-3">
                     <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
-                      Stable Georgia
+                      {heroTitle}
                     </h1>
+                    <p className="max-w-3xl text-sm leading-7 text-slate-300">
+                      {heroDescription}
+                    </p>
                   </div>
 
                   <div className="max-w-xl">
@@ -2987,7 +3087,9 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
 
             <AdminWalletCard
               address={activeAccount?.address}
-              disconnectedMessage="지갑을 연결하면 보호된 주문 조회가 열립니다."
+              accessLabel={walletAccessLabel}
+              title={walletTitle}
+              disconnectedMessage={ordersDisconnectedMessage}
             />
           </div>
         </section>
@@ -3000,13 +3102,19 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   Filters
                 </p>
                 <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                  Admin query
+                  {isStoreScoped ? "Store query" : "Admin query"}
                 </h2>
               </div>
             </div>
 
             <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
+              {shouldHideStoreFilter ? (
+                <div className="mb-3 text-xs text-slate-400">
+                  현재 범위: {storeCoverageLabel}
+                </div>
+              ) : null}
               <div className="grid gap-3 xl:grid-cols-12">
+                {!shouldHideStoreFilter ? (
                 <div className="space-y-2 text-sm xl:col-span-4">
                   <span className="font-medium text-slate-200">가맹점 선택</span>
                   <div ref={storeSearchRef} className="relative">
@@ -3152,6 +3260,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     ) : null}
                   </div>
                 </div>
+                ) : null}
 
                 <label className="space-y-2 text-sm xl:col-span-3">
                   <span className="font-medium text-slate-200">Trade ID</span>
@@ -3516,9 +3625,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                   {NUMBER_FORMATTER.format(sellerBankTradeSummaries.length)} 계좌
                 </span>
                 <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
-                  {filters.storecode
-                    ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
-                    : "전체 가맹점"}
+                  {storeCoverageLabel}
                 </span>
                 <button
                   type="button"
@@ -3537,7 +3644,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
             <div className="px-5 py-4">
               {!isSignedIn ? (
                 <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
-                  판매자 통장별 P2P 거래 통계는 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
+                  판매자 통장별 P2P 거래 통계는 {accessActorLabel} 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
                   위 영역에서 지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`의 계좌별 집계가
                   함께 로드됩니다.
                 </div>
@@ -3635,7 +3742,11 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     {animatedUnmatchedTransfers.map(({ id, item: transfer, phase }) => {
                       const isHighlighted = highlightedUnmatchedId && highlightedUnmatchedId === id;
                       const storeLabel =
-                        transfer.storeInfo?.storeName || transfer.storeInfo?.storecode || filters.storecode || "admin";
+                        transfer.storeInfo?.storeName
+                        || transfer.storeInfo?.storecode
+                        || filters.storecode
+                        || normalizedForcedStorecode
+                        || "admin";
                       const storeLogoSrc = getUnmatchedTransferStoreLogoSrc(transfer, stores);
                       const transactionDate =
                         transfer.transactionDateUtc || transfer.processingDate || transfer.regDate || "";
@@ -3754,7 +3865,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                 <div className="space-y-4 px-6 pt-4 pb-3">
                   {!isSignedIn ? (
                     <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
-                      주문 목록은 관리자 지갑을 연결한 뒤 서명해야 불러올 수 있습니다. 위 영역에서
+                      주문 목록은 {accessActorLabel} 지갑을 연결한 뒤 서명해야 불러올 수 있습니다. 위 영역에서
                       지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`가 로컬 BFF를 통해
                       호출됩니다.
                     </div>
@@ -3807,7 +3918,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           주문 목록 불러오는 중...
                         </span>
                       ) : shouldShowOrdersConnectPrompt ? (
-                        "지갑 연결 후 주문 목록이 표시됩니다."
+                        ordersDisconnectedMessage
                       ) : shouldShowOrdersErrorState ? (
                         "주문 목록을 불러오지 못했습니다."
                       ) : "현재 필터에 해당하는 주문이 없습니다."}
@@ -4628,7 +4739,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                       미신청입금 선택 후 완료하기
                     </h3>
                     <p className="text-sm text-slate-600">
-                      판매자 계좌로 들어온 미신청입금을 선택하고, 관리자 서명으로 주문을 `paymentConfirmed`
+                      판매자 계좌로 들어온 미신청입금을 선택하고, {accessActorLabel} 서명으로 주문을 `paymentConfirmed`
                       상태로 넘깁니다.
                     </p>
                   </div>
@@ -4825,7 +4936,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                     </h3>
                     <p className="text-sm text-slate-600">
                       취소 후 주문 상태는 `cancelled`로 변경됩니다. escrow 주문이면 escrow 취소 route를,
-                      일반 주문이면 관리자 서명 취소 route를 사용합니다.
+                      일반 주문이면 {accessActorLabel} 서명 취소 route를 사용합니다.
                     </p>
                   </div>
                   <button

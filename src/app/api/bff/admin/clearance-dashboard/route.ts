@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
 
   const signedOrdersBody = asPlainObject(body.signedOrdersBody);
   const signedStoreBody = asPlainObject(body.signedStoreBody);
+  const selectedStorecode = normalizeString(body.selectedStorecode);
   const storesLimit = Math.min(parsePositiveInt(body.storesLimit, 200), 300);
   const storesPage = Math.max(parsePositiveInt(body.storesPage, 1), 1);
   const withdrawalLimit = Math.min(parsePositiveInt(body.withdrawalLimit, 24), 80);
@@ -104,12 +105,20 @@ export async function POST(request: NextRequest) {
     jobs.push(postRemoteJson("/api/order/getAllBuyOrders", signedOrdersBody));
   }
 
+  if (selectedStorecode) {
+    jobs.push(
+      postRemoteJson("/api/store/getOneStore", {
+        storecode: selectedStorecode,
+      }),
+    );
+  }
+
   const results = await Promise.all(jobs);
-  const storesResponse = results[0];
-  const withdrawalEventsResponse = results[1];
-  const signedOrdersResponse = hasSignedOrdersBody
-    ? results[results.length - 1]
-    : null;
+  let resultIndex = 0;
+  const storesResponse = results[resultIndex++];
+  const withdrawalEventsResponse = results[resultIndex++];
+  const signedOrdersResponse = hasSignedOrdersBody ? results[resultIndex++] : null;
+  const selectedStoreResponse = selectedStorecode ? results[resultIndex++] : null;
   const storesError = storesResponse.ok
     ? ""
     : resolveRemoteError(storesResponse.json, "Failed to load store list");
@@ -136,6 +145,7 @@ export async function POST(request: NextRequest) {
       stores: storesResponse.json?.result?.stores || [],
       storeTotalCount: storesResponse.json?.result?.totalCount || 0,
       storesError,
+      selectedStore: selectedStoreResponse?.ok ? (selectedStoreResponse.json?.result || null) : null,
       ordersError,
       orders: signedOrdersResult.orders || [],
       totalCount: Number(signedOrdersResult.totalCount || 0),
