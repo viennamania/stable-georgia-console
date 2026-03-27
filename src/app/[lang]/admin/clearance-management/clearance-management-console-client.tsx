@@ -219,8 +219,11 @@ const createDefaultFilters = (storecode = ""): FilterState => ({
   searchMyOrders: false,
 });
 
-const createBaseLoadSignature = (walletAddress?: string | null) => {
-  return String(walletAddress || "").trim().toLowerCase() || "guest";
+const createBaseLoadSignature = (walletAddress?: string | null, storecode?: string | null) => {
+  return [
+    String(walletAddress || "").trim().toLowerCase() || "guest",
+    String(storecode || "").trim().toLowerCase() || "*",
+  ].join("|");
 };
 
 const createOrdersLoadSignature = (filters: FilterState, walletAddress?: string | null) => {
@@ -710,7 +713,10 @@ export default function ClearanceManagementConsoleClient({
   const desiredBaseLoadSignatureRef = useRef("");
   const desiredOrdersLoadSignatureRef = useRef("");
 
-  desiredBaseLoadSignatureRef.current = createBaseLoadSignature(activeAccount?.address);
+  desiredBaseLoadSignatureRef.current = createBaseLoadSignature(
+    activeAccount?.address,
+    normalizedForcedStorecode || filters.storecode,
+  );
   desiredOrdersLoadSignatureRef.current = createOrdersLoadSignature(
     {
       ...filters,
@@ -801,13 +807,14 @@ export default function ClearanceManagementConsoleClient({
         transactionType: "withdrawn",
         sort: "asc",
       });
+      const scopedStorecode = normalizedForcedStorecode || filters.storecode;
 
       const nextCursor = options?.sinceCursor ?? withdrawalRealtimeCursorRef.current;
       if (nextCursor) {
         params.set("since", nextCursor);
       }
-      if (isStoreScoped && normalizedForcedStorecode) {
-        params.set("storecode", normalizedForcedStorecode);
+      if (scopedStorecode) {
+        params.set("storecode", scopedStorecode);
       }
 
       try {
@@ -840,13 +847,16 @@ export default function ClearanceManagementConsoleClient({
         );
       }
     },
-    [isStoreScoped, normalizedForcedStorecode, upsertWithdrawalRealtimeEvents],
+    [filters.storecode, normalizedForcedStorecode, upsertWithdrawalRealtimeEvents],
   );
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const loadSignature = createBaseLoadSignature(activeAccount?.address);
+      const loadSignature = createBaseLoadSignature(
+        activeAccount?.address,
+        normalizedForcedStorecode || filters.storecode,
+      );
       const selectedStorecode = normalizedForcedStorecode || filters.storecode;
 
       if (isStoreScoped && !activeAccount) {
@@ -868,9 +878,7 @@ export default function ClearanceManagementConsoleClient({
       }
 
       if (inflightLoadRef.current) {
-        if (silent) {
-          queuedSilentRefreshRef.current = true;
-        }
+        queuedSilentRefreshRef.current = true;
         return;
       }
 
@@ -923,9 +931,7 @@ export default function ClearanceManagementConsoleClient({
         }
 
         if (desiredBaseLoadSignatureRef.current !== loadSignature) {
-          if (silent) {
-            queuedSilentRefreshRef.current = true;
-          }
+          queuedSilentRefreshRef.current = true;
           return;
         }
 
@@ -981,9 +987,7 @@ export default function ClearanceManagementConsoleClient({
       );
 
       if (inflightOrdersLoadRef.current) {
-        if (silent) {
-          queuedSilentOrdersRefreshRef.current = true;
-        }
+        queuedSilentOrdersRefreshRef.current = true;
         return;
       }
 
@@ -997,9 +1001,7 @@ export default function ClearanceManagementConsoleClient({
       try {
         if (!activeAccount) {
           if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
-            if (silent) {
-              queuedSilentOrdersRefreshRef.current = true;
-            }
+            queuedSilentOrdersRefreshRef.current = true;
             return;
           }
 
@@ -1050,9 +1052,7 @@ export default function ClearanceManagementConsoleClient({
 
         if (!signedOrdersBody) {
           if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
-            if (silent) {
-              queuedSilentOrdersRefreshRef.current = true;
-            }
+            queuedSilentOrdersRefreshRef.current = true;
             return;
           }
 
@@ -1087,9 +1087,7 @@ export default function ClearanceManagementConsoleClient({
         }
 
         if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
-          if (silent) {
-            queuedSilentOrdersRefreshRef.current = true;
-          }
+          queuedSilentOrdersRefreshRef.current = true;
           return;
         }
 
@@ -1269,7 +1267,7 @@ export default function ClearanceManagementConsoleClient({
     }
 
     return (
-      stores.find((store) => String(store.storecode || "").trim() === filters.storecode)
+      stores.find((store) => normalizeText(store.storecode).toLowerCase() === filters.storecode.toLowerCase())
       || data?.selectedStore
       || null
     );
@@ -1286,7 +1284,7 @@ export default function ClearanceManagementConsoleClient({
     }
 
     return withdrawalRealtimeItems.filter((item) => {
-      return String(item.data.storecode || "").trim() === filters.storecode;
+      return normalizeText(item.data.storecode).toLowerCase() === filters.storecode.toLowerCase();
     });
   }, [filters.storecode, withdrawalRealtimeItems]);
   const withdrawalRealtimeEventCount = filteredWithdrawalRealtimeItems.length;
