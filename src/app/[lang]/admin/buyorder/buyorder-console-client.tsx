@@ -1879,6 +1879,7 @@ export default function BuyorderConsoleClient({
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
       const shouldLoadOrders = canReadSignedData;
+      const shouldWaitForSignedOrders = !canReadSignedData && isWalletRecovering;
       const selectedStorecode = normalizedForcedStorecode || filters.storecode;
 
       if (isStoreScoped && !canReadSignedData) {
@@ -1911,7 +1912,7 @@ export default function BuyorderConsoleClient({
         setRefreshing(true);
       } else {
         setLoading(true);
-        if (shouldLoadOrders) {
+        if (shouldLoadOrders || shouldWaitForSignedOrders) {
           setOrdersQueryState("loading");
         }
       }
@@ -1968,11 +1969,15 @@ export default function BuyorderConsoleClient({
         setError("");
         if (shouldLoadOrders) {
           setOrdersQueryState("ready");
+        } else if (!shouldWaitForSignedOrders) {
+          setOrdersQueryState("idle");
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
         if (shouldLoadOrders) {
           setOrdersQueryState("error");
+        } else if (!shouldWaitForSignedOrders) {
+          setOrdersQueryState("idle");
         }
       } finally {
         inflightLoadRef.current = false;
