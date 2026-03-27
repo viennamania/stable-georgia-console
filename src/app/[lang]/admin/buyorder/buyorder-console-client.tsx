@@ -4015,7 +4015,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                           </div>
                         </td>
                         <td className="w-[304px] border-b border-slate-100 px-4 py-4 align-top">
-                          <div className="grid grid-cols-[minmax(0,1fr)_104px] items-start gap-3">
+                          <div className="grid grid-cols-[minmax(0,1fr)_92px] items-start gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex min-w-0 items-center gap-2">
                                 <span
@@ -4029,7 +4029,7 @@ export default function BuyorderConsoleClient({ lang }: { lang: string }) {
                               </div>
                               {shouldShowBuyerDepositName ? (
                                 <div className="mt-1 truncate text-sm font-medium text-slate-600">
-                                  예금주 {buyerDepositName}
+                                  {buyerDepositName}
                                 </div>
                               ) : null}
                               <div className="console-mono mt-1 text-xs text-slate-500">
