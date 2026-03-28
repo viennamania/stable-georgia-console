@@ -485,6 +485,25 @@ export default function DailyCloseConsoleClient({
     ? "가맹점 관리자 지갑 서명이 있어야 일별 마감 데이터를 읽을 수 있습니다."
     : "";
   const paymentRequestedPreview = data.paymentRequested.orders.slice(0, 4);
+  const heroStatusLabel = loading
+    ? "Initial sync"
+    : refreshing
+      ? "Refreshing snapshot"
+      : "Daily close synced";
+  const heroStatusBadgeClassName = loading
+    ? "border-sky-400/30 bg-sky-400/12 text-sky-100"
+    : refreshing
+      ? "border-emerald-400/30 bg-emerald-400/12 text-emerald-100"
+      : "border-white/12 bg-white/8 text-slate-100";
+  const walletStateLabel = canReadSignedData
+    ? "Store wallet signed"
+    : isWalletRecovering
+      ? "Checking store wallet connection"
+      : "Signed wallet required for scoped data";
+  const activeDateRangeLabel = `${filters.fromDate || "-"} ~ ${filters.toDate || "-"}`;
+  const loadedRowsLabel = loading && data.orders.length === 0
+    ? "Syncing..."
+    : `${data.orders.length.toLocaleString()} rows`;
 
   const applyQuickRange = (days: number) => {
     const endDate = new Date();
@@ -505,54 +524,80 @@ export default function DailyCloseConsoleClient({
   };
 
   return (
-    <div className="min-h-screen bg-[#edf3f8] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_360px]">
-          <div className="console-shell rounded-[34px] px-6 py-7 sm:px-8">
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-wrap items-start justify-between gap-5">
-                <div className="space-y-4">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-sky-100">
-                    <span className="h-2 w-2 rounded-full bg-sky-300" aria-hidden="true" />
-                    Stable Georgia / Store Daily Close Console
-                  </div>
-                  <div>
-                    <h1 className="console-display text-4xl font-semibold tracking-[-0.07em] text-white sm:text-5xl">
-                      일별 마감
+    <div className="console-shell px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5">
+        <section className="console-hero overflow-hidden rounded-[34px] text-white">
+          <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.8fr)_380px] lg:px-8 lg:py-8">
+            <div className="space-y-6">
+              <div className="console-mono flex flex-wrap items-center gap-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300">
+                <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1">
+                  Store daily close
+                </span>
+                <span className={`rounded-full border px-3 py-1 ${heroStatusBadgeClassName}`}>
+                  {heroStatusLabel}
+                </span>
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_320px]">
+                <div className="space-y-5">
+                  <div className="max-w-4xl space-y-3">
+                    <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
+                      {storeDisplayName}
                     </h1>
-                    <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+                    <p className="max-w-3xl text-sm leading-7 text-slate-300">
                       해당 가맹점의 거래, 결제, 수수료, 출금, 청산 흐름을 일자 단위로 확인합니다.
                     </p>
                   </div>
-                </div>
 
-                <div className="grid min-w-[260px] gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <div className="rounded-[28px] border border-white/10 bg-white/6 p-5 text-white">
-                    <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
-                      Store scope
-                    </div>
-                    <div className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-white">
-                      {storeDisplayName}
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-                        {normalizedForcedStorecode}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-                        {filters.fromDate || "-"} ~ {filters.toDate || "-"}
-                      </span>
+                  <div className="max-w-xl">
+                    <div className="console-dark-card rounded-[24px] p-4">
+                      <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                        Last sync
+                      </div>
+                      <div className="mt-3 text-sm font-medium text-white">
+                        {data.fetchedAt ? formatDateTime(data.fetchedAt) : "Waiting for first sync"}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-400">{walletStateLabel}</div>
                     </div>
                   </div>
+                </div>
 
-                  <div className="rounded-[28px] border border-white/10 bg-white/6 p-5 text-white">
-                    <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
-                      Sync status
+                <div className="console-dark-card rounded-[28px] p-4">
+                  <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
+                    Scope deck
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2.5">
+                    <div className="rounded-[18px] border border-white/10 bg-white/6 px-3 py-3">
+                      <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
+                        Storecode
+                      </div>
+                      <div className="mt-1.5 text-sm font-semibold text-white">
+                        {normalizedForcedStorecode || "-"}
+                      </div>
                     </div>
-                    <div className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-white">
-                      {loading ? "Initial sync" : refreshing ? "Refreshing" : "Live snapshot"}
+                    <div className="rounded-[18px] border border-white/10 bg-white/6 px-3 py-3">
+                      <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
+                        Range
+                      </div>
+                      <div className="mt-1.5 text-sm font-semibold text-white">
+                        {activeDateRangeLabel}
+                      </div>
                     </div>
-                    <div className="mt-2 text-sm text-slate-300">
-                      {data.fetchedAt ? formatDateTime(data.fetchedAt) : "Waiting for first sync"}
+                    <div className="rounded-[18px] border border-white/10 bg-white/6 px-3 py-3">
+                      <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
+                        Loaded rows
+                      </div>
+                      <div className="mt-1.5 text-sm font-semibold text-white">
+                        {loadedRowsLabel}
+                      </div>
+                    </div>
+                    <div className="rounded-[18px] border border-white/10 bg-white/6 px-3 py-3">
+                      <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
+                        Payment requested
+                      </div>
+                      <div className="mt-1.5 text-sm font-semibold text-white">
+                        {data.paymentRequested.totalCount.toLocaleString()}건
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -570,164 +615,345 @@ export default function DailyCloseConsoleClient({
                 </div>
               ) : null}
             </div>
-          </div>
 
-          <AdminWalletCard
-            address={activeAccount?.address}
-            accessLabel="Store signed access"
-            title="Store wallet"
-            disconnectedMessage={disconnectedMessage}
-            errorMessage={error}
-          />
+            <AdminWalletCard
+              address={activeAccount?.address}
+              accessLabel="Store signed access"
+              title="Store wallet"
+              disconnectedMessage={disconnectedMessage}
+              errorMessage={error}
+            />
+          </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.85fr)_360px]">
-          <div className="console-panel rounded-[30px] p-6">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                  Filters
-                </div>
-                <h2 className="console-display mt-2 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                  Daily close query
-                </h2>
+        <section className="console-panel rounded-[30px] p-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                Filters
+              </div>
+              <h2 className="console-display mt-2 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                Daily close query
+              </h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => applyQuickRange(1)}
+                className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                오늘
+              </button>
+              <button
+                type="button"
+                onClick={() => applyQuickRange(7)}
+                className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                7일
+              </button>
+              <button
+                type="button"
+                onClick={() => applyQuickRange(30)}
+                className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                30일
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
+            <div className="mb-3 text-xs text-slate-400">현재 범위: {storeDisplayName}</div>
+            <div className="grid gap-3 xl:grid-cols-12">
+              <label className="space-y-2 text-sm xl:col-span-2">
+                <span className="font-medium text-slate-200">From</span>
+                <input
+                  type="date"
+                  value={draftFilters.fromDate}
+                  onChange={(event) => {
+                    setDraftFilters((current) => ({
+                      ...current,
+                      fromDate: event.target.value,
+                    }));
+                  }}
+                  className={fieldClassName}
+                />
+              </label>
+
+              <label className="space-y-2 text-sm xl:col-span-2">
+                <span className="font-medium text-slate-200">To</span>
+                <input
+                  type="date"
+                  value={draftFilters.toDate}
+                  onChange={(event) => {
+                    setDraftFilters((current) => ({
+                      ...current,
+                      toDate: event.target.value,
+                    }));
+                  }}
+                  className={fieldClassName}
+                />
+              </label>
+
+              <label className="space-y-2 text-sm xl:col-span-3">
+                <span className="font-medium text-slate-200">Buyer</span>
+                <input
+                  value={draftFilters.searchBuyer}
+                  onChange={(event) => {
+                    setDraftFilters((current) => ({
+                      ...current,
+                      searchBuyer: event.target.value,
+                    }));
+                  }}
+                  placeholder="구매자 검색"
+                  className={fieldClassName}
+                />
+              </label>
+
+              <label className="space-y-2 text-sm xl:col-span-2">
+                <span className="font-medium text-slate-200">Deposit name</span>
+                <input
+                  value={draftFilters.searchDepositName}
+                  onChange={(event) => {
+                    setDraftFilters((current) => ({
+                      ...current,
+                      searchDepositName: event.target.value,
+                    }));
+                  }}
+                  placeholder="입금자명 검색"
+                  className={fieldClassName}
+                />
+              </label>
+
+              <label className="space-y-2 text-sm xl:col-span-3">
+                <span className="font-medium text-slate-200">Bank account</span>
+                <input
+                  value={draftFilters.searchStoreBankAccountNumber}
+                  onChange={(event) => {
+                    setDraftFilters((current) => ({
+                      ...current,
+                      searchStoreBankAccountNumber: event.target.value,
+                    }));
+                  }}
+                  placeholder="통장번호 검색"
+                  className={fieldClassName}
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-slate-400">
+                자동 새로고침 20초. 조회 조건 변경 후 적용을 눌러 반영합니다.
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => applyQuickRange(1)}
-                  className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  onClick={resetFilters}
+                  className="rounded-2xl border border-white/10 bg-white/6 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10"
                 >
-                  오늘
+                  초기화
                 </button>
                 <button
                   type="button"
-                  onClick={() => applyQuickRange(7)}
-                  className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  onClick={() => setFilters(draftFilters)}
+                  className="rounded-2xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
                 >
-                  7일
+                  적용
                 </button>
                 <button
                   type="button"
-                  onClick={() => applyQuickRange(30)}
-                  className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  onClick={() => void loadDashboard({ silent: true })}
+                  className="rounded-2xl border border-sky-300/35 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-400/20"
                 >
-                  30일
+                  {refreshing ? "새로고침 중" : "새로고침"}
                 </button>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
-              <div className="mb-3 text-xs text-slate-400">현재 범위: {storeDisplayName}</div>
-              <div className="grid gap-3 xl:grid-cols-12">
-                <label className="space-y-2 text-sm xl:col-span-2">
-                  <span className="font-medium text-slate-200">From</span>
-                  <input
-                    type="date"
-                    value={draftFilters.fromDate}
-                    onChange={(event) => {
-                      setDraftFilters((current) => ({
-                        ...current,
-                        fromDate: event.target.value,
-                      }));
-                    }}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="space-y-2 text-sm xl:col-span-2">
-                  <span className="font-medium text-slate-200">To</span>
-                  <input
-                    type="date"
-                    value={draftFilters.toDate}
-                    onChange={(event) => {
-                      setDraftFilters((current) => ({
-                        ...current,
-                        toDate: event.target.value,
-                      }));
-                    }}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="space-y-2 text-sm xl:col-span-3">
-                  <span className="font-medium text-slate-200">Buyer</span>
-                  <input
-                    value={draftFilters.searchBuyer}
-                    onChange={(event) => {
-                      setDraftFilters((current) => ({
-                        ...current,
-                        searchBuyer: event.target.value,
-                      }));
-                    }}
-                    placeholder="구매자 검색"
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="space-y-2 text-sm xl:col-span-2">
-                  <span className="font-medium text-slate-200">Deposit name</span>
-                  <input
-                    value={draftFilters.searchDepositName}
-                    onChange={(event) => {
-                      setDraftFilters((current) => ({
-                        ...current,
-                        searchDepositName: event.target.value,
-                      }));
-                    }}
-                    placeholder="입금자명 검색"
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="space-y-2 text-sm xl:col-span-3">
-                  <span className="font-medium text-slate-200">Bank account</span>
-                  <input
-                    value={draftFilters.searchStoreBankAccountNumber}
-                    onChange={(event) => {
-                      setDraftFilters((current) => ({
-                        ...current,
-                        searchStoreBankAccountNumber: event.target.value,
-                      }));
-                    }}
-                    placeholder="통장번호 검색"
-                    className={fieldClassName}
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-xs text-slate-400">
-                  자동 새로고침 20초. 조회 조건 변경 후 적용을 눌러 반영합니다.
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="rounded-2xl border border-white/10 bg-white/6 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10"
-                  >
-                    초기화
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilters(draftFilters)}
-                    className="rounded-2xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
-                  >
-                    적용
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void loadDashboard({ silent: true })}
-                    className="rounded-2xl border border-sky-300/35 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-400/20"
-                  >
-                    {refreshing ? "새로고침 중" : "새로고침"}
-                  </button>
-                </div>
               </div>
             </div>
           </div>
+        </section>
 
-          <div className="space-y-6">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <MetricCard
+            label="집계 일수"
+            value={summary.totalDays.toLocaleString()}
+            unit="DAY"
+            helper={`${filters.fromDate || "-"} ~ ${filters.toDate || "-"}`}
+          />
+          <MetricCard
+            label="총 거래수"
+            value={summary.totalCount.toLocaleString()}
+            unit="건"
+            helper={`API total ${data.summary.totalCount.toLocaleString()}`}
+          />
+          <MetricCard
+            label="총 거래량"
+            value={formatUsdtDisplay(summary.totalUsdtAmount)}
+            unit="USDT"
+            tone="emerald"
+          />
+          <MetricCard
+            label="총 거래금액"
+            value={formatKrwDisplay(summary.totalKrwAmount)}
+            unit="KRW"
+            tone="amber"
+          />
+          <MetricCard
+            label="총 결제금액"
+            value={formatKrwDisplay(summary.totalSettlementAmountKRW)}
+            unit="KRW"
+            tone="amber"
+          />
+          <MetricCard
+            label="총 청산금액"
+            value={formatKrwDisplay(summary.totalClearanceKrwAmount)}
+            unit="KRW"
+            tone="amber"
+          />
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.75fr)_360px]">
+          <section className="console-panel overflow-hidden rounded-[30px]">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
+              <div>
+                <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  Daily table
+                </div>
+                <h2 className="console-display mt-2 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                  일별 마감 내역
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
+                  {data.orders.length.toLocaleString()} rows
+                </span>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
+                  {storeDisplayName}
+                </span>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
+                  {data.fetchedAt ? formatDateTime(data.fetchedAt) : "Waiting for first sync"}
+                </span>
+              </div>
+            </div>
+
+            {data.dailyError ? (
+              <div className="border-b border-rose-200 bg-rose-50 px-6 py-4 text-sm text-rose-600">
+                {data.dailyError}
+              </div>
+            ) : null}
+
+            {loading && data.orders.length === 0 ? (
+              <div className="px-6 py-16 text-center text-sm text-slate-500">
+                일별 마감 데이터를 불러오는 중입니다.
+              </div>
+            ) : data.orders.length === 0 ? (
+              <div className="px-6 py-16 text-center text-sm text-slate-500">
+                조회된 일별 마감 데이터가 없습니다.
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto">
+                <table className="min-w-[1180px] w-full table-auto border-collapse">
+                  <thead className="bg-slate-950 text-white">
+                    <tr>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        날짜
+                      </th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        거래수
+                      </th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        거래량 / 금액
+                      </th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        결제량 / 금액
+                      </th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        수수료량 / 금액
+                      </th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        출금
+                      </th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        청산수
+                      </th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        청산량 / 금액
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.orders.map((row, index) => (
+                      <tr
+                        key={`${row.date}-${index}`}
+                        className="border-b border-slate-200 bg-white transition-colors hover:bg-slate-50"
+                      >
+                        <td className="px-5 py-4 align-top">
+                          <div className="flex flex-col gap-1">
+                            <div className="text-base font-semibold text-slate-950">
+                              {formatDailyCloseDate(row.date)}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {formatDailyCloseWeekday(row.date)}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-right align-top">
+                          <div className="text-lg font-semibold text-slate-950">
+                            {normalizeNumber(row.totalCount).toLocaleString()}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 align-top">
+                          <AmountCell
+                            usdtValue={normalizeNumber(row.totalUsdtAmount)}
+                            krwValue={normalizeNumber(row.totalKrwAmount)}
+                          />
+                        </td>
+                        <td className="px-5 py-4 align-top">
+                          <AmountCell
+                            usdtValue={normalizeNumber(row.totalSettlementAmount)}
+                            krwValue={normalizeNumber(row.totalSettlementAmountKRW)}
+                          />
+                        </td>
+                        <td className="px-5 py-4 align-top">
+                          <AmountCell
+                            usdtValue={normalizeNumber(row.totalAgentFeeAmount) + normalizeNumber(row.totalFeeAmount)}
+                            krwValue={normalizeNumber(row.totalAgentFeeAmountKRW) + normalizeNumber(row.totalFeeAmountKRW)}
+                          />
+                        </td>
+                        <td className="px-5 py-4 text-right align-top">
+                          {normalizeNumber(row.totalEscrowCount) > 0 ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="console-display text-sm font-semibold tracking-[-0.04em] text-emerald-600">
+                                {formatUsdtDisplay(normalizeNumber(row.totalEscrowWithdrawAmount))}
+                              </span>
+                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                출금완료
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600">
+                              출금대기
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-right align-top">
+                          <div className="text-lg font-semibold text-slate-950">
+                            {normalizeNumber(row.totalClearanceCount).toLocaleString()}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 align-top">
+                          <AmountCell
+                            usdtValue={normalizeNumber(row.totalClearanceUsdtAmount)}
+                            krwValue={normalizeNumber(row.totalClearanceKrwAmount)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <div className="space-y-5">
             <div className="console-dark-card rounded-[30px] p-5 text-white">
               <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
                 Escrow snapshot
@@ -793,201 +1019,40 @@ export default function DailyCloseConsoleClient({
                 </div>
               ) : null}
             </div>
-          </div>
-        </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <MetricCard
-            label="집계 일수"
-            value={summary.totalDays.toLocaleString()}
-            unit="DAY"
-            helper={`${filters.fromDate || "-"} ~ ${filters.toDate || "-"}`}
-          />
-          <MetricCard
-            label="총 거래수"
-            value={summary.totalCount.toLocaleString()}
-            unit="건"
-            helper={`API total ${data.summary.totalCount.toLocaleString()}`}
-          />
-          <MetricCard
-            label="총 거래량"
-            value={formatUsdtDisplay(summary.totalUsdtAmount)}
-            unit="USDT"
-            tone="emerald"
-          />
-          <MetricCard
-            label="총 거래금액"
-            value={formatKrwDisplay(summary.totalKrwAmount)}
-            unit="KRW"
-            tone="amber"
-          />
-          <MetricCard
-            label="총 결제금액"
-            value={formatKrwDisplay(summary.totalSettlementAmountKRW)}
-            unit="KRW"
-            tone="amber"
-          />
-          <MetricCard
-            label="총 청산금액"
-            value={formatKrwDisplay(summary.totalClearanceKrwAmount)}
-            unit="KRW"
-            tone="amber"
-          />
-        </section>
-
-        <section className="console-panel overflow-hidden rounded-[30px]">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
-            <div>
-              <div className="console-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                Daily table
+            <div className="console-panel rounded-[30px] p-5">
+              <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                System
               </div>
-              <h2 className="console-display mt-2 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                일별 마감 내역
-              </h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
-                {data.orders.length.toLocaleString()} rows
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
-                {storeDisplayName}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
-                {data.fetchedAt ? formatDateTime(data.fetchedAt) : "Waiting for first sync"}
-              </span>
-            </div>
-          </div>
-
-          {data.dailyError ? (
-            <div className="border-b border-rose-200 bg-rose-50 px-6 py-4 text-sm text-rose-600">
-              {data.dailyError}
-            </div>
-          ) : null}
-
-          {loading && data.orders.length === 0 ? (
-            <div className="px-6 py-16 text-center text-sm text-slate-500">
-              일별 마감 데이터를 불러오는 중입니다.
-            </div>
-          ) : data.orders.length === 0 ? (
-            <div className="px-6 py-16 text-center text-sm text-slate-500">
-              조회된 일별 마감 데이터가 없습니다.
-            </div>
-          ) : (
-            <div className="w-full overflow-x-auto">
-              <table className="min-w-[1180px] w-full table-auto border-collapse">
-                <thead className="bg-slate-950 text-white">
-                  <tr>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      날짜
-                    </th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      거래수
-                    </th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      거래량 / 금액
-                    </th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      결제량 / 금액
-                    </th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      수수료량 / 금액
-                    </th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      출금
-                    </th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      청산수
-                    </th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      청산량 / 금액
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.orders.map((row, index) => (
-                    <tr
-                      key={`${row.date}-${index}`}
-                      className="border-b border-slate-200 bg-white transition-colors hover:bg-slate-50"
-                    >
-                      <td className="px-5 py-4 align-top">
-                        <div className="flex flex-col gap-1">
-                          <div className="text-base font-semibold text-slate-950">
-                            {formatDailyCloseDate(row.date)}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {formatDailyCloseWeekday(row.date)}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-right align-top">
-                        <div className="text-lg font-semibold text-slate-950">
-                          {normalizeNumber(row.totalCount).toLocaleString()}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 align-top">
-                        <AmountCell
-                          usdtValue={normalizeNumber(row.totalUsdtAmount)}
-                          krwValue={normalizeNumber(row.totalKrwAmount)}
-                        />
-                      </td>
-                      <td className="px-5 py-4 align-top">
-                        <AmountCell
-                          usdtValue={normalizeNumber(row.totalSettlementAmount)}
-                          krwValue={normalizeNumber(row.totalSettlementAmountKRW)}
-                        />
-                      </td>
-                      <td className="px-5 py-4 align-top">
-                        <AmountCell
-                          usdtValue={normalizeNumber(row.totalAgentFeeAmount) + normalizeNumber(row.totalFeeAmount)}
-                          krwValue={normalizeNumber(row.totalAgentFeeAmountKRW) + normalizeNumber(row.totalFeeAmountKRW)}
-                        />
-                      </td>
-                      <td className="px-5 py-4 text-right align-top">
-                        {normalizeNumber(row.totalEscrowCount) > 0 ? (
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="console-display text-sm font-semibold tracking-[-0.04em] text-emerald-600">
-                              {formatUsdtDisplay(normalizeNumber(row.totalEscrowWithdrawAmount))}
-                            </span>
-                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                              출금완료
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600">
-                            출금대기
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-right align-top">
-                        <div className="text-lg font-semibold text-slate-950">
-                          {normalizeNumber(row.totalClearanceCount).toLocaleString()}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 align-top">
-                        <AmountCell
-                          usdtValue={normalizeNumber(row.totalClearanceUsdtAmount)}
-                          krwValue={normalizeNumber(row.totalClearanceKrwAmount)}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-[26px] border border-slate-200 bg-white px-5 py-4 text-xs text-slate-500">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              Console route: /{lang}/{normalizedForcedStorecode}/daily-close
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <span>Store wallet: {shortAddress(data.selectedStore?.adminWalletAddress)}</span>
-              <span>Backend: {data.remoteBackendBaseUrl || "-"}</span>
+              <div className="mt-4 space-y-3 text-sm text-slate-600">
+                <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                    Console route
+                  </div>
+                  <div className="mt-1 break-all font-medium text-slate-900">
+                    /{lang}/{normalizedForcedStorecode}/daily-close
+                  </div>
+                </div>
+                <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                    Store wallet
+                  </div>
+                  <div className="mt-1 font-medium text-slate-900">
+                    {shortAddress(data.selectedStore?.adminWalletAddress)}
+                  </div>
+                </div>
+                <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                    Backend
+                  </div>
+                  <div className="mt-1 break-all font-medium text-slate-900">
+                    {data.remoteBackendBaseUrl || "-"}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );
