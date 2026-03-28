@@ -95,6 +95,11 @@ type AddMemberFormState = {
   userType: string;
 };
 
+type GradeModalState = {
+  member: MemberRow;
+  index: number;
+} | null;
+
 const BANK_OPTIONS = [
   "카카오뱅크",
   "케이뱅크",
@@ -487,7 +492,10 @@ export default function MemberManagementConsoleClient({
   const [error, setError] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addMemberForm, setAddMemberForm] = useState<AddMemberFormState>(EMPTY_ADD_MEMBER_FORM);
+  const [gradeModalState, setGradeModalState] = useState<GradeModalState>(null);
+  const [nextUserType, setNextUserType] = useState("normal");
   const [submitting, setSubmitting] = useState(false);
+  const [updatingUserType, setUpdatingUserType] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, string>>({});
@@ -729,6 +737,20 @@ export default function MemberManagementConsoleClient({
     });
   };
 
+  const openGradeModal = useCallback((member: MemberRow, index: number) => {
+    setGradeModalState({ member, index });
+    setNextUserType(normalizeString(member.userType).toUpperCase() || "normal");
+    setActionError("");
+  }, []);
+
+  const closeGradeModal = useCallback(() => {
+    if (updatingUserType) {
+      return;
+    }
+    setGradeModalState(null);
+    setNextUserType("normal");
+  }, [updatingUserType]);
+
   const updatePaymentDraft = useCallback((key: string, value: string) => {
     const normalizedValue = digitsOnly(value);
     setPaymentDrafts((current) => {
@@ -795,6 +817,93 @@ export default function MemberManagementConsoleClient({
       setActionError("");
     }
   }, [getPaymentDraftValue, paymentAccessToken, paymentBaseUrl]);
+
+  const submitUserTypeUpdate = useCallback(async () => {
+    if (!gradeModalState?.member) {
+      return;
+    }
+
+    const targetStorecode = normalizeString(gradeModalState.member.storecode) || normalizedForcedStorecode;
+    const targetWalletAddress = normalizeString(gradeModalState.member.walletAddress);
+
+    if (!targetStorecode || !targetWalletAddress) {
+      setActionError("회원 storecode 또는 지갑주소가 없어 등급을 변경할 수 없습니다.");
+      setActionMessage("");
+      return;
+    }
+
+    if (!activeAccount) {
+      setActionError("가맹점 관리자 지갑 연결이 필요합니다.");
+      setActionMessage("");
+      return;
+    }
+
+    const normalizedNextUserType = normalizeString(nextUserType).toUpperCase();
+    const requestUserType = normalizedNextUserType === "NORMAL" ? "" : normalizedNextUserType;
+
+    if (!["", "AAA", "BBB", "CCC", "DDD"].includes(requestUserType)) {
+      setActionError("잘못된 회원 등급입니다.");
+      setActionMessage("");
+      return;
+    }
+
+    setUpdatingUserType(true);
+
+    try {
+      const signedBody = await createCenterStoreAdminSignedBody({
+        account: activeAccount,
+        route: "/api/user/updateUserType",
+        storecode: targetStorecode,
+        body: {
+          storecode: targetStorecode,
+          walletAddress: targetWalletAddress,
+          userType: requestUserType,
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/member-signed-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route: "/api/user/updateUserType",
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.result) {
+        throw new Error(payload?.error || "회원등급 변경에 실패했습니다.");
+      }
+
+      const targetKey = getMemberPaymentDraftKey(gradeModalState.member, gradeModalState.index);
+      setData((current) => ({
+        ...current,
+        members: current.members.map((member, index) => {
+          if (getMemberPaymentDraftKey(member, index) !== targetKey) {
+            return member;
+          }
+          return {
+            ...member,
+            userType: requestUserType,
+          };
+        }),
+      }));
+
+      setActionMessage(
+        `${normalizeString(gradeModalState.member.nickname) || "회원"} 등급을 ${getMemberGradeMeta(requestUserType).label}으로 변경했습니다.`,
+      );
+      setActionError("");
+      setGradeModalState(null);
+      setNextUserType("normal");
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "회원등급 변경에 실패했습니다.");
+      setActionMessage("");
+    } finally {
+      setUpdatingUserType(false);
+    }
+  }, [activeAccount, gradeModalState, nextUserType, normalizedForcedStorecode]);
 
   const updateAddMemberField = <Key extends keyof AddMemberFormState>(
     key: Key,
@@ -1287,7 +1396,17 @@ export default function MemberManagementConsoleClient({
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <MemberGradeBadge userType={member.userType} />
+                          <div className="space-y-2">
+                            <MemberGradeBadge userType={member.userType} />
+                            <button
+                              type="button"
+                              onClick={() => openGradeModal(member, index)}
+                              disabled={!canReadSignedData}
+                              className="inline-flex h-8 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                            >
+                              등급 변경
+                            </button>
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="space-y-1">
@@ -1432,6 +1551,17 @@ export default function MemberManagementConsoleClient({
                       <MemberGradeBadge userType={member.userType} />
                     </div>
 
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => openGradeModal(member, index)}
+                        disabled={!canReadSignedData}
+                        className="inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                      >
+                        회원등급 변경하기
+                      </button>
+                    </div>
+
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3">
                         <div className="text-xs font-medium text-slate-500">추가자</div>
@@ -1549,6 +1679,113 @@ export default function MemberManagementConsoleClient({
           </div>
         </section>
       </div>
+
+      {gradeModalState ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="console-panel w-full max-w-xl rounded-[32px] bg-white p-6 shadow-[0_42px_90px_-56px_rgba(15,23,42,0.7)]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                  Member grade
+                </div>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                  회원등급 변경
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {normalizeString(gradeModalState.member.nickname) || "회원"}의 등급을 변경합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeGradeModal}
+                disabled={updatingUserType}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs font-medium text-slate-500">회원</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">
+                    {normalizeString(gradeModalState.member.nickname) || "-"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500">가맹점</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">
+                    {normalizeString(gradeModalState.member.storecode) || normalizedForcedStorecode}
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <div className="text-xs font-medium text-slate-500">지갑주소</div>
+                  <div className="mt-1 break-all text-sm text-slate-700">
+                    {normalizeString(gradeModalState.member.walletAddress) || "-"}
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <div className="text-xs font-medium text-slate-500">현재 등급</div>
+                  <div className="mt-2">
+                    <MemberGradeBadge userType={gradeModalState.member.userType} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <div className="text-sm font-medium text-slate-700">변경할 등급</div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {ADD_MEMBER_TYPE_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer items-center justify-between rounded-[20px] border px-4 py-3 text-sm transition ${
+                      nextUserType === option.value
+                        ? "border-sky-300 bg-sky-50 text-sky-900"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="member-grade"
+                        value={option.value}
+                        checked={nextUserType === option.value}
+                        onChange={(event) => setNextUserType(event.target.value)}
+                        className="h-4 w-4 border-slate-300 text-sky-600 focus:ring-sky-500"
+                      />
+                      <span className="font-medium">{option.label}</span>
+                    </div>
+                    <MemberGradeBadge userType={option.value === "normal" ? "" : option.value} />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeGradeModal}
+                disabled={updatingUserType}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void submitUserTypeUpdate();
+                }}
+                disabled={updatingUserType || !nextUserType}
+                className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {updatingUserType ? "변경 중..." : "등급 저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isAddModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">

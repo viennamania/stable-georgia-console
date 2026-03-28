@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 const ALLOWED_ROUTES = new Set([
   "/api/user/insertBuyerWithoutWalletAddressByStorecode",
+  "/api/user/updateUserType",
 ]);
 
 const normalizeString = (value: unknown) => {
