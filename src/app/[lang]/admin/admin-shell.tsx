@@ -32,6 +32,13 @@ const NAV_ITEMS = [
     marker: "04",
     description: "센터 프로필, 환율, 로고, 연동 설정",
   },
+  {
+    href: "/admin/store-management",
+    label: "가맹점관리",
+    eyebrow: "Store Management",
+    marker: "05",
+    description: "가맹점 목록과 상세 운영 설정",
+  },
 ];
 
 export default function AdminShell({

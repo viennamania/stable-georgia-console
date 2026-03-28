@@ -6,6 +6,23 @@ export const runtime = "nodejs";
 
 const ALLOWED_ROUTES = new Set([
   "/api/store/updateClearanceSortOrders",
+  "/api/store/setStore",
+  "/api/store/setStoreName",
+  "/api/store/setStoreDescription",
+  "/api/store/setStoreLogo",
+  "/api/store/setStoreWithdrawalBankInfo",
+  "/api/store/setStoreWithdrawalBankInfoAAA",
+  "/api/store/setStoreWithdrawalBankInfoBBB",
+  "/api/store/updateStoreAdminWalletAddress",
+  "/api/store/getStoreAdminWalletAddressHistory",
+  "/api/store/updateStoreEscrowAmountUSDT",
+  "/api/store/updatePayactionKeys",
+  "/api/store/updateBackgroundColor",
+  "/api/store/updateAgentcode",
+  "/api/store/updateStorePaymentUrl",
+  "/api/store/updateMaxPaymentAmountKRW",
+  "/api/store/updateStoreAccessToken",
+  "/api/store/toggleView",
 ]);
 
 const normalizeString = (value: unknown) => {
