@@ -32,6 +32,13 @@ const NAV_ITEMS = [
     marker: "04",
     description: "해당 가맹점 회원 목록과 추가",
   },
+  {
+    href: "/settings",
+    label: "가맹점설정",
+    eyebrow: "Settings",
+    marker: "05",
+    description: "해당 가맹점 운영 설정 정보",
+  },
 ] as const;
 
 export default function StoreShell({
@@ -62,7 +69,7 @@ export default function StoreShell({
                 {decodedStorecode}
               </div>
               <div className="mt-3 text-sm leading-6 text-slate-300">
-                현재 가맹점 범위에서 주문, 청산, 일별마감, 회원 운영 화면을 빠르게 오갈 수 있습니다.
+                현재 가맹점 범위에서 주문, 청산, 일별마감, 회원 운영, 설정 정보 화면을 빠르게 오갈 수 있습니다.
               </div>
             </div>
 
