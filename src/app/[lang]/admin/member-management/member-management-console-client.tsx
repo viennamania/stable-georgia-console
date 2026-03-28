@@ -237,6 +237,79 @@ const shortAddress = (value?: string | null) => {
   return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
 };
 
+const digitsOnly = (value: string) => value.replace(/[^\d]/g, "");
+
+const joinUrlSegments = (base: string, ...segments: Array<string | undefined>) => {
+  const normalizedBase = normalizeString(base).replace(/\/+$/, "");
+  const normalizedSegments = segments
+    .map((segment) => normalizeString(segment))
+    .filter(Boolean)
+    .map((segment) => segment.replace(/^\/+|\/+$/g, ""));
+
+  if (!normalizedBase) {
+    return "";
+  }
+
+  return [normalizedBase, ...normalizedSegments].join("/");
+};
+
+const getMemberPaymentDraftKey = (member: MemberRow, index: number) => {
+  return normalizeString(member._id)
+    || normalizeString(member.walletAddress)
+    || `${normalizeString(member.storecode) || "member"}-${index}`;
+};
+
+const buildMemberPaymentUrl = ({
+  paymentBaseUrl,
+  member,
+  paymentAmountKrw,
+  accessToken,
+  fallbackStorecode,
+}: {
+  paymentBaseUrl: string;
+  member: MemberRow;
+  paymentAmountKrw: string;
+  accessToken?: string;
+  fallbackStorecode: string;
+}) => {
+  const storecode = normalizeString(member.storecode) || normalizeString(fallbackStorecode);
+  const baseUrl = joinUrlSegments(paymentBaseUrl, storecode, "payment");
+
+  if (!baseUrl) {
+    return "";
+  }
+
+  const params = new URLSearchParams();
+  const nickname = normalizeString(member.nickname);
+  const depositBankName = normalizeString(member.buyer?.depositBankName);
+  const depositBankAccountNumber = normalizeString(member.buyer?.depositBankAccountNumber);
+  const depositName = normalizeString(member.buyer?.depositName);
+  const normalizedAccessToken = normalizeString(accessToken);
+  const normalizedPaymentAmountKrw = digitsOnly(paymentAmountKrw);
+
+  if (nickname) {
+    params.set("storeUser", nickname);
+  }
+  if (depositBankName) {
+    params.set("depositBankName", depositBankName);
+  }
+  if (depositBankAccountNumber) {
+    params.set("depositBankAccountNumber", depositBankAccountNumber);
+  }
+  if (depositName) {
+    params.set("depositName", depositName);
+  }
+  if (normalizedPaymentAmountKrw) {
+    params.set("depositAmountKrw", normalizedPaymentAmountKrw);
+  }
+  if (normalizedAccessToken) {
+    params.set("accessToken", normalizedAccessToken);
+  }
+
+  const queryString = params.toString();
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+};
+
 const getStoreDisplayName = (store: StoreMeta | null | undefined, fallbackStorecode: string) => {
   return normalizeString(store?.storeName)
     || normalizeString(store?.serviceName)
@@ -434,6 +507,7 @@ export default function MemberManagementConsoleClient({
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [paymentDrafts, setPaymentDrafts] = useState<Record<string, string>>({});
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
 
@@ -613,6 +687,8 @@ export default function MemberManagementConsoleClient({
   }, [data.members]);
 
   const storeDisplayName = getStoreDisplayName(data.selectedStore, normalizedForcedStorecode);
+  const paymentBaseUrl = normalizeString(data.selectedStore?.paymentUrl);
+  const paymentAccessToken = normalizeString(data.selectedStore?.accessToken);
   const disconnectedMessage = isWalletRecovering
     ? "지갑 연결 상태를 확인하는 중입니다."
     : "지갑을 연결하고 서명하면 해당 가맹점 회원 목록이 열립니다.";
@@ -669,6 +745,75 @@ export default function MemberManagementConsoleClient({
       };
     });
   };
+
+  const updatePaymentDraft = useCallback((key: string, value: string) => {
+    const normalizedValue = digitsOnly(value);
+    setPaymentDrafts((current) => {
+      if (current[key] === normalizedValue) {
+        return current;
+      }
+      return {
+        ...current,
+        [key]: normalizedValue,
+      };
+    });
+  }, []);
+
+  const getPaymentDraftValue = useCallback((key: string) => {
+    return paymentDrafts[key] || "";
+  }, [paymentDrafts]);
+
+  const handleCopyPaymentPage = useCallback((member: MemberRow, index: number) => {
+    const paymentUrl = buildMemberPaymentUrl({
+      paymentBaseUrl,
+      member,
+      paymentAmountKrw: getPaymentDraftValue(getMemberPaymentDraftKey(member, index)),
+      accessToken: paymentAccessToken,
+      fallbackStorecode: normalizedForcedStorecode,
+    });
+
+    if (!paymentUrl) {
+      setActionError("가맹점 결제 URL이 설정되지 않아 링크를 만들 수 없습니다.");
+      setActionMessage("");
+      return;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      setActionError("현재 브라우저에서 클립보드 복사를 사용할 수 없습니다.");
+      setActionMessage("");
+      return;
+    }
+
+    navigator.clipboard.writeText(paymentUrl).then(() => {
+      setActionMessage(`회원 결제페이지 링크를 복사했습니다. ${normalizeString(member.nickname) || "회원"}`);
+      setActionError("");
+    }).catch(() => {
+      setActionError("결제페이지 링크 복사에 실패했습니다.");
+      setActionMessage("");
+    });
+  }, [getPaymentDraftValue, normalizedForcedStorecode, paymentAccessToken, paymentBaseUrl]);
+
+  const handleOpenPaymentPage = useCallback((member: MemberRow, index: number) => {
+    const paymentUrl = buildMemberPaymentUrl({
+      paymentBaseUrl,
+      member,
+      paymentAmountKrw: getPaymentDraftValue(getMemberPaymentDraftKey(member, index)),
+      accessToken: paymentAccessToken,
+      fallbackStorecode: normalizedForcedStorecode,
+    });
+
+    if (!paymentUrl) {
+      setActionError("가맹점 결제 URL이 설정되지 않아 페이지를 열 수 없습니다.");
+      setActionMessage("");
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.open(paymentUrl, "_blank", "noopener,noreferrer");
+      setActionMessage(`회원 결제페이지를 새 창으로 열었습니다. ${normalizeString(member.nickname) || "회원"}`);
+      setActionError("");
+    }
+  }, [getPaymentDraftValue, normalizedForcedStorecode, paymentAccessToken, paymentBaseUrl]);
 
   const updateAddMemberField = <Key extends keyof AddMemberFormState>(
     key: Key,
@@ -1119,14 +1264,26 @@ export default function MemberManagementConsoleClient({
                   <th className="px-6 py-4">추가자</th>
                   <th className="px-6 py-4">회원 통장</th>
                   <th className="px-6 py-4 text-right">구매 요약</th>
-                  <th className="px-6 py-4">주문상태</th>
                   <th className="px-6 py-4">지갑</th>
+                  <th className="px-6 py-4">충전/결제</th>
+                  <th className="px-6 py-4">주문상태</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {data.members.length > 0 ? (
                   data.members.map((member, index) => {
                     const statusMeta = getBuyOrderStatusMeta(member.buyOrderStatus);
+                    const paymentDraftKey = getMemberPaymentDraftKey(member, index);
+                    const paymentDraftValue = getPaymentDraftValue(paymentDraftKey);
+                    const paymentUrlReady = Boolean(
+                      buildMemberPaymentUrl({
+                        paymentBaseUrl,
+                        member,
+                        paymentAmountKrw: paymentDraftValue,
+                        accessToken: paymentAccessToken,
+                        fallbackStorecode: normalizedForcedStorecode,
+                      }),
+                    );
                     return (
                       <tr key={member._id || `${member.walletAddress || "member"}-${index}`} className="align-top">
                         <td className="px-6 py-4">
@@ -1192,11 +1349,6 @@ export default function MemberManagementConsoleClient({
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
-                            {statusMeta.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
                           <button
                             type="button"
                             onClick={() => {
@@ -1213,12 +1365,54 @@ export default function MemberManagementConsoleClient({
                             {shortAddress(member.walletAddress)}
                           </button>
                         </td>
+                        <td className="px-6 py-4">
+                          <div className="min-w-[230px] space-y-2">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={paymentDraftValue}
+                              onChange={(event) => {
+                                updatePaymentDraft(paymentDraftKey, event.target.value);
+                              }}
+                              placeholder="충전금액"
+                              className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-200"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleCopyPaymentPage(member, index)}
+                                disabled={!paymentUrlReady}
+                                className="inline-flex h-9 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+                              >
+                                링크 복사
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPaymentPage(member, index)}
+                                disabled={!paymentUrlReady}
+                                className="inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                              >
+                                새창 열기
+                              </button>
+                            </div>
+                            {!paymentBaseUrl ? (
+                              <div className="text-xs text-rose-600">
+                                가맹점 결제 URL이 설정되지 않았습니다.
+                              </div>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                            {statusMeta.label}
+                          </span>
+                        </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-6 py-16 text-center text-sm text-slate-500">
+                    <td colSpan={9} className="px-6 py-16 text-center text-sm text-slate-500">
                       {loading ? "회원 목록을 불러오는 중입니다." : "표시할 회원이 없습니다."}
                     </td>
                   </tr>
@@ -1231,6 +1425,17 @@ export default function MemberManagementConsoleClient({
             {data.members.length > 0 ? (
               data.members.map((member, index) => {
                 const statusMeta = getBuyOrderStatusMeta(member.buyOrderStatus);
+                const paymentDraftKey = getMemberPaymentDraftKey(member, index);
+                const paymentDraftValue = getPaymentDraftValue(paymentDraftKey);
+                const paymentUrlReady = Boolean(
+                  buildMemberPaymentUrl({
+                    paymentBaseUrl,
+                    member,
+                    paymentAmountKrw: paymentDraftValue,
+                    accessToken: paymentAccessToken,
+                    fallbackStorecode: normalizedForcedStorecode,
+                  }),
+                );
                 return (
                   <article
                     key={member._id || `${member.walletAddress || "member-card"}-${index}`}
@@ -1295,6 +1500,43 @@ export default function MemberManagementConsoleClient({
                           {formatKrwDisplay(normalizeNumber(member.totalPaymentConfirmedKrwAmount))} KRW
                         </div>
                       </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-xs font-medium text-slate-500">충전/결제</div>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={paymentDraftValue}
+                        onChange={(event) => {
+                          updatePaymentDraft(paymentDraftKey, event.target.value);
+                        }}
+                        placeholder="충전금액"
+                        className="mt-2 h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-200"
+                      />
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyPaymentPage(member, index)}
+                          disabled={!paymentUrlReady}
+                          className="inline-flex h-9 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          링크 복사
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPaymentPage(member, index)}
+                          disabled={!paymentUrlReady}
+                          className="inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                        >
+                          새창 열기
+                        </button>
+                      </div>
+                      {!paymentBaseUrl ? (
+                        <div className="mt-2 text-xs text-rose-600">
+                          가맹점 결제 URL이 설정되지 않았습니다.
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
