@@ -239,20 +239,6 @@ const shortAddress = (value?: string | null) => {
 
 const digitsOnly = (value: string) => value.replace(/[^\d]/g, "");
 
-const joinUrlSegments = (base: string, ...segments: Array<string | undefined>) => {
-  const normalizedBase = normalizeString(base).replace(/\/+$/, "");
-  const normalizedSegments = segments
-    .map((segment) => normalizeString(segment))
-    .filter(Boolean)
-    .map((segment) => segment.replace(/^\/+|\/+$/g, ""));
-
-  if (!normalizedBase) {
-    return "";
-  }
-
-  return [normalizedBase, ...normalizedSegments].join("/");
-};
-
 const getMemberPaymentDraftKey = (member: MemberRow, index: number) => {
   return normalizeString(member._id)
     || normalizeString(member.walletAddress)
@@ -264,16 +250,13 @@ const buildMemberPaymentUrl = ({
   member,
   paymentAmountKrw,
   accessToken,
-  fallbackStorecode,
 }: {
   paymentBaseUrl: string;
   member: MemberRow;
   paymentAmountKrw: string;
   accessToken?: string;
-  fallbackStorecode: string;
 }) => {
-  const storecode = normalizeString(member.storecode) || normalizeString(fallbackStorecode);
-  const baseUrl = joinUrlSegments(paymentBaseUrl, storecode, "payment");
+  const baseUrl = normalizeString(paymentBaseUrl).replace(/\/+$/, "");
 
   if (!baseUrl) {
     return "";
@@ -769,7 +752,6 @@ export default function MemberManagementConsoleClient({
       member,
       paymentAmountKrw: getPaymentDraftValue(getMemberPaymentDraftKey(member, index)),
       accessToken: paymentAccessToken,
-      fallbackStorecode: normalizedForcedStorecode,
     });
 
     if (!paymentUrl) {
@@ -791,7 +773,7 @@ export default function MemberManagementConsoleClient({
       setActionError("결제페이지 링크 복사에 실패했습니다.");
       setActionMessage("");
     });
-  }, [getPaymentDraftValue, normalizedForcedStorecode, paymentAccessToken, paymentBaseUrl]);
+  }, [getPaymentDraftValue, paymentAccessToken, paymentBaseUrl]);
 
   const handleOpenPaymentPage = useCallback((member: MemberRow, index: number) => {
     const paymentUrl = buildMemberPaymentUrl({
@@ -799,7 +781,6 @@ export default function MemberManagementConsoleClient({
       member,
       paymentAmountKrw: getPaymentDraftValue(getMemberPaymentDraftKey(member, index)),
       accessToken: paymentAccessToken,
-      fallbackStorecode: normalizedForcedStorecode,
     });
 
     if (!paymentUrl) {
@@ -813,7 +794,7 @@ export default function MemberManagementConsoleClient({
       setActionMessage(`회원 결제페이지를 새 창으로 열었습니다. ${normalizeString(member.nickname) || "회원"}`);
       setActionError("");
     }
-  }, [getPaymentDraftValue, normalizedForcedStorecode, paymentAccessToken, paymentBaseUrl]);
+  }, [getPaymentDraftValue, paymentAccessToken, paymentBaseUrl]);
 
   const updateAddMemberField = <Key extends keyof AddMemberFormState>(
     key: Key,
@@ -1281,7 +1262,6 @@ export default function MemberManagementConsoleClient({
                         member,
                         paymentAmountKrw: paymentDraftValue,
                         accessToken: paymentAccessToken,
-                        fallbackStorecode: normalizedForcedStorecode,
                       }),
                     );
                     return (
@@ -1433,7 +1413,6 @@ export default function MemberManagementConsoleClient({
                     member,
                     paymentAmountKrw: paymentDraftValue,
                     accessToken: paymentAccessToken,
-                    fallbackStorecode: normalizedForcedStorecode,
                   }),
                 );
                 return (
