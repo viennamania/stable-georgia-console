@@ -235,6 +235,14 @@ type DashboardResult = {
   selectedStore: Record<string, unknown> | null;
 };
 
+const EMPTY_DASHBOARD_METRICS: DashboardResult["metrics"] = {
+  totalBuyOrders: 0,
+  totalClearanceOrders: 0,
+  audioOnBuyOrders: 0,
+  p2pTradeCount: 0,
+  storePaymentCount: 0,
+};
+
 const EMPTY_TRADE_SUMMARY: DashboardResult["tradeSummary"] = {
   totalCount: 0,
   totalUsdtAmount: 0,
@@ -256,6 +264,25 @@ const EMPTY_BANKTRANSFER_TODAY_SUMMARY: DashboardResult["banktransferTodaySummar
   withdrawnCount: 0,
   totalCount: 0,
   updatedAt: "",
+};
+
+const EMPTY_DASHBOARD_RESULT: DashboardResult = {
+  fetchedAt: "",
+  remoteBackendBaseUrl: "",
+  metrics: EMPTY_DASHBOARD_METRICS,
+  tradeSummary: EMPTY_TRADE_SUMMARY,
+  sellerBankTradeStats: EMPTY_SELLER_BANK_TRADE_STATS,
+  banktransferTodaySummary: EMPTY_BANKTRANSFER_TODAY_SUMMARY,
+  orders: EMPTY_ORDERS,
+  orderTotalCount: 0,
+  processingBuyOrders: EMPTY_ORDERS,
+  processingClearanceOrders: EMPTY_ORDERS,
+  stores: EMPTY_STORES,
+  storeTotalCount: 0,
+  unmatchedTransfers: EMPTY_UNMATCHED_TRANSFERS,
+  unmatchedTotalAmount: 0,
+  unmatchedTotalCount: 0,
+  selectedStore: null,
 };
 
 const PAYMENT_REVERSE_PREVIEW_ORIGIN = "https://cryptoss-georgia.vercel.app";
@@ -1882,23 +1909,6 @@ export default function BuyorderConsoleClient({
       const shouldWaitForSignedOrders = !canReadSignedData && isWalletRecovering;
       const selectedStorecode = normalizedForcedStorecode || filters.storecode;
 
-      if (isStoreScoped && !canReadSignedData) {
-        if (isWalletRecovering) {
-          setError("");
-          setLoading(true);
-          setRefreshing(false);
-          setOrdersQueryState("loading");
-          return;
-        }
-
-        setData(null);
-        setError("");
-        setLoading(false);
-        setRefreshing(false);
-        setOrdersQueryState("idle");
-        return;
-      }
-
       if (inflightLoadRef.current) {
         if (silent) {
           queuedSilentRefreshRef.current = true;
@@ -1918,8 +1928,12 @@ export default function BuyorderConsoleClient({
       }
 
       try {
-        const signedOrdersBody = canReadSignedData && activeAccount
-          ? await createCenterStoreAdminSignedBody({
+        let signedOrdersBody: Record<string, unknown> | null = null;
+        let signErrorMessage = "";
+
+        if (canReadSignedData && activeAccount) {
+          try {
+            signedOrdersBody = await createCenterStoreAdminSignedBody({
               account: activeAccount,
               route: "/api/order/getAllBuyOrders",
               storecode: normalizedForcedStorecode || "admin",
@@ -1935,8 +1949,13 @@ export default function BuyorderConsoleClient({
                 searchOrderStatusCancelled: filters.searchOrderStatusCancelled,
                 searchOrderStatusCompleted: filters.searchOrderStatusCompleted,
               },
-            })
-          : null;
+            });
+          } catch (signError) {
+            signErrorMessage = signError instanceof Error
+              ? signError.message
+              : "주문 조회 서명을 준비하지 못했습니다.";
+          }
+        }
 
         const response = await fetch("/api/bff/admin/buyorder-dashboard", {
           method: "POST",
@@ -1965,11 +1984,79 @@ export default function BuyorderConsoleClient({
           throw new Error(payload?.error || "Failed to load dashboard");
         }
 
-        setData(payload.result as DashboardResult);
-        setError("");
-        if (shouldLoadOrders) {
+        const result = payload.result as DashboardResult;
+        setData((current) => {
+          const baseResult = current || EMPTY_DASHBOARD_RESULT;
+          const nextData: DashboardResult = {
+            ...baseResult,
+            fetchedAt: String(result?.fetchedAt || ""),
+            remoteBackendBaseUrl: String(result?.remoteBackendBaseUrl || ""),
+            metrics: {
+              totalBuyOrders: Number(result?.metrics?.totalBuyOrders || 0),
+              totalClearanceOrders: Number(result?.metrics?.totalClearanceOrders || 0),
+              audioOnBuyOrders: Number(result?.metrics?.audioOnBuyOrders || 0),
+              p2pTradeCount: Number(result?.metrics?.p2pTradeCount || 0),
+              storePaymentCount: Number(result?.metrics?.storePaymentCount || 0),
+            },
+            banktransferTodaySummary: {
+              dateKst: String(result?.banktransferTodaySummary?.dateKst || ""),
+              depositedAmount: Number(result?.banktransferTodaySummary?.depositedAmount || 0),
+              withdrawnAmount: Number(result?.banktransferTodaySummary?.withdrawnAmount || 0),
+              depositedCount: Number(result?.banktransferTodaySummary?.depositedCount || 0),
+              withdrawnCount: Number(result?.banktransferTodaySummary?.withdrawnCount || 0),
+              totalCount: Number(result?.banktransferTodaySummary?.totalCount || 0),
+              updatedAt: String(result?.banktransferTodaySummary?.updatedAt || ""),
+            },
+            processingBuyOrders: Array.isArray(result?.processingBuyOrders) ? result.processingBuyOrders : EMPTY_ORDERS,
+            processingClearanceOrders: Array.isArray(result?.processingClearanceOrders)
+              ? result.processingClearanceOrders
+              : EMPTY_ORDERS,
+            stores: Array.isArray(result?.stores) ? result.stores : EMPTY_STORES,
+            storeTotalCount: Number(result?.storeTotalCount || 0),
+            unmatchedTransfers: Array.isArray(result?.unmatchedTransfers)
+              ? result.unmatchedTransfers
+              : EMPTY_UNMATCHED_TRANSFERS,
+            unmatchedTotalAmount: Number(result?.unmatchedTotalAmount || 0),
+            unmatchedTotalCount: Number(result?.unmatchedTotalCount || 0),
+            selectedStore: result?.selectedStore || null,
+          };
+
+          if (!signedOrdersBody) {
+            return nextData;
+          }
+
+          return {
+            ...nextData,
+            tradeSummary: {
+              totalCount: Number(result?.tradeSummary?.totalCount || 0),
+              totalUsdtAmount: Number(result?.tradeSummary?.totalUsdtAmount || 0),
+              totalKrwAmount: Number(result?.tradeSummary?.totalKrwAmount || 0),
+              totalSettlementCount: Number(result?.tradeSummary?.totalSettlementCount || 0),
+              totalSettlementAmount: Number(result?.tradeSummary?.totalSettlementAmount || 0),
+              totalSettlementAmountKRW: Number(result?.tradeSummary?.totalSettlementAmountKRW || 0),
+              totalFeeAmount: Number(result?.tradeSummary?.totalFeeAmount || 0),
+              totalFeeAmountKRW: Number(result?.tradeSummary?.totalFeeAmountKRW || 0),
+              totalAgentFeeAmount: Number(result?.tradeSummary?.totalAgentFeeAmount || 0),
+              totalAgentFeeAmountKRW: Number(result?.tradeSummary?.totalAgentFeeAmountKRW || 0),
+            },
+            sellerBankTradeStats: Array.isArray(result?.sellerBankTradeStats)
+              ? result.sellerBankTradeStats
+              : EMPTY_SELLER_BANK_TRADE_STATS,
+            orders: Array.isArray(result?.orders) ? result.orders : EMPTY_ORDERS,
+            orderTotalCount: Number(result?.orderTotalCount || 0),
+          };
+        });
+
+        if (signedOrdersBody) {
+          setError("");
           setOrdersQueryState("ready");
-        } else if (!shouldWaitForSignedOrders) {
+        } else if (shouldWaitForSignedOrders) {
+          setError("");
+        } else if (signErrorMessage) {
+          setError(signErrorMessage);
+          setOrdersQueryState("error");
+        } else {
+          setError("");
           setOrdersQueryState("idle");
         }
       } catch (loadError) {
@@ -2748,7 +2835,8 @@ export default function BuyorderConsoleClient({
     requestRealtimeRefresh,
   ]);
 
-  const orders = data?.orders ?? EMPTY_ORDERS;
+  const shouldRevealSignedOrderData = canReadSignedData || isWalletRecovering;
+  const orders = shouldRevealSignedOrderData ? (data?.orders ?? EMPTY_ORDERS) : EMPTY_ORDERS;
   const stores = data?.stores ?? EMPTY_STORES;
   const unmatchedTransfers = data?.unmatchedTransfers ?? EMPTY_UNMATCHED_TRANSFERS;
   const animatedUnmatchedTransfers = useAnimatedPresenceList(
@@ -2826,7 +2914,7 @@ export default function BuyorderConsoleClient({
     : "입금 이벤트, 주문 큐, 판매자 계좌 흐름을 하나의 운영 콘솔에서 실시간으로 추적합니다.";
 
   const isSignedIn = canReadSignedData;
-  const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
+  const tradeSummary = shouldRevealSignedOrderData ? (data?.tradeSummary || EMPTY_TRADE_SUMMARY) : EMPTY_TRADE_SUMMARY;
   const animatedTradeSummaryTotalCount = useAnimatedNumber(tradeSummary.totalCount);
   const animatedTradeSummaryTotalUsdtAmount = useAnimatedNumber(tradeSummary.totalUsdtAmount);
   const animatedTradeSummaryTotalKrwAmount = useAnimatedNumber(tradeSummary.totalKrwAmount);
@@ -2835,7 +2923,9 @@ export default function BuyorderConsoleClient({
   const animatedTradeSummaryTotalSettlementAmountKrw = useAnimatedNumber(tradeSummary.totalSettlementAmountKRW);
   const animatedTradeSummaryTotalFeeAmount = useAnimatedNumber(tradeSummary.totalFeeAmount);
   const animatedTradeSummaryTotalFeeAmountKrw = useAnimatedNumber(tradeSummary.totalFeeAmountKRW);
-  const sellerBankTradeStats = data?.sellerBankTradeStats || EMPTY_SELLER_BANK_TRADE_STATS;
+  const sellerBankTradeStats = shouldRevealSignedOrderData
+    ? (data?.sellerBankTradeStats || EMPTY_SELLER_BANK_TRADE_STATS)
+    : EMPTY_SELLER_BANK_TRADE_STATS;
   const banktransferTodaySummary = data?.banktransferTodaySummary || EMPTY_BANKTRANSFER_TODAY_SUMMARY;
   const sellerBankTradeSummaries = useMemo(() => {
     return sellerBankTradeStats.map(getSellerBankTradeSummary);
@@ -2874,6 +2964,14 @@ export default function BuyorderConsoleClient({
     && ordersQueryState === "idle"
     && !loading;
   const shouldShowOrdersErrorState = orders.length === 0 && ordersQueryState === "error" && !loading;
+  const totalOrderCount = shouldRevealSignedOrderData ? Math.max(0, Number(data?.orderTotalCount || 0)) : 0;
+  const orderLimit = Math.max(1, Number(filters.limit) || 1);
+  const signedOrderDataLoading = ordersQueryState === "loading" && orders.length === 0 && totalOrderCount === 0;
+  const shouldShowSignedSummaryPlaceholder =
+    signedOrderDataLoading
+    && tradeSummary.totalCount === 0
+    && tradeSummary.totalSettlementCount === 0;
+  const shouldShowSellerBankStatsLoading = signedOrderDataLoading && sellerBankTradeSummaries.length === 0;
   const depositedRatio = useMemo(() => {
     if (banktransferTodaySummary.depositedAmount <= 0) {
       return 0;
@@ -2922,19 +3020,28 @@ export default function BuyorderConsoleClient({
     : connectionState === "connecting" || connectionState === "initialized"
       ? "border-sky-400/30 bg-sky-400/12 text-sky-200"
       : "border-amber-400/30 bg-amber-400/12 text-amber-200";
+  const loadedRowsSummary = signedOrderDataLoading
+    ? "..."
+    : `${NUMBER_FORMATTER.format(orders.length)} / ${NUMBER_FORMATTER.format(totalOrderCount)}`;
+  const pendingUsdtSummary = signedOrderDataLoading
+    ? "..."
+    : `${NUMBER_FORMATTER.format(pendingUsdtTransferCount)}건`;
+  const pendingSettlementSummary = signedOrderDataLoading
+    ? "..."
+    : `${NUMBER_FORMATTER.format(pendingSettlementCount)}건`;
   const liveQueueCards = isStoreScoped
     ? [
         {
           label: "Visible orders",
-          value: `${NUMBER_FORMATTER.format(orders.length)} / ${NUMBER_FORMATTER.format(data?.orderTotalCount || 0)}`,
+          value: loadedRowsSummary,
         },
         {
           label: "Pending USDT",
-          value: `${NUMBER_FORMATTER.format(pendingUsdtTransferCount)}건`,
+          value: pendingUsdtSummary,
         },
         {
           label: "Settlement wait",
-          value: `${NUMBER_FORMATTER.format(pendingSettlementCount)}건`,
+          value: pendingSettlementSummary,
         },
         {
           label: "Unmatched deposits",
@@ -2952,19 +3059,20 @@ export default function BuyorderConsoleClient({
         },
         {
           label: "Loaded rows",
-          value: `${NUMBER_FORMATTER.format(orders.length)} / ${NUMBER_FORMATTER.format(data?.orderTotalCount || 0)}`,
+          value: loadedRowsSummary,
         },
         {
           label: "Unmatched deposits",
           value: `${NUMBER_FORMATTER.format(data?.unmatchedTotalCount || 0)}건`,
         },
       ];
-  const orderLimit = Math.max(1, Number(filters.limit) || 1);
-  const totalOrderCount = Math.max(0, Number(data?.orderTotalCount || 0));
   const totalOrderPages = Math.max(1, Math.ceil(totalOrderCount / orderLimit));
   const currentOrderPage = Math.min(Math.max(1, Number(filters.page) || 1), totalOrderPages);
   const currentOrderRangeStart = orders.length === 0 ? 0 : ((currentOrderPage - 1) * orderLimit) + 1;
   const currentOrderRangeEnd = orders.length === 0 ? 0 : currentOrderRangeStart + orders.length - 1;
+  const orderRowsRangeLabel = signedOrderDataLoading
+    ? "Rows syncing..."
+    : `Rows ${NUMBER_FORMATTER.format(currentOrderRangeStart)}-${NUMBER_FORMATTER.format(currentOrderRangeEnd)} / ${NUMBER_FORMATTER.format(totalOrderCount)}`;
   const showUnmatchedLoadingOverlay = loading && unmatchedTransfers.length > 0;
   const showOrdersLoadingOverlay = loading && orders.length > 0;
   const visibleOrderPages = useMemo(() => {
@@ -3545,7 +3653,9 @@ export default function BuyorderConsoleClient({
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Count</div>
                 <div className="mt-1 text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                  {NUMBER_FORMATTER.format(animatedTradeSummaryTotalCount)}
+                  {shouldShowSignedSummaryPlaceholder
+                    ? "..."
+                    : NUMBER_FORMATTER.format(animatedTradeSummaryTotalCount)}
                 </div>
               </div>
             </div>
@@ -3555,7 +3665,9 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래량</div>
                 <div className="mt-2 flex items-end justify-end gap-3 text-right">
                   <span className="text-[1.4rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {formatUsdtValue(animatedTradeSummaryTotalUsdtAmount)}
+                    {shouldShowSignedSummaryPlaceholder
+                      ? "..."
+                      : formatUsdtValue(animatedTradeSummaryTotalUsdtAmount)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
                 </div>
@@ -3565,7 +3677,9 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래금액</div>
                 <div className="mt-2 flex items-end justify-end gap-3 text-right">
                   <span className="text-[1.4rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {formatKrwValue(animatedTradeSummaryTotalKrwAmount)}
+                    {shouldShowSignedSummaryPlaceholder
+                      ? "..."
+                      : formatKrwValue(animatedTradeSummaryTotalKrwAmount)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
@@ -3582,7 +3696,9 @@ export default function BuyorderConsoleClient({
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Count</div>
                 <div className="mt-1 text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                  {NUMBER_FORMATTER.format(animatedTradeSummaryTotalSettlementCount)}
+                  {shouldShowSignedSummaryPlaceholder
+                    ? "..."
+                    : NUMBER_FORMATTER.format(animatedTradeSummaryTotalSettlementCount)}
                 </div>
               </div>
             </div>
@@ -3592,7 +3708,9 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제량</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {formatUsdtValue(animatedTradeSummaryTotalSettlementAmount)}
+                    {shouldShowSignedSummaryPlaceholder
+                      ? "..."
+                      : formatUsdtValue(animatedTradeSummaryTotalSettlementAmount)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
                 </div>
@@ -3602,7 +3720,9 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제금액</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {formatKrwValue(animatedTradeSummaryTotalSettlementAmountKrw)}
+                    {shouldShowSignedSummaryPlaceholder
+                      ? "..."
+                      : formatKrwValue(animatedTradeSummaryTotalSettlementAmountKrw)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
@@ -3612,7 +3732,9 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료량</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {formatUsdtValue(animatedTradeSummaryTotalFeeAmount)}
+                    {shouldShowSignedSummaryPlaceholder
+                      ? "..."
+                      : formatUsdtValue(animatedTradeSummaryTotalFeeAmount)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-emerald-600">USDT</span>
                 </div>
@@ -3622,7 +3744,9 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료금액</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {formatKrwValue(animatedTradeSummaryTotalFeeAmountKrw)}
+                    {shouldShowSignedSummaryPlaceholder
+                      ? "..."
+                      : formatKrwValue(animatedTradeSummaryTotalFeeAmountKrw)}
                   </span>
                   <span className="console-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">KRW</span>
                 </div>
@@ -3647,7 +3771,7 @@ export default function BuyorderConsoleClient({
                   </span>
                 ) : null}
                 <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
-                  {NUMBER_FORMATTER.format(sellerBankTradeSummaries.length)} 계좌
+                  {shouldShowSellerBankStatsLoading ? "집계 준비중" : `${NUMBER_FORMATTER.format(sellerBankTradeSummaries.length)} 계좌`}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                   {storeCoverageLabel}
@@ -3672,6 +3796,15 @@ export default function BuyorderConsoleClient({
                   판매자 통장별 P2P 거래 통계는 {accessActorLabel} 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
                   위 영역에서 지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`의 계좌별 집계가
                   함께 로드됩니다.
+                </div>
+              ) : shouldShowSellerBankStatsLoading ? (
+                <div className="grid justify-center gap-1 [grid-template-columns:repeat(auto-fit,minmax(154px,168px))]">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                      key={`seller-bank-loading-${index}`}
+                      className="h-[168px] animate-pulse rounded-[24px] border border-slate-200 bg-slate-50"
+                    />
+                  ))}
                 </div>
               ) : sellerBankTradeSummaries.length === 0 ? (
                 <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
@@ -3858,9 +3991,7 @@ export default function BuyorderConsoleClient({
                   </span>
                 ) : null}
                 <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
-                  Rows {NUMBER_FORMATTER.format(currentOrderRangeStart)}-
-                  {NUMBER_FORMATTER.format(currentOrderRangeEnd)} /{" "}
-                  {NUMBER_FORMATTER.format(totalOrderCount)}
+                  {orderRowsRangeLabel}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                   Page {NUMBER_FORMATTER.format(currentOrderPage)} / {NUMBER_FORMATTER.format(totalOrderPages)}

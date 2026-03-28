@@ -23,6 +23,19 @@ const parsePositiveInt = (value: unknown, fallback: number) => {
   return parsed;
 };
 
+const parseNonNegativeInt = (value: unknown, fallback: number) => {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.trunc(value);
+  }
+
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
 const asPlainObject = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -51,7 +64,7 @@ export async function POST(request: NextRequest) {
   const selectedStorecode = normalizeString(body.selectedStorecode);
   const storesLimit = Math.min(parsePositiveInt(body.storesLimit, 200), 300);
   const storesPage = Math.max(parsePositiveInt(body.storesPage, 1), 1);
-  const withdrawalLimit = Math.min(parsePositiveInt(body.withdrawalLimit, 24), 80);
+  const withdrawalLimit = Math.min(parseNonNegativeInt(body.withdrawalLimit, 24), 80);
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
 
   const hasSignedStoreBody = Object.keys(signedStoreBody).length > 0;
@@ -66,13 +79,22 @@ export async function POST(request: NextRequest) {
           page: storesPage,
         },
     ),
-    getRemoteJson("/api/realtime/banktransfer/events", {
-      public: "1",
-      limit: String(withdrawalLimit),
-      transactionType: "withdrawn",
-      sort: "asc",
-      ...(selectedStorecode ? { storecode: selectedStorecode } : {}),
-    }),
+    withdrawalLimit > 0
+      ? getRemoteJson("/api/realtime/banktransfer/events", {
+        public: "1",
+        limit: String(withdrawalLimit),
+        transactionType: "withdrawn",
+        sort: "asc",
+        ...(selectedStorecode ? { storecode: selectedStorecode } : {}),
+      })
+      : Promise.resolve({
+        ok: true,
+        status: 200,
+        json: {
+          events: [],
+          nextCursor: null,
+        },
+      }),
   ];
 
   if (hasSignedOrdersBody) {

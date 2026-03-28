@@ -141,6 +141,7 @@ type WithdrawalRealtimeItem = {
   data: BankTransferDashboardEvent;
   receivedAt: string;
   highlightUntil: number;
+  sortOrder: number;
 };
 
 type ClearanceActionMode = "complete" | "cancel";
@@ -766,6 +767,7 @@ export default function ClearanceManagementConsoleClient({
   const lastBuyorderEventIdRef = useRef("");
   const lastWithdrawalEventIdRef = useRef("");
   const withdrawalRealtimeCursorRef = useRef<string | null>(null);
+  const withdrawalRealtimeSequenceRef = useRef(0);
   const ablyClientIdRef = useRef(`console-clearance-${Math.random().toString(36).slice(2, 10)}`);
   const desiredBaseLoadSignatureRef = useRef("");
   const desiredOrdersLoadSignatureRef = useRef("");
@@ -787,7 +789,10 @@ export default function ClearanceManagementConsoleClient({
       .sort((left, right) => {
         const rightTimestamp = getWithdrawalRealtimePrimaryTimestamp(right.data, right.receivedAt);
         const leftTimestamp = getWithdrawalRealtimePrimaryTimestamp(left.data, left.receivedAt);
-        return rightTimestamp - leftTimestamp;
+        if (rightTimestamp !== leftTimestamp) {
+          return rightTimestamp - leftTimestamp;
+        }
+        return right.sortOrder - left.sortOrder;
       })
       .slice(0, 24);
   }, []);
@@ -795,6 +800,7 @@ export default function ClearanceManagementConsoleClient({
   const replaceWithdrawalRealtimeItems = useCallback((
     events: BankTransferDashboardEvent[],
   ) => {
+    let nextSequence = withdrawalRealtimeSequenceRef.current;
     setWithdrawalRealtimeItems(
       sortWithdrawalRealtimeItems(
         events.map((event) => ({
@@ -802,9 +808,11 @@ export default function ClearanceManagementConsoleClient({
           data: event,
           receivedAt: new Date().toISOString(),
           highlightUntil: 0,
+          sortOrder: ++nextSequence,
         })),
       ),
     );
+    withdrawalRealtimeSequenceRef.current = nextSequence;
   }, [sortWithdrawalRealtimeItems]);
 
   const upsertWithdrawalRealtimeEvents = useCallback((
@@ -840,6 +848,7 @@ export default function ClearanceManagementConsoleClient({
           data: event,
           receivedAt: new Date().toISOString(),
           highlightUntil: highlightNew ? now + WITHDRAWAL_HIGHLIGHT_MS : 0,
+          sortOrder: ++withdrawalRealtimeSequenceRef.current,
         });
       }
 
@@ -906,31 +915,6 @@ export default function ClearanceManagementConsoleClient({
       );
       const selectedStorecode = normalizedForcedStorecode || filters.storecode;
 
-      if (isStoreScoped && !canReadSignedData) {
-        if (isWalletRecovering) {
-          setError("");
-          setLoading(true);
-          setRefreshing(false);
-          return;
-        }
-
-        setData((current) => ({
-          ...(current || EMPTY_CLEARANCE_DASHBOARD),
-          stores: EMPTY_STORES,
-          storeTotalCount: 0,
-          storesError: "",
-          selectedStore: null,
-          withdrawalEvents: EMPTY_WITHDRAWALS,
-          withdrawalNextCursor: null,
-        }));
-        replaceWithdrawalRealtimeItems(EMPTY_WITHDRAWALS);
-        setWithdrawalSyncError("");
-        setError("");
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
       if (inflightLoadRef.current) {
         queuedSilentRefreshRef.current = true;
         return;
@@ -973,7 +957,7 @@ export default function ClearanceManagementConsoleClient({
           body: JSON.stringify({
             storesLimit: isStoreScoped ? 1 : 300,
             storesPage: 1,
-            withdrawalLimit: 24,
+            withdrawalLimit: hideWithdrawalLiveSection ? 0 : 24,
             selectedStorecode,
             signedStoreBody,
           }),
@@ -990,6 +974,14 @@ export default function ClearanceManagementConsoleClient({
         }
 
         const result = payload.result as ClearanceBaseResult;
+        const nextWithdrawalEvents =
+          !hideWithdrawalLiveSection && Array.isArray(result?.withdrawalEvents)
+            ? result.withdrawalEvents
+            : EMPTY_WITHDRAWALS;
+        const nextWithdrawalCursor =
+          !hideWithdrawalLiveSection && typeof result?.withdrawalNextCursor === "string"
+            ? result.withdrawalNextCursor
+            : null;
         setData((current) => ({
           ...(current || EMPTY_CLEARANCE_DASHBOARD),
           fetchedAt: result?.fetchedAt || "",
@@ -998,16 +990,11 @@ export default function ClearanceManagementConsoleClient({
           storeTotalCount: Number(result?.storeTotalCount || 0),
           storesError: normalizeText(result?.storesError),
           selectedStore: result?.selectedStore || null,
-          withdrawalEvents: Array.isArray(result?.withdrawalEvents) ? result.withdrawalEvents : EMPTY_WITHDRAWALS,
-          withdrawalNextCursor: typeof result?.withdrawalNextCursor === "string" ? result.withdrawalNextCursor : null,
+          withdrawalEvents: nextWithdrawalEvents,
+          withdrawalNextCursor: nextWithdrawalCursor,
         }));
-        withdrawalRealtimeCursorRef.current =
-          typeof result?.withdrawalNextCursor === "string" && result.withdrawalNextCursor
-            ? result.withdrawalNextCursor
-            : withdrawalRealtimeCursorRef.current;
-        replaceWithdrawalRealtimeItems(
-          Array.isArray(result?.withdrawalEvents) ? result.withdrawalEvents : EMPTY_WITHDRAWALS,
-        );
+        withdrawalRealtimeCursorRef.current = nextWithdrawalCursor || null;
+        replaceWithdrawalRealtimeItems(nextWithdrawalEvents);
         setWithdrawalSyncError("");
         setError("");
       } catch (loadError) {
@@ -1028,10 +1015,9 @@ export default function ClearanceManagementConsoleClient({
     },
     [
       activeAccount,
-      canReadSignedData,
       filters.storecode,
       isStoreScoped,
-      isWalletRecovering,
+      hideWithdrawalLiveSection,
       normalizedForcedStorecode,
       replaceWithdrawalRealtimeItems,
     ],
@@ -1079,11 +1065,6 @@ export default function ClearanceManagementConsoleClient({
           setData((current) => ({
             ...(current || EMPTY_CLEARANCE_DASHBOARD),
             ordersError: "",
-            orders: EMPTY_ORDERS,
-            totalCount: 0,
-            totalClearanceCount: 0,
-            totalClearanceAmount: 0,
-            totalClearanceAmountKRW: 0,
           }));
           setError("");
           return;
@@ -1130,11 +1111,6 @@ export default function ClearanceManagementConsoleClient({
           setData((current) => ({
             ...(current || EMPTY_CLEARANCE_DASHBOARD),
             ordersError: nextOrdersError,
-            orders: EMPTY_ORDERS,
-            totalCount: 0,
-            totalClearanceCount: 0,
-            totalClearanceAmount: 0,
-            totalClearanceAmountKRW: 0,
           }));
           setError("");
           return;
@@ -1248,14 +1224,26 @@ export default function ClearanceManagementConsoleClient({
   }, [loadOrdersDashboard]);
 
   useEffect(() => {
+    if (hideWithdrawalLiveSection) {
+      return;
+    }
+
     const timer = window.setInterval(() => {
       setWithdrawalRealtimeNowMs(Date.now());
     }, WITHDRAWAL_CLOCK_TICK_MS);
 
     return () => window.clearInterval(timer);
-  }, []);
+  }, [hideWithdrawalLiveSection]);
 
   useEffect(() => {
+    if (hideWithdrawalLiveSection) {
+      withdrawalRealtimeCursorRef.current = null;
+      replaceWithdrawalRealtimeItems(EMPTY_WITHDRAWALS);
+      setConnectionError("");
+      setWithdrawalSyncError("");
+      return;
+    }
+
     const realtime = new Ably.Realtime({
       authUrl: `/api/bff/realtime/ably-token?stream=ops-admin&clientId=${ablyClientIdRef.current}`,
     });
@@ -1326,12 +1314,13 @@ export default function ClearanceManagementConsoleClient({
       realtime.connection.off(onConnectionStateChange);
       realtime.close();
     };
-  }, [requestRealtimeRefresh, syncWithdrawalRealtimeEvents, upsertWithdrawalRealtimeEvents]);
+  }, [hideWithdrawalLiveSection, replaceWithdrawalRealtimeItems, requestRealtimeRefresh, syncWithdrawalRealtimeEvents, upsertWithdrawalRealtimeEvents]);
 
   const stores = data?.stores || EMPTY_STORES;
   const storesError = normalizeText(data?.storesError);
-  const ordersError = normalizeText(data?.ordersError);
-  const orders = data?.orders || EMPTY_ORDERS;
+  const shouldRevealSignedOrderData = canReadSignedData || isWalletRecovering;
+  const ordersError = shouldRevealSignedOrderData ? normalizeText(data?.ordersError) : "";
+  const orders = shouldRevealSignedOrderData ? (data?.orders || EMPTY_ORDERS) : EMPTY_ORDERS;
   const selectedStoreSummary = useMemo(() => {
     if (!filters.storecode) {
       return null;
@@ -1590,7 +1579,10 @@ export default function ClearanceManagementConsoleClient({
   ]);
 
   const currentOrderPage = Math.max(1, filters.page);
-  const totalOrderCount = Number(data?.totalCount || 0);
+  const totalOrderCount = shouldRevealSignedOrderData ? Number(data?.totalCount || 0) : 0;
+  const totalClearanceCount = shouldRevealSignedOrderData ? Number(data?.totalClearanceCount || 0) : 0;
+  const totalClearanceAmount = shouldRevealSignedOrderData ? Number(data?.totalClearanceAmount || 0) : 0;
+  const totalClearanceAmountKRW = shouldRevealSignedOrderData ? Number(data?.totalClearanceAmountKRW || 0) : 0;
   const totalOrderPages = Math.max(1, Math.ceil(totalOrderCount / Math.max(1, filters.limit)));
   const currentOrderRangeStart = totalOrderCount === 0 ? 0 : (currentOrderPage - 1) * filters.limit + 1;
   const currentOrderRangeEnd = totalOrderCount === 0 ? 0 : Math.min(totalOrderCount, currentOrderPage * filters.limit);
@@ -1847,7 +1839,7 @@ export default function ClearanceManagementConsoleClient({
           {[
             {
               label: "전체 주문",
-              value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(data?.totalCount || 0),
+              value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(totalOrderCount),
               caption: showOrdersLoadingState
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
@@ -1856,7 +1848,7 @@ export default function ClearanceManagementConsoleClient({
             },
             {
               label: usesCollectOrdersSummary ? "청산주문" : "출금완료",
-              value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(data?.totalClearanceCount || 0),
+              value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(totalClearanceCount),
               caption: showOrdersLoadingState
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
@@ -1865,7 +1857,7 @@ export default function ClearanceManagementConsoleClient({
             },
             {
               label: "청산량",
-              value: showOrdersLoadingState ? "..." : `${formatUsdtValue(data?.totalClearanceAmount || 0)} USDT`,
+              value: showOrdersLoadingState ? "..." : `${formatUsdtValue(totalClearanceAmount)} USDT`,
               caption: showOrdersLoadingState
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
@@ -1874,7 +1866,7 @@ export default function ClearanceManagementConsoleClient({
             },
             {
               label: "청산금액",
-              value: showOrdersLoadingState ? "..." : `${formatKrwValue(data?.totalClearanceAmountKRW || 0)} KRW`,
+              value: showOrdersLoadingState ? "..." : `${formatKrwValue(totalClearanceAmountKRW)} KRW`,
               caption: showOrdersLoadingState
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
@@ -1980,7 +1972,7 @@ export default function ClearanceManagementConsoleClient({
               </div>
             ) : (
               <div className="-mx-1 overflow-x-auto px-1 pb-1">
-                <div className="flex min-w-full items-start gap-3">
+                <div className="inline-flex min-w-max items-start gap-3">
                   {filteredWithdrawalRealtimeItems.map((item) => {
                     const event = item.data;
                     const isHighlighted = item.highlightUntil > withdrawalRealtimeNowMs;
