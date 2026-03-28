@@ -18,6 +18,13 @@ const NAV_ITEMS = [
     marker: "02",
     description: "해당 가맹점 청산 현황",
   },
+  {
+    href: "/daily-close",
+    label: "일별마감",
+    eyebrow: "Daily close",
+    marker: "03",
+    description: "해당 가맹점 일별 정산 요약",
+  },
 ] as const;
 
 export default function StoreShell({
