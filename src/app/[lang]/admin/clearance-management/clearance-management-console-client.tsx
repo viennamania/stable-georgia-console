@@ -1070,6 +1070,21 @@ export default function ClearanceManagementConsoleClient({
           return;
         }
 
+        const signingAccount = activeAccount;
+        if (!signingAccount) {
+          if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
+            queuedSilentOrdersRefreshRef.current = true;
+            return;
+          }
+
+          setData((current) => ({
+            ...(current || EMPTY_CLEARANCE_DASHBOARD),
+            ordersError: "주문 조회 지갑 정보를 확인하지 못했습니다.",
+          }));
+          setError("");
+          return;
+        }
+
         let signedOrdersBody: Record<string, unknown> | null = null;
         let nextOrdersError = "";
         const ordersRoute = ordersQueryMode === "collectOrdersForSeller"
@@ -1081,15 +1096,15 @@ export default function ClearanceManagementConsoleClient({
 
         try {
           signedOrdersBody = await createCenterStoreAdminSignedBody({
-            account: activeAccount,
+            account: signingAccount,
             route: ordersRoute,
             storecode: signingStorecode,
-            requesterWalletAddress: activeAccount.address,
+            requesterWalletAddress: signingAccount.address,
             body: {
               storecode: effectiveStorecode,
               limit: filters.limit,
               page: filters.page,
-              walletAddress: activeAccount.address,
+              walletAddress: signingAccount.address,
               searchMyOrders: filters.searchMyOrders,
               privateSale: true,
               fromDate: filters.fromDate,
