@@ -257,11 +257,11 @@ function AmountCell({
   krwValue: number;
 }) {
   return (
-    <div className="flex flex-col items-end gap-1">
-      <span className="console-display text-sm font-semibold tracking-[-0.04em] text-emerald-600">
+    <div className="flex flex-col items-end gap-0.5 text-right">
+      <span className="console-display break-all text-[13px] font-semibold leading-tight tracking-[-0.04em] text-emerald-600 sm:text-sm">
         {formatUsdtDisplay(usdtValue)}
       </span>
-      <span className="console-display text-sm font-semibold tracking-[-0.04em] text-amber-600">
+      <span className="console-display break-all text-[13px] font-semibold leading-tight tracking-[-0.04em] text-amber-600 sm:text-sm">
         {formatKrwDisplay(krwValue)}
       </span>
     </div>
@@ -810,7 +810,7 @@ export default function DailyCloseConsoleClient({
           />
         </section>
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.75fr)_360px]">
+        <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.75fr)_360px]">
           <section className="console-panel overflow-hidden rounded-[30px]">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
               <div>
@@ -849,32 +849,42 @@ export default function DailyCloseConsoleClient({
                 조회된 일별 마감 데이터가 없습니다.
               </div>
             ) : (
-              <div className="w-full overflow-x-auto">
-                <table className="min-w-[1180px] w-full table-auto border-collapse">
+              <div className="w-full">
+                <table className="w-full table-fixed border-collapse">
+                  <colgroup>
+                    <col className="w-[13%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[14%]" />
+                  </colgroup>
                   <thead className="bg-slate-950 text-white">
                     <tr>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300 sm:px-4">
                         날짜
                       </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <th className="px-3 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300 sm:px-4">
                         거래수
                       </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <th className="px-3 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300 sm:px-4">
                         거래량 / 금액
                       </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <th className="px-3 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300 sm:px-4">
                         결제량 / 금액
                       </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <th className="px-3 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300 sm:px-4">
                         수수료량 / 금액
                       </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <th className="px-3 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300 sm:px-4">
                         출금
                       </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <th className="px-3 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300 sm:px-4">
                         청산수
                       </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <th className="px-3 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300 sm:px-4">
                         청산량 / 금액
                       </th>
                     </tr>
@@ -885,61 +895,61 @@ export default function DailyCloseConsoleClient({
                         key={`${row.date}-${index}`}
                         className="border-b border-slate-200 bg-white transition-colors hover:bg-slate-50"
                       >
-                        <td className="px-5 py-4 align-top">
+                        <td className="px-3 py-4 align-top sm:px-4">
                           <div className="flex flex-col gap-1">
-                            <div className="text-base font-semibold text-slate-950">
+                            <div className="text-sm font-semibold text-slate-950 sm:text-base">
                               {formatDailyCloseDate(row.date)}
                             </div>
-                            <div className="text-xs text-slate-500">
+                            <div className="text-[11px] text-slate-500">
                               {formatDailyCloseWeekday(row.date)}
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-4 text-right align-top">
-                          <div className="text-lg font-semibold text-slate-950">
+                        <td className="px-3 py-4 text-right align-top sm:px-4">
+                          <div className="text-base font-semibold text-slate-950 sm:text-lg">
                             {normalizeNumber(row.totalCount).toLocaleString()}
                           </div>
                         </td>
-                        <td className="px-5 py-4 align-top">
+                        <td className="px-3 py-4 align-top sm:px-4">
                           <AmountCell
                             usdtValue={normalizeNumber(row.totalUsdtAmount)}
                             krwValue={normalizeNumber(row.totalKrwAmount)}
                           />
                         </td>
-                        <td className="px-5 py-4 align-top">
+                        <td className="px-3 py-4 align-top sm:px-4">
                           <AmountCell
                             usdtValue={normalizeNumber(row.totalSettlementAmount)}
                             krwValue={normalizeNumber(row.totalSettlementAmountKRW)}
                           />
                         </td>
-                        <td className="px-5 py-4 align-top">
+                        <td className="px-3 py-4 align-top sm:px-4">
                           <AmountCell
                             usdtValue={normalizeNumber(row.totalAgentFeeAmount) + normalizeNumber(row.totalFeeAmount)}
                             krwValue={normalizeNumber(row.totalAgentFeeAmountKRW) + normalizeNumber(row.totalFeeAmountKRW)}
                           />
                         </td>
-                        <td className="px-5 py-4 text-right align-top">
+                        <td className="px-3 py-4 text-right align-top sm:px-4">
                           {normalizeNumber(row.totalEscrowCount) > 0 ? (
                             <div className="flex flex-col items-end gap-1">
-                              <span className="console-display text-sm font-semibold tracking-[-0.04em] text-emerald-600">
+                              <span className="console-display break-all text-[13px] font-semibold tracking-[-0.04em] text-emerald-600 sm:text-sm">
                                 {formatUsdtDisplay(normalizeNumber(row.totalEscrowWithdrawAmount))}
                               </span>
-                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold text-emerald-700 sm:text-[10px]">
                                 출금완료
                               </span>
                             </div>
                           ) : (
-                            <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600">
+                            <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[9px] font-semibold text-rose-600 sm:px-2.5 sm:py-1 sm:text-[11px]">
                               출금대기
                             </span>
                           )}
                         </td>
-                        <td className="px-5 py-4 text-right align-top">
-                          <div className="text-lg font-semibold text-slate-950">
+                        <td className="px-3 py-4 text-right align-top sm:px-4">
+                          <div className="text-base font-semibold text-slate-950 sm:text-lg">
                             {normalizeNumber(row.totalClearanceCount).toLocaleString()}
                           </div>
                         </td>
-                        <td className="px-5 py-4 align-top">
+                        <td className="px-3 py-4 align-top sm:px-4">
                           <AmountCell
                             usdtValue={normalizeNumber(row.totalClearanceUsdtAmount)}
                             krwValue={normalizeNumber(row.totalClearanceKrwAmount)}
