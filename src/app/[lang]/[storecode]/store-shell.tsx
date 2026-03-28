@@ -25,6 +25,13 @@ const NAV_ITEMS = [
     marker: "03",
     description: "해당 가맹점 일별 정산 요약",
   },
+  {
+    href: "/member-management",
+    label: "회원관리",
+    eyebrow: "Members",
+    marker: "04",
+    description: "해당 가맹점 회원 목록과 추가",
+  },
 ] as const;
 
 export default function StoreShell({
@@ -55,7 +62,7 @@ export default function StoreShell({
                 {decodedStorecode}
               </div>
               <div className="mt-3 text-sm leading-6 text-slate-300">
-                현재 가맹점 범위에서 구매주문과 청산주문 운영 화면을 빠르게 오갈 수 있습니다.
+                현재 가맹점 범위에서 주문, 청산, 일별마감, 회원 운영 화면을 빠르게 오갈 수 있습니다.
               </div>
             </div>
 
