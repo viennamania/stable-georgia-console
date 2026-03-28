@@ -1867,7 +1867,7 @@ export default function ClearanceManagementConsoleClient({
               caption: showOrdersLoadingState
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
-                  ? "paymentRequested + paymentConfirmed 기준"
+                  ? "가맹점 청산주문 API 집계 기준"
                   : "paymentConfirmed 기준 완료 건수",
             },
             {
