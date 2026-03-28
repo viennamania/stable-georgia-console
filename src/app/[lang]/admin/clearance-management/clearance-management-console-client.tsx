@@ -758,12 +758,14 @@ export default function ClearanceManagementConsoleClient({
   const [actionModalSubmitting, setActionModalSubmitting] = useState(false);
   const [actionModalError, setActionModalError] = useState("");
   const [processingOrderId, setProcessingOrderId] = useState("");
+  const [copiedTradeId, setCopiedTradeId] = useState("");
 
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
   const inflightOrdersLoadRef = useRef(false);
   const queuedSilentOrdersRefreshRef = useRef(false);
   const ordersRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBuyorderEventIdRef = useRef("");
   const lastWithdrawalEventIdRef = useRef("");
   const withdrawalRealtimeCursorRef = useRef<string | null>(null);
@@ -1196,6 +1198,26 @@ export default function ClearanceManagementConsoleClient({
     }, 350);
   }, [loadOrdersDashboard]);
 
+  const copyTradeId = useCallback(async (tradeId: string) => {
+    const safeTradeId = String(tradeId || "").trim();
+    if (!safeTradeId || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(safeTradeId);
+      setCopiedTradeId(safeTradeId);
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+      copyResetTimerRef.current = setTimeout(() => {
+        setCopiedTradeId("");
+      }, 1800);
+    } catch {
+      // Keep trade row interactions non-blocking when clipboard access fails.
+    }
+  }, []);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
@@ -1203,6 +1225,14 @@ export default function ClearanceManagementConsoleClient({
   useEffect(() => {
     void loadOrdersDashboard();
   }, [loadOrdersDashboard]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!hideStoreFilter && !normalizedForcedStorecode) {
@@ -2207,6 +2237,7 @@ export default function ClearanceManagementConsoleClient({
                 ) : (
                   orders.map((order, index) => {
                     const orderId = String(order._id || "").trim();
+                    const tradeId = String(order.tradeId || "").trim();
                     const statusMeta = getStatusMeta(order.status);
                     const withdrawalStatusMeta = getWithdrawalStatusMeta(order);
                     const creationMeta = getClearanceOrderCreationMeta(order);
@@ -2222,6 +2253,7 @@ export default function ClearanceManagementConsoleClient({
                     const isCancelled = String(order.status || "").trim() === "cancelled";
                     const canManageWithdrawal = !isWithdrawalCompleted && !isCancelled;
                     const isProcessingThisOrder = processingOrderId === orderId;
+                    const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
 
                     return (
                       <tr
@@ -2245,7 +2277,27 @@ export default function ClearanceManagementConsoleClient({
                                 </span>
                               </div>
                               <div className="mt-1 break-all font-semibold text-slate-900">
-                                {order.tradeId || "-"}
+                                {tradeId ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      void copyTradeId(tradeId);
+                                    }}
+                                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left transition hover:border-sky-300 hover:bg-sky-50"
+                                    title="클릭해서 청산 주문번호 복사"
+                                  >
+                                    <span className="font-semibold text-slate-950">{tradeId}</span>
+                                    <span
+                                      className={`console-mono text-[10px] uppercase tracking-[0.14em] ${
+                                        isCopiedTradeId ? "text-emerald-600" : "text-slate-400"
+                                      }`}
+                                    >
+                                      {isCopiedTradeId ? "copied" : "copy"}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  "-"
+                                )}
                               </div>
                               <div className="mt-0.5 break-words text-[11px] text-slate-500">
                                 {createdAtLabel === "-" ? "-" : `${createdAtLabel} · ${createdTimeAgoLabel}`}

@@ -565,12 +565,15 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [submitLoading, setSubmitLoading] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
+  const [createdTradeId, setCreatedTradeId] = useState("");
+  const [copiedTradeId, setCopiedTradeId] = useState("");
   const [embeddedRefreshKey, setEmbeddedRefreshKey] = useState(0);
   const [buyerBankBalanceDate, setBuyerBankBalanceDate] = useState(createInputDate(0));
   const buyerBankBalanceAblyClientIdRef = useRef(`console-clearance-order-${Math.random().toString(36).slice(2, 10)}`);
   const lastBuyerBankBalanceEventIdRef = useRef("");
   const storeContextRequestIdRef = useRef(0);
   const sellerBankBalancesRequestIdRef = useRef(0);
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibleSellerBankBalances = useMemo(
     () => sellerBankBalances.filter((item) => Number(item.balance || 0) > 0),
     [sellerBankBalances],
@@ -654,8 +657,18 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   useEffect(() => {
     setActionError("");
     setActionSuccess("");
+    setCreatedTradeId("");
+    setCopiedTradeId("");
     setKrwAmountInput("");
   }, [selectedStorecode]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
 
   const loadStoreContext = useCallback(async () => {
     const requestId = ++storeContextRequestIdRef.current;
@@ -1094,6 +1107,26 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     && Boolean(sellerBankInfo)
     && rate > 0;
 
+  const copyTradeId = useCallback(async (tradeId: string) => {
+    const safeTradeId = String(tradeId || "").trim();
+    if (!safeTradeId || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(safeTradeId);
+      setCopiedTradeId(safeTradeId);
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+      copyResetTimerRef.current = setTimeout(() => {
+        setCopiedTradeId("");
+      }, 1800);
+    } catch {
+      // Keep create-order interactions non-blocking when clipboard access fails.
+    }
+  }, []);
+
   const handleCreateOrder = useCallback(async () => {
     if (!activeAccount) {
       setActionError("관리자 지갑을 연결해야 청산주문을 생성할 수 있습니다.");
@@ -1108,6 +1141,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     setSubmitLoading(true);
     setActionError("");
     setActionSuccess("");
+    setCreatedTradeId("");
+    setCopiedTradeId("");
 
     try {
       const body = buildClearanceOrderBody();
@@ -1137,15 +1172,13 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
       }
 
       const tradeId = normalizeText(payload?.result?.tradeId || payload?.result?.order?.tradeId);
-      setActionSuccess(
-        tradeId
-          ? `청산주문이 생성되었습니다. tradeId ${tradeId}`
-          : "청산주문이 생성되었습니다.",
-      );
+      setCreatedTradeId(tradeId);
+      setActionSuccess("청산주문이 생성되었습니다.");
       setKrwAmountInput("");
       setEmbeddedRefreshKey((prev) => prev + 1);
       void loadStoreContext();
     } catch (error) {
+      setCreatedTradeId("");
       setActionError(
         error instanceof Error ? error.message : "청산주문 생성 중 오류가 발생했습니다.",
       );
@@ -1622,7 +1655,26 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
 
                         {actionSuccess ? (
                           <div className="rounded-[22px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                            {actionSuccess}
+                            <div>{actionSuccess}</div>
+                            {createdTradeId ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void copyTradeId(createdTradeId);
+                                }}
+                                className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-left transition hover:border-emerald-300 hover:bg-emerald-100/60"
+                                title="클릭해서 청산 주문번호 복사"
+                              >
+                                <span className="font-semibold text-emerald-900">{createdTradeId}</span>
+                                <span
+                                  className={`console-mono text-[10px] uppercase tracking-[0.14em] ${
+                                    copiedTradeId === createdTradeId ? "text-emerald-700" : "text-emerald-500"
+                                  }`}
+                                >
+                                  {copiedTradeId === createdTradeId ? "copied" : "copy"}
+                                </span>
+                              </button>
+                            ) : null}
                           </div>
                         ) : null}
 
