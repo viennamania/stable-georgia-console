@@ -95,6 +95,38 @@ type AddMemberFormState = {
   userType: string;
 };
 
+const BANK_OPTIONS = [
+  "카카오뱅크",
+  "케이뱅크",
+  "토스뱅크",
+  "국민은행",
+  "우리은행",
+  "신한은행",
+  "농협",
+  "새마을금고",
+  "우체국",
+  "산림조합",
+  "기업은행",
+  "하나은행",
+  "외환은행",
+  "SC제일은행",
+  "부산은행",
+  "경남은행",
+  "대구은행",
+  "전북은행",
+  "경북은행",
+  "광주은행",
+  "제주은행",
+  "수협",
+  "신협",
+  "저축은행",
+  "씨티은행",
+  "대신은행",
+  "동양종합금융",
+  "JT친애저축은행",
+  "산업은행",
+] as const;
+
 const MEMBER_TYPE_OPTIONS = [
   { value: "all", label: "전체 등급" },
   { value: "normal", label: "일반 회원" },
@@ -670,7 +702,7 @@ export default function MemberManagementConsoleClient({
     }
 
     if (!trimmedBankName) {
-      setActionError("은행명을 입력해주세요.");
+      setActionError("은행을 선택해주세요.");
       return;
     }
 
@@ -1349,18 +1381,29 @@ export default function MemberManagementConsoleClient({
                 </label>
                 <label className="space-y-2">
                   <div className="text-sm font-medium text-slate-700">은행명</div>
-                  <input
+                  <select
                     value={addMemberForm.userBankName}
                     onChange={(event) => updateAddMemberField("userBankName", event.target.value)}
-                    placeholder="국민은행"
                     className={fieldClassName}
-                  />
+                  >
+                    <option value="">은행선택</option>
+                    {BANK_OPTIONS.map((bankName) => (
+                      <option key={bankName} value={bankName}>
+                        {bankName}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="space-y-2">
                   <div className="text-sm font-medium text-slate-700">계좌번호</div>
                   <input
                     value={addMemberForm.userBankAccountNumber}
-                    onChange={(event) => updateAddMemberField("userBankAccountNumber", event.target.value)}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      if (/^[0-9]*$/.test(nextValue)) {
+                        updateAddMemberField("userBankAccountNumber", nextValue);
+                      }
+                    }}
                     placeholder="12345678901234"
                     className={fieldClassName}
                   />
