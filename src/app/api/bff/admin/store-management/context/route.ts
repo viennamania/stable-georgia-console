@@ -18,6 +18,28 @@ const asPlainObject = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
+const normalizeRole = (value: unknown) => normalizeString(value).toLowerCase();
+
+const toUserSummary = (value: any) => ({
+  _id: normalizeString(value?._id),
+  id: value?.id ?? null,
+  nickname: normalizeString(value?.nickname),
+  walletAddress: normalizeString(value?.walletAddress),
+  signerAddress: normalizeString(value?.signerAddress),
+  role: normalizeRole(value?.role || value?.rold),
+  createdAt: normalizeString(value?.createdAt),
+  depositName: normalizeString(value?.buyer?.depositName),
+});
+
+const findUserByWalletAddress = (users: any[], walletAddressRaw: unknown) => {
+  const walletAddress = normalizeString(walletAddressRaw).toLowerCase();
+  if (!walletAddress) {
+    return null;
+  }
+
+  return users.find((user) => normalizeString(user?.walletAddress).toLowerCase() === walletAddress) || null;
+};
+
 const resolveRemoteError = (payload: any, fallback: string) => {
   return normalizeString(payload?.error)
     || normalizeString(payload?.message)
@@ -72,9 +94,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const rawUsers = Array.isArray(usersResponse.json?.result?.users)
+  const rawUsers: any[] = Array.isArray(usersResponse.json?.result?.users)
     ? usersResponse.json.result.users
     : [];
+  const storeInfo = storeResponse.json?.result || null;
 
   const adminWalletCandidateMap = new Map<string, any>();
   for (const user of rawUsers) {
@@ -89,11 +112,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const sellerWalletUser = findUserByWalletAddress(rawUsers, storeInfo?.sellerWalletAddress);
+  const privateSellerWalletUser = findUserByWalletAddress(rawUsers, storeInfo?.privateSellerWalletAddress);
+  const settlementWalletUser = findUserByWalletAddress(rawUsers, storeInfo?.settlementWalletAddress);
+  const sellerRoleUsers = rawUsers
+    .filter((user: any) => normalizeRole(user?.role || user?.rold) === "seller")
+    .map(toUserSummary)
+    .slice(0, 12);
+
   return NextResponse.json({
     result: {
       fetchedAt: new Date().toISOString(),
       remoteBackendBaseUrl: getRemoteBackendBaseUrl(),
-      store: storeResponse.json?.result || null,
+      store: storeInfo,
       storeError: "",
       agents: Array.isArray(agentsResponse.json?.result?.agents)
         ? agentsResponse.json.result.agents
@@ -111,6 +142,12 @@ export async function POST(request: NextRequest) {
       adminWalletHistoryError: historyResponse.ok
         ? ""
         : resolveRemoteError(historyResponse.json, "Failed to load admin wallet history"),
+      sellerProfiles: {
+        sellerWalletUser: sellerWalletUser ? toUserSummary(sellerWalletUser) : null,
+        privateSellerWalletUser: privateSellerWalletUser ? toUserSummary(privateSellerWalletUser) : null,
+        settlementWalletUser: settlementWalletUser ? toUserSummary(settlementWalletUser) : null,
+        sellerRoleUsers,
+      },
     },
   });
 }

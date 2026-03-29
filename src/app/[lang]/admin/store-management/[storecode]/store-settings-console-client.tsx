@@ -80,35 +80,72 @@ type AdminWalletHistoryEntry = {
   updatedAt?: string | null;
 };
 
+type StoreUserSummary = {
+  _id?: string;
+  id?: number | null;
+  nickname?: string;
+  walletAddress?: string;
+  signerAddress?: string;
+  role?: string;
+  createdAt?: string;
+  depositName?: string;
+};
+
 type StoreDetail = {
   _id?: string;
   createdAt?: string;
   storecode?: string;
   storeName?: string;
   storeLogo?: string;
+  storeBanner?: string;
   storeDescription?: string;
+  storeType?: string;
+  storeUrl?: string;
   agentcode?: string;
   agentName?: string;
   agentLogo?: string;
   totalBuyerCount?: number;
   totalPaymentConfirmedCount?: number;
   totalUsdtAmount?: number;
+  totalSettlementCount?: number;
+  totalSettlementAmount?: number;
   totalSettlementAmountKRW?: number;
+  totalFeeAmountKRW?: number;
+  totalAgentFeeAmountKRW?: number;
+  totalPaymentConfirmedClearanceCount?: number;
+  totalKrwAmountClearance?: number;
+  totalUsdtAmountClearance?: number;
+  totalWithdrawalCount?: number;
+  totalWithdrawalAmount?: number;
+  totalWithdrawalAmountKRW?: number;
+  totalSettlementFeeAmountKRW?: number;
   escrowAmountUSDT?: number;
   maxPaymentAmountKRW?: number;
   paymentUrl?: string;
+  paymentCallbackUrl?: string;
   viewOnAndOff?: boolean;
   liveOnAndOff?: boolean;
   adminWalletAddress?: string;
   settlementWalletAddress?: string;
+  settlementFeeWalletAddress?: string;
+  settlementFeePercent?: number;
   privateSaleWalletAddress?: string;
+  privateSellerWalletAddress?: string;
   sellerWalletAddress?: string;
+  agentFeeWalletAddress?: string;
+  agentFeePercent?: number;
   backgroundColor?: string;
   accessToken?: string;
   payactionKey?: PayactionKey | null;
+  bankInfo?: BankInfo | null;
+  bankInfoAAA?: BankInfo | null;
+  bankInfoBBB?: BankInfo | null;
+  bankInfoCCC?: BankInfo | null;
+  bankInfoDDD?: BankInfo | null;
   withdrawalBankInfo?: BankInfo | null;
   withdrawalBankInfoAAA?: BankInfo | null;
   withdrawalBankInfoBBB?: BankInfo | null;
+  withdrawalBankInfoCCC?: BankInfo | null;
 };
 
 type ContextResult = {
@@ -122,6 +159,12 @@ type ContextResult = {
   adminWalletCandidatesError: string;
   adminWalletHistory: AdminWalletHistoryEntry[];
   adminWalletHistoryError: string;
+  sellerProfiles: {
+    sellerWalletUser: StoreUserSummary | null;
+    privateSellerWalletUser: StoreUserSummary | null;
+    settlementWalletUser: StoreUserSummary | null;
+    sellerRoleUsers: StoreUserSummary[];
+  };
 };
 
 type FeedbackState = {
@@ -158,6 +201,12 @@ const EMPTY_CONTEXT_RESULT: ContextResult = {
   adminWalletCandidatesError: "",
   adminWalletHistory: [],
   adminWalletHistoryError: "",
+  sellerProfiles: {
+    sellerWalletUser: null,
+    privateSellerWalletUser: null,
+    settlementWalletUser: null,
+    sellerRoleUsers: [],
+  },
 };
 
 const EMPTY_PROFILE_FORM: ProfileFormState = {
@@ -234,6 +283,22 @@ const formatUsdtDisplay = (value: number | null | undefined) =>
 
 const formatKrwDisplay = (value: number | null | undefined) =>
   Math.round(Number(value || 0)).toLocaleString("ko-KR");
+
+const formatPercentDisplay = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "-";
+  }
+
+  return `${parsed.toLocaleString("ko-KR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}%`;
+};
 
 const sanitizeDigits = (value: string) => value.replace(/[^\d]/g, "");
 
@@ -397,6 +462,78 @@ const HistoryRow = ({ item }: { item: AdminWalletHistoryEntry }) => {
         <CurrentValue label="요청 지갑" value={shortAddress(item?.requesterWalletAddress)} />
         <CurrentValue label="IP" value={normalizeString(item?.publicIp) || "-"} />
         <CurrentValue label="Route" value={normalizeString(item?.route) || "-"} />
+      </div>
+    </div>
+  );
+};
+
+const formatRoleDisplay = (value: unknown) => {
+  const role = normalizeString(value).toLowerCase();
+  if (!role) {
+    return "미지정";
+  }
+  if (role === "seller") {
+    return "판매자";
+  }
+  if (role === "admin") {
+    return "관리자";
+  }
+  if (role === "superadmin") {
+    return "슈퍼어드민";
+  }
+  return role;
+};
+
+const StoreUserInfoCard = ({
+  title,
+  description,
+  user,
+}: {
+  title: string;
+  description: string;
+  user?: StoreUserSummary | null;
+}) => {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
+      <div className="text-sm font-semibold text-slate-900">{title}</div>
+      <div className="mt-1 text-xs leading-5 text-slate-500">{description}</div>
+      <div className="mt-4 grid gap-3">
+        <CurrentValue
+          label="회원명"
+          value={
+            normalizeString(user?.nickname)
+              || normalizeString(user?.depositName)
+              || "매칭된 회원 없음"
+          }
+        />
+        <CurrentValue label="권한" value={formatRoleDisplay(user?.role)} />
+        <CurrentValue label="지갑 주소" value={normalizeString(user?.walletAddress) || "-"} />
+        <CurrentValue label="Signer 주소" value={normalizeString(user?.signerAddress) || "-"} />
+        <CurrentValue label="생성일" value={formatDateTime(user?.createdAt)} />
+      </div>
+    </div>
+  );
+};
+
+const ReadOnlyBankInfoCard = ({
+  title,
+  info,
+  description,
+}: {
+  title: string;
+  info?: BankInfo | null;
+  description?: string;
+}) => {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
+      <div className="text-sm font-semibold text-slate-900">{title}</div>
+      {description ? (
+        <div className="mt-1 text-xs leading-5 text-slate-500">{description}</div>
+      ) : null}
+      <div className="mt-4 grid gap-3">
+        <CurrentValue label="은행명" value={normalizeString(info?.bankName) || "-"} />
+        <CurrentValue label="계좌번호" value={normalizeString(info?.accountNumber) || "-"} />
+        <CurrentValue label="예금주명" value={normalizeString(info?.accountHolder) || "-"} />
       </div>
     </div>
   );
@@ -619,6 +756,16 @@ export default function StoreSettingsConsoleClient({
             ? result.adminWalletHistory
             : [],
           adminWalletHistoryError: normalizeString(result.adminWalletHistoryError),
+          sellerProfiles: result.sellerProfiles && typeof result.sellerProfiles === "object"
+            ? {
+                sellerWalletUser: result.sellerProfiles.sellerWalletUser || null,
+                privateSellerWalletUser: result.sellerProfiles.privateSellerWalletUser || null,
+                settlementWalletUser: result.sellerProfiles.settlementWalletUser || null,
+                sellerRoleUsers: Array.isArray(result.sellerProfiles.sellerRoleUsers)
+                  ? result.sellerProfiles.sellerRoleUsers
+                  : [],
+              }
+            : EMPTY_CONTEXT_RESULT.sellerProfiles,
         });
         hydrateForms(nextStore);
 
@@ -1191,6 +1338,15 @@ export default function StoreSettingsConsoleClient({
       return normalizeString(item.walletAddress).toLowerCase() === currentWallet;
     }) || null;
   }, [data.adminWalletCandidates, store?.adminWalletAddress]);
+  const sellerRoleUsers = data.sellerProfiles.sellerRoleUsers;
+  const sellerWalletUserLabel =
+    normalizeString(data.sellerProfiles.sellerWalletUser?.nickname)
+    || normalizeString(data.sellerProfiles.sellerWalletUser?.depositName)
+    || shortAddress(data.sellerProfiles.sellerWalletUser?.walletAddress);
+  const settlementWalletUserLabel =
+    normalizeString(data.sellerProfiles.settlementWalletUser?.nickname)
+    || normalizeString(data.sellerProfiles.settlementWalletUser?.depositName)
+    || shortAddress(data.sellerProfiles.settlementWalletUser?.walletAddress);
 
   const heroStatusLabel = loading
     ? "Loading store settings"
@@ -1209,6 +1365,55 @@ export default function StoreSettingsConsoleClient({
   const publicStoreConsoleUrl = remoteBaseUrl
     ? `${remoteBaseUrl}/${lang}/${storecode}/buyorder`
     : "";
+  const depositBankCards = [
+    {
+      title: "일반 입금 계좌",
+      description: "기본 회원 입금 매칭용 계좌입니다.",
+      info: store?.bankInfo,
+    },
+    {
+      title: "1등급 입금 계좌",
+      description: "AAA 등급 회원 매칭 계좌입니다.",
+      info: store?.bankInfoAAA,
+    },
+    {
+      title: "2등급 입금 계좌",
+      description: "BBB 등급 회원 매칭 계좌입니다.",
+      info: store?.bankInfoBBB,
+    },
+    {
+      title: "3등급 입금 계좌",
+      description: "CCC 등급 회원 매칭 계좌입니다.",
+      info: store?.bankInfoCCC,
+    },
+    {
+      title: "4등급 입금 계좌",
+      description: "DDD 등급 회원 매칭 계좌입니다.",
+      info: store?.bankInfoDDD,
+    },
+  ];
+  const withdrawalReadOnlyCards = [
+    {
+      title: "기본 출금 계좌",
+      description: "일반 회원 및 기본 출금 흐름에 사용됩니다.",
+      info: store?.withdrawalBankInfo,
+    },
+    {
+      title: "1등급 출금 계좌",
+      description: "AAA 등급 회원 출금용 계좌입니다.",
+      info: store?.withdrawalBankInfoAAA,
+    },
+    {
+      title: "2등급 출금 계좌",
+      description: "BBB 등급 회원 출금용 계좌입니다.",
+      info: store?.withdrawalBankInfoBBB,
+    },
+    {
+      title: "3등급 출금 계좌",
+      description: "CCC 등급 회원 출금용 계좌입니다.",
+      info: store?.withdrawalBankInfoCCC,
+    },
+  ];
 
   return (
     <div className="min-h-screen px-4 py-4 sm:px-5 lg:px-8">
@@ -1332,6 +1537,72 @@ export default function StoreSettingsConsoleClient({
             unit="KRW"
             helper={`현재 에스크로 ${formatUsdtDisplay(normalizeNumber(store?.escrowAmountUSDT))} USDT`}
           />
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-3">
+          <article className="console-panel rounded-[26px] p-5">
+            <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              Seller wallet
+            </div>
+            <div className="mt-3 text-lg font-semibold text-slate-950">판매자 지갑주소</div>
+            <div className="mt-1 text-sm leading-6 text-slate-500">
+              현재 판매 지갑과 연결된 회원을 상단 요약에서 바로 확인합니다.
+            </div>
+            <div className="mt-4 grid gap-3">
+              <CurrentValue
+                label="판매자 지갑주소"
+                value={normalizeString(store?.sellerWalletAddress) || "-"}
+              />
+              <CurrentValue
+                label="연결 회원"
+                value={sellerWalletUserLabel || "매칭된 회원 없음"}
+              />
+            </div>
+          </article>
+
+          <article className="console-panel rounded-[26px] p-5">
+            <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              Settlement wallet
+            </div>
+            <div className="mt-3 text-lg font-semibold text-slate-950">결제용 지갑주소</div>
+            <div className="mt-1 text-sm leading-6 text-slate-500">
+              주문 결제와 정산 흐름에 쓰이는 settlement wallet 주소입니다.
+            </div>
+            <div className="mt-4 grid gap-3">
+              <CurrentValue
+                label="결제용 지갑주소"
+                value={normalizeString(store?.settlementWalletAddress) || "-"}
+              />
+              <CurrentValue
+                label="연결 회원"
+                value={settlementWalletUserLabel || "매칭된 회원 없음"}
+              />
+            </div>
+          </article>
+
+          <article className="console-panel rounded-[26px] p-5">
+            <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              Payment fee
+            </div>
+            <div className="mt-3 text-lg font-semibold text-slate-950">결제 수수료</div>
+            <div className="mt-1 text-sm leading-6 text-slate-500">
+              현재 적용 중인 수수료율과 수수료 수취 지갑을 상단에서 바로 봅니다.
+            </div>
+            <div className="mt-4 grid gap-3">
+              <CurrentValue
+                label="정산 수수료율"
+                value={formatPercentDisplay(store?.settlementFeePercent)}
+              />
+              <CurrentValue
+                label="에이전트 수수료율"
+                value={formatPercentDisplay(store?.agentFeePercent)}
+              />
+              <CurrentValue
+                label="정산 수수료 지갑"
+                value={normalizeString(store?.settlementFeeWalletAddress) || "-"}
+              />
+            </div>
+          </article>
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
@@ -1522,6 +1793,73 @@ export default function StoreSettingsConsoleClient({
             </SettingsCard>
 
             <SettingsCard
+              eyebrow="Store infrastructure"
+              title="입금 계좌와 운영 메타"
+              description="메인 가맹점 상세설정에서 관리하는 입금 매칭 계좌, URL, 배너, 콜백, 공개 상태 정보를 한 화면에서 확인합니다."
+            >
+              <div className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <CurrentValue label="가맹점 타입" value={normalizeString(store?.storeType) || "-"} />
+                  <CurrentValue
+                    label="라이브 상태"
+                    value={store?.liveOnAndOff === false ? "중지됨" : "운영중"}
+                  />
+                  <CurrentValue label="스토어 URL" value={normalizeString(store?.storeUrl) || "-"} />
+                  <CurrentValue
+                    label="결제 콜백 URL"
+                    value={normalizeString(store?.paymentCallbackUrl) || "-"}
+                  />
+                  <CurrentValue
+                    label="가맹점 배너 URL"
+                    value={normalizeString(store?.storeBanner) || "-"}
+                  />
+                  <CurrentValue
+                    label="현재 agentcode"
+                    value={
+                      normalizeString(store?.agentName)
+                        ? `${normalizeString(store?.agentName)} (${normalizeString(store?.agentcode) || "-"})`
+                        : normalizeString(store?.agentcode) || "-"
+                    }
+                  />
+                </div>
+
+                {normalizeString(store?.storeBanner) ? (
+                  <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="text-sm font-semibold text-slate-900">배너 미리보기</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-500">
+                      현재 설정된 가맹점 배너 이미지입니다.
+                    </div>
+                    <div className="mt-4 overflow-hidden rounded-[22px] border border-slate-200 bg-white">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={normalizeString(store?.storeBanner)}
+                        alt={`${normalizeString(store?.storeName) || storecode} banner`}
+                        className="h-40 w-full object-cover"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">입금 계좌 프리셋</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    회원 등급별 입금 매칭 계좌 상태입니다.
+                  </div>
+                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                    {depositBankCards.map((item) => (
+                      <ReadOnlyBankInfoCard
+                        key={item.title}
+                        title={item.title}
+                        description={item.description}
+                        info={item.info}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </SettingsCard>
+
+            <SettingsCard
               eyebrow="Withdrawal accounts"
               title="출금 계좌 프리셋"
               description="일반, 1등급, 2등급 출금 계좌를 각각 저장합니다. 메인 가맹점 설정 페이지와 동일한 API를 사용합니다."
@@ -1575,6 +1913,17 @@ export default function StoreSettingsConsoleClient({
                     });
                   }}
                 />
+              </div>
+
+              <div className="mt-5 grid gap-4 xl:grid-cols-4">
+                {withdrawalReadOnlyCards.map((item) => (
+                  <ReadOnlyBankInfoCard
+                    key={item.title}
+                    title={item.title}
+                    description={item.description}
+                    info={item.info}
+                  />
+                ))}
               </div>
             </SettingsCard>
 
@@ -1742,6 +2091,168 @@ export default function StoreSettingsConsoleClient({
           </div>
 
           <div className="space-y-6">
+            <SettingsCard
+              eyebrow="Seller identities"
+              title="판매자 정보"
+              description="현재 판매 지갑과 연결된 회원 정보, seller 권한 회원 목록을 한 번에 확인합니다."
+            >
+              <div className="space-y-5">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">현재 판매 지갑 매칭</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    store 설정의 판매 지갑 주소와 실제 회원 문서를 매칭한 결과입니다.
+                  </div>
+                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                    <StoreUserInfoCard
+                      title="판매 지갑 회원"
+                      description={normalizeString(store?.sellerWalletAddress) || "판매 지갑 미설정"}
+                      user={data.sellerProfiles.sellerWalletUser}
+                    />
+                    <StoreUserInfoCard
+                      title="Private seller 회원"
+                      description={normalizeString(store?.privateSellerWalletAddress) || "Private seller 지갑 미설정"}
+                      user={data.sellerProfiles.privateSellerWalletUser}
+                    />
+                    <StoreUserInfoCard
+                      title="정산 지갑 회원"
+                      description={normalizeString(store?.settlementWalletAddress) || "정산 지갑 미설정"}
+                      user={data.sellerProfiles.settlementWalletUser}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">판매자 권한 회원 목록</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    현재 가맹점에 등록된 `role=seller` 회원 상위 목록입니다.
+                  </div>
+                  {sellerRoleUsers.length > 0 ? (
+                    <div className="mt-4 grid gap-3">
+                      {sellerRoleUsers.map((user) => (
+                        <div
+                          key={normalizeString(user.walletAddress) || `${user._id}-${user.id}`}
+                          className="rounded-[22px] border border-slate-200 bg-white p-4"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-semibold text-slate-900">
+                              {normalizeString(user.nickname)
+                                || normalizeString(user.depositName)
+                                || shortAddress(user.walletAddress)}
+                            </div>
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                              {formatRoleDisplay(user.role)}
+                            </span>
+                          </div>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <CurrentValue label="지갑 주소" value={normalizeString(user.walletAddress) || "-"} />
+                            <CurrentValue label="Signer 주소" value={normalizeString(user.signerAddress) || "-"} />
+                            <CurrentValue label="예금주명" value={normalizeString(user.depositName) || "-"} />
+                            <CurrentValue label="생성일" value={formatDateTime(user.createdAt)} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-[22px] border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                      `role=seller` 회원이 아직 없습니다. 판매 지갑 매칭 회원만 위에서 확인할 수 있습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SettingsCard>
+
+            <SettingsCard
+              eyebrow="Payment fee"
+              title="결제 수수료와 정산 구조"
+              description="결제 수수료율, 수수료 수취 지갑, 누적 정산·청산·출금 수치를 같이 봅니다."
+            >
+              <div className="space-y-5">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">결제 수수료 설정</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    메인 가맹점 설정 API에서 관리하는 현재 수수료 비율과 수취 지갑입니다.
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <CurrentValue label="정산 지갑" value={normalizeString(store?.settlementWalletAddress) || "-"} />
+                    <CurrentValue label="Private sale 지갑" value={normalizeString(store?.privateSaleWalletAddress) || "-"} />
+                    <CurrentValue
+                      label="정산 수수료 지갑"
+                      value={normalizeString(store?.settlementFeeWalletAddress) || "-"}
+                    />
+                    <CurrentValue
+                      label="에이전트 수수료 지갑"
+                      value={normalizeString(store?.agentFeeWalletAddress) || "-"}
+                    />
+                    <CurrentValue
+                      label="정산 수수료율"
+                      value={formatPercentDisplay(store?.settlementFeePercent)}
+                    />
+                    <CurrentValue
+                      label="에이전트 수수료율"
+                      value={formatPercentDisplay(store?.agentFeePercent)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">누적 운영 지표</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    누적 정산, 청산, 출금 및 수수료 흐름을 읽기 전용으로 확인합니다.
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <CurrentValue
+                      label="누적 정산 건수"
+                      value={`${normalizeNumber(store?.totalSettlementCount).toLocaleString()}건`}
+                    />
+                    <CurrentValue
+                      label="누적 정산 금액"
+                      value={`${formatUsdtDisplay(store?.totalSettlementAmount)} USDT`}
+                    />
+                    <CurrentValue
+                      label="누적 정산 KRW"
+                      value={`${formatKrwDisplay(store?.totalSettlementAmountKRW)} KRW`}
+                    />
+                    <CurrentValue
+                      label="누적 청산 완료"
+                      value={`${normalizeNumber(store?.totalPaymentConfirmedClearanceCount).toLocaleString()}건`}
+                    />
+                    <CurrentValue
+                      label="누적 청산 USDT"
+                      value={`${formatUsdtDisplay(store?.totalUsdtAmountClearance)} USDT`}
+                    />
+                    <CurrentValue
+                      label="누적 청산 KRW"
+                      value={`${formatKrwDisplay(store?.totalKrwAmountClearance)} KRW`}
+                    />
+                    <CurrentValue
+                      label="누적 출금 건수"
+                      value={`${normalizeNumber(store?.totalWithdrawalCount).toLocaleString()}건`}
+                    />
+                    <CurrentValue
+                      label="누적 출금 USDT"
+                      value={`${formatUsdtDisplay(store?.totalWithdrawalAmount)} USDT`}
+                    />
+                    <CurrentValue
+                      label="누적 출금 KRW"
+                      value={`${formatKrwDisplay(store?.totalWithdrawalAmountKRW)} KRW`}
+                    />
+                    <CurrentValue
+                      label="누적 수수료 KRW"
+                      value={`${formatKrwDisplay(store?.totalFeeAmountKRW)} KRW`}
+                    />
+                    <CurrentValue
+                      label="누적 에이전트 수수료 KRW"
+                      value={`${formatKrwDisplay(store?.totalAgentFeeAmountKRW)} KRW`}
+                    />
+                    <CurrentValue
+                      label="누적 정산 수수료 KRW"
+                      value={`${formatKrwDisplay(store?.totalSettlementFeeAmountKRW)} KRW`}
+                    />
+                  </div>
+                </div>
+              </div>
+            </SettingsCard>
+
             <SettingsCard
               eyebrow="Admin wallet"
               title="가맹점 관리자 지갑"
