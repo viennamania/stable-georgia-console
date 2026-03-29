@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRemoteBackendBaseUrl, getRemoteJson, postRemoteJson } from "@/lib/server/remote-backend";
-import { fetchAllStoresForBalance } from "@/lib/server/store-list";
 
 export const runtime = "nodejs";
 
@@ -49,8 +48,6 @@ export async function POST(request: NextRequest) {
 
   const signedOrdersBody = asPlainObject(body.signedOrdersBody);
   const selectedStorecode = normalizeString(body.selectedStorecode);
-  const storesLimit = Math.min(parsePositiveInt(body.storesLimit, 100), 200);
-  const storesPage = Math.max(parsePositiveInt(body.storesPage, 1), 1);
   const unmatchedFilters = asPlainObject(body.unmatchedFilters);
   const unmatchedLimit = Math.min(parsePositiveInt(unmatchedFilters.limit, 40), 120);
   const unmatchedPage = Math.max(parsePositiveInt(unmatchedFilters.page, 1), 1);
@@ -72,10 +69,6 @@ export async function POST(request: NextRequest) {
       toDate: normalizeString(signedOrdersBody.toDate),
       searchBuyer: normalizeString(signedOrdersBody.searchBuyer),
       searchOrderStatusCompleted: Boolean(signedOrdersBody.searchOrderStatusCompleted),
-    }),
-    fetchAllStoresForBalance({
-      limit: storesLimit,
-      startPage: storesPage,
     }),
     postRemoteJson("/api/bankTransfer/getAll", {
       limit: unmatchedLimit,
@@ -113,10 +106,9 @@ export async function POST(request: NextRequest) {
   const totalBuyOrdersResponse = results[0];
   const totalClearanceOrdersResponse = results[1];
   const tradeSummaryResponse = results[2];
-  const storesResponse = results[3];
-  const unmatchedTransfersResponse = results[4];
-  const banktransferSummaryResponse = results[5];
-  const selectedStoreResponse = selectedStorecode ? results[6] : null;
+  const unmatchedTransfersResponse = results[3];
+  const banktransferSummaryResponse = results[4];
+  const selectedStoreResponse = selectedStorecode ? results[5] : null;
   const signedOrdersResponse = hasSignedOrdersBody
     ? results[results.length - 1]
     : null;
@@ -170,8 +162,6 @@ export async function POST(request: NextRequest) {
       orderTotalCount: signedOrdersResponse?.json?.result?.totalCount || 0,
       processingBuyOrders: totalBuyOrdersResponse.json?.result?.orders || [],
       processingClearanceOrders: totalClearanceOrdersResponse.json?.result?.orders || [],
-      stores: storesResponse.json?.result?.stores || [],
-      storeTotalCount: storesResponse.json?.result?.totalCount || 0,
       unmatchedTransfers: unmatchedTransfersResponse.json?.result?.transfers || [],
       unmatchedTotalAmount: unmatchedTransfersResponse.json?.result?.totalAmount || 0,
       unmatchedTotalCount: unmatchedTransfersResponse.json?.result?.totalCount || 0,

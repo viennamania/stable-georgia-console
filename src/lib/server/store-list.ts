@@ -94,6 +94,12 @@ export const fetchAllStoresForBalance = async (
   return fetchAllStoresByRoute("/api/store/getAllStoresForBalance", options);
 };
 
+export const fetchAllStoreDirectory = async (
+  options?: FetchAllStoresOptions,
+): Promise<RemoteJsonResponse> => {
+  return fetchAllStoresByRoute("/api/store/getStoreDirectory", options);
+};
+
 export const fetchAllStoresWithBankInfo = async (
   options?: FetchAllStoresOptions,
 ): Promise<RemoteJsonResponse> => {

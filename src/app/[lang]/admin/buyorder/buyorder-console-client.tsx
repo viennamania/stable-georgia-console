@@ -227,12 +227,16 @@ type DashboardResult = {
   orderTotalCount: number;
   processingBuyOrders: BuyOrder[];
   processingClearanceOrders: BuyOrder[];
-  stores: StoreItem[];
-  storeTotalCount: number;
   unmatchedTransfers: UnmatchedTransfer[];
   unmatchedTotalAmount: number;
   unmatchedTotalCount: number;
   selectedStore: Record<string, unknown> | null;
+};
+
+type StoreDirectoryResult = {
+  fetchedAt: string;
+  stores: StoreItem[];
+  totalCount: number;
 };
 
 const EMPTY_DASHBOARD_METRICS: DashboardResult["metrics"] = {
@@ -277,12 +281,16 @@ const EMPTY_DASHBOARD_RESULT: DashboardResult = {
   orderTotalCount: 0,
   processingBuyOrders: EMPTY_ORDERS,
   processingClearanceOrders: EMPTY_ORDERS,
-  stores: EMPTY_STORES,
-  storeTotalCount: 0,
   unmatchedTransfers: EMPTY_UNMATCHED_TRANSFERS,
   unmatchedTotalAmount: 0,
   unmatchedTotalCount: 0,
   selectedStore: null,
+};
+
+const EMPTY_STORE_DIRECTORY_RESULT: StoreDirectoryResult = {
+  fetchedAt: "",
+  stores: EMPTY_STORES,
+  totalCount: 0,
 };
 
 const PAYMENT_REVERSE_PREVIEW_ORIGIN = "https://cryptoss-georgia.vercel.app";
@@ -358,6 +366,7 @@ const NEW_ORDER_HIGHLIGHT_MS = 6500;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const SUMMARY_VALUE_ANIMATION_MS = 700;
+const LIVE_CONNECTED_REFRESH_GRACE_MS = 8000;
 const SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS = 2200;
 const UNMATCHED_CARD_PRESENCE_MS = 560;
 const BANK_TRANSFER_LIVE_LOG_LIMIT = 80;
@@ -1829,6 +1838,9 @@ export default function BuyorderConsoleClient({
   const [targetCancelOrder, setTargetCancelOrder] = useState<BuyOrder | null>(null);
   const [cancellingTradeId, setCancellingTradeId] = useState("");
   const [data, setData] = useState<DashboardResult | null>(null);
+  const [storeDirectory, setStoreDirectory] = useState<StoreDirectoryResult>(EMPTY_STORE_DIRECTORY_RESULT);
+  const [storeDirectoryLoading, setStoreDirectoryLoading] = useState(false);
+  const [storeDirectoryError, setStoreDirectoryError] = useState("");
   const [loading, setLoading] = useState(true);
   const [ordersQueryState, setOrdersQueryState] = useState<OrdersQueryState>("idle");
   const [refreshing, setRefreshing] = useState(false);
@@ -1851,6 +1863,8 @@ export default function BuyorderConsoleClient({
   const [unmatchedLiveCollapsed, setUnmatchedLiveCollapsed] = useState(false);
   const [buyOrdersCollapsed, setBuyOrdersCollapsed] = useState(false);
   const inflightLoadRef = useRef(false);
+  const inflightStoreDirectoryRef = useRef(false);
+  const lastDashboardFetchAtRef = useRef(0);
   const queuedSilentRefreshRef = useRef(false);
   const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const highlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1901,6 +1915,50 @@ export default function BuyorderConsoleClient({
     closeOrderStatusPreviewPanel();
     setBankTransferLivePanelOpen(true);
   }, [closeOrderStatusPreviewPanel]);
+
+  const loadStoreDirectory = useCallback(async () => {
+    if (isStoreScoped || inflightStoreDirectoryRef.current) {
+      return;
+    }
+
+    inflightStoreDirectoryRef.current = true;
+    setStoreDirectoryLoading(true);
+
+    try {
+      const response = await fetch("/api/bff/admin/store-directory", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          limit: 200,
+          startPage: 1,
+          maxPages: 12,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "가맹점 목록을 불러오지 못했습니다.");
+      }
+
+      const result = payload.result || {};
+      setStoreDirectory({
+        fetchedAt: String(result?.fetchedAt || ""),
+        stores: Array.isArray(result?.stores) ? result.stores : EMPTY_STORES,
+        totalCount: Number(result?.totalCount || 0),
+      });
+      setStoreDirectoryError("");
+    } catch (loadError) {
+      setStoreDirectoryError(
+        loadError instanceof Error ? loadError.message : "가맹점 목록을 불러오지 못했습니다.",
+      );
+    } finally {
+      inflightStoreDirectoryRef.current = false;
+      setStoreDirectoryLoading(false);
+    }
+  }, [isStoreScoped]);
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -1966,8 +2024,6 @@ export default function BuyorderConsoleClient({
           body: JSON.stringify({
             signedOrdersBody,
             selectedStorecode,
-            storesLimit: isStoreScoped ? 1 : 200,
-            storesPage: 1,
             unmatchedFilters: {
               limit: 24,
               page: 1,
@@ -2011,8 +2067,6 @@ export default function BuyorderConsoleClient({
             processingClearanceOrders: Array.isArray(result?.processingClearanceOrders)
               ? result.processingClearanceOrders
               : EMPTY_ORDERS,
-            stores: Array.isArray(result?.stores) ? result.stores : EMPTY_STORES,
-            storeTotalCount: Number(result?.storeTotalCount || 0),
             unmatchedTransfers: Array.isArray(result?.unmatchedTransfers)
               ? result.unmatchedTransfers
               : EMPTY_UNMATCHED_TRANSFERS,
@@ -2059,6 +2113,7 @@ export default function BuyorderConsoleClient({
           setError("");
           setOrdersQueryState("idle");
         }
+        lastDashboardFetchAtRef.current = Date.now();
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
         if (shouldLoadOrders) {
@@ -2078,7 +2133,7 @@ export default function BuyorderConsoleClient({
         }
       }
     },
-    [activeAccount, canReadSignedData, filters, isStoreScoped, isWalletRecovering, normalizedForcedStorecode],
+    [activeAccount, canReadSignedData, filters, isWalletRecovering, normalizedForcedStorecode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
@@ -2681,6 +2736,14 @@ export default function BuyorderConsoleClient({
   }, [loadDashboard]);
 
   useEffect(() => {
+    if (isStoreScoped) {
+      return;
+    }
+
+    void loadStoreDirectory();
+  }, [isStoreScoped, loadStoreDirectory]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       void loadDashboard({ silent: true });
     }, 60000);
@@ -2757,7 +2820,13 @@ export default function BuyorderConsoleClient({
       }
 
       if (stateChange.current === "connected") {
-        void loadDashboard({ silent: true });
+        const elapsedSinceLastFetch = Date.now() - lastDashboardFetchAtRef.current;
+        if (
+          !inflightLoadRef.current
+          && elapsedSinceLastFetch > LIVE_CONNECTED_REFRESH_GRACE_MS
+        ) {
+          void loadDashboard({ silent: true });
+        }
       }
     };
 
@@ -2837,7 +2906,13 @@ export default function BuyorderConsoleClient({
 
   const shouldRevealSignedOrderData = canReadSignedData || isWalletRecovering;
   const orders = shouldRevealSignedOrderData ? (data?.orders ?? EMPTY_ORDERS) : EMPTY_ORDERS;
-  const stores = data?.stores ?? EMPTY_STORES;
+  const stores = useMemo(() => {
+    if (isStoreScoped) {
+      return data?.selectedStore ? [data.selectedStore as StoreItem] : EMPTY_STORES;
+    }
+
+    return storeDirectory.stores;
+  }, [data?.selectedStore, isStoreScoped, storeDirectory.stores]);
   const unmatchedTransfers = data?.unmatchedTransfers ?? EMPTY_UNMATCHED_TRANSFERS;
   const animatedUnmatchedTransfers = useAnimatedPresenceList(
     unmatchedTransfers,
@@ -3383,6 +3458,14 @@ export default function BuyorderConsoleClient({
                                 </button>
                               );
                             })
+                          ) : storeDirectoryLoading ? (
+                            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                              가맹점 목록을 불러오는 중입니다.
+                            </div>
+                          ) : storeDirectoryError ? (
+                            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-center text-sm text-rose-700">
+                              {storeDirectoryError}
+                            </div>
                           ) : (
                             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
                               검색 조건에 맞는 가맹점이 없습니다.
