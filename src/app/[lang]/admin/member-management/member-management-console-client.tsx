@@ -9,9 +9,11 @@ import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-sto
 type MemberManagementConsoleClientProps = {
   lang: string;
   forcedStorecode?: string;
+  storeOptions?: StoreMeta[];
 };
 
 type FilterState = {
+  searchStore: string;
   search: string;
   depositName: string;
   userType: string;
@@ -417,6 +419,7 @@ const getBuyOrderStatusMeta = (status: unknown) => {
 };
 
 const createDefaultFilters = (): FilterState => ({
+  searchStore: "",
   search: "",
   depositName: "",
   userType: "all",
@@ -480,6 +483,7 @@ function MemberGradeBadge({ userType }: { userType?: string }) {
 export default function MemberManagementConsoleClient({
   lang,
   forcedStorecode,
+  storeOptions = [],
 }: MemberManagementConsoleClientProps) {
   const activeAccount = useActiveAccount();
   const walletConnectionStatus = useActiveWalletConnectionStatus();
@@ -505,17 +509,22 @@ export default function MemberManagementConsoleClient({
   const isWalletRecovering =
     walletConnectionStatus === "unknown" || walletConnectionStatus === "connecting";
   const canReadSignedData = Boolean(activeAccount) && walletConnectionStatus === "connected";
+  const isAllStoresMode = !normalizedForcedStorecode;
+  const storeOptionsMap = useMemo(() => {
+    const next = new Map<string, StoreMeta>();
+    for (const store of storeOptions) {
+      const storecode = normalizeString(store.storecode);
+      if (!storecode) {
+        continue;
+      }
+      next.set(storecode, store);
+    }
+    return next;
+  }, [storeOptions]);
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-
-      if (!normalizedForcedStorecode) {
-        setLoading(false);
-        setRefreshing(false);
-        setError("storecode is required");
-        return;
-      }
 
       if (inflightLoadRef.current) {
         if (silent) {
@@ -543,9 +552,10 @@ export default function MemberManagementConsoleClient({
               createCenterStoreAdminSignedBody({
                 account: activeAccount,
                 route: "/api/user/getAllBuyers",
-                storecode: normalizedForcedStorecode,
+                storecode: normalizedForcedStorecode || "admin",
                 body: {
                   storecode: normalizedForcedStorecode,
+                  searchStore: filters.searchStore,
                   search: filters.search,
                   depositName: filters.depositName,
                   userType: filters.userType,
@@ -553,23 +563,27 @@ export default function MemberManagementConsoleClient({
                   page: filters.page,
                 },
               }),
-              createCenterStoreAdminSignedBody({
-                account: activeAccount,
-                route: "/api/store/getEscrowBalance",
-                storecode: normalizedForcedStorecode,
-                body: {
-                  storecode: normalizedForcedStorecode,
-                },
-              }),
-              createCenterStoreAdminSignedBody({
-                account: activeAccount,
-                route: "/api/order/getCountOfPaymentRequested",
-                storecode: normalizedForcedStorecode,
-                body: {
-                  storecode: normalizedForcedStorecode,
-                  ordersLimit: 6,
-                },
-              }),
+              normalizedForcedStorecode
+                ? createCenterStoreAdminSignedBody({
+                    account: activeAccount,
+                    route: "/api/store/getEscrowBalance",
+                    storecode: normalizedForcedStorecode,
+                    body: {
+                      storecode: normalizedForcedStorecode,
+                    },
+                  })
+                : Promise.resolve(null),
+              normalizedForcedStorecode
+                ? createCenterStoreAdminSignedBody({
+                    account: activeAccount,
+                    route: "/api/order/getCountOfPaymentRequested",
+                    storecode: normalizedForcedStorecode,
+                    body: {
+                      storecode: normalizedForcedStorecode,
+                      ordersLimit: 6,
+                    },
+                  })
+                : Promise.resolve(null),
             ]);
           } catch (signError) {
             signErrorMessage = signError instanceof Error
@@ -650,16 +664,12 @@ export default function MemberManagementConsoleClient({
   }, [loadDashboard]);
 
   useEffect(() => {
-    if (!normalizedForcedStorecode) {
-      return undefined;
-    }
-
     const interval = setInterval(() => {
       void loadDashboard({ silent: true });
     }, 20000);
 
     return () => clearInterval(interval);
-  }, [loadDashboard, normalizedForcedStorecode]);
+  }, [loadDashboard]);
 
   const visibleSummary = useMemo(() => {
     return data.members.reduce(
@@ -677,9 +687,11 @@ export default function MemberManagementConsoleClient({
     );
   }, [data.members]);
 
-  const storeDisplayName = getStoreDisplayName(data.selectedStore, normalizedForcedStorecode);
-  const paymentBaseUrl = normalizeString(data.selectedStore?.paymentUrl);
-  const paymentAccessToken = normalizeString(data.selectedStore?.accessToken);
+  const storeDisplayName = isAllStoresMode
+    ? "전체 가맹점 회원관리"
+    : getStoreDisplayName(data.selectedStore, normalizedForcedStorecode);
+  const paymentBaseUrl = isAllStoresMode ? "" : normalizeString(data.selectedStore?.paymentUrl);
+  const paymentAccessToken = isAllStoresMode ? "" : normalizeString(data.selectedStore?.accessToken);
   const disconnectedMessage = isWalletRecovering
     ? "지갑 연결 상태를 확인하는 중입니다."
     : "지갑을 연결하고 서명하면 해당 가맹점 회원 목록이 열립니다.";
@@ -703,9 +715,18 @@ export default function MemberManagementConsoleClient({
       : "Signed wallet required for member access";
   const totalPages = Math.max(1, Math.ceil(Math.max(0, data.membersSummary.totalCount) / Math.max(1, filters.limit)));
   const pendingOrdersPreview = data.paymentRequested.orders.slice(0, 4);
+  const visibleStoreCount = useMemo(
+    () => new Set(
+      data.members
+        .map((member) => normalizeString(member.storecode))
+        .filter(Boolean),
+    ).size,
+    [data.members],
+  );
 
   const applyFilters = () => {
     setFilters({
+      searchStore: draftFilters.searchStore,
       search: draftFilters.search,
       depositName: draftFilters.depositName,
       userType: draftFilters.userType,
@@ -767,6 +788,14 @@ export default function MemberManagementConsoleClient({
   const getPaymentDraftValue = useCallback((key: string) => {
     return paymentDrafts[key] || "";
   }, [paymentDrafts]);
+
+  const getMemberStoreMeta = useCallback((member: MemberRow) => {
+    const memberStorecode = normalizeString(member.storecode);
+    if (memberStorecode && storeOptionsMap.has(memberStorecode)) {
+      return storeOptionsMap.get(memberStorecode) || null;
+    }
+    return data.selectedStore || null;
+  }, [data.selectedStore, storeOptionsMap]);
 
   const handleCopyPaymentPage = useCallback((member: MemberRow, index: number) => {
     const paymentUrl = buildMemberPaymentUrl({
@@ -1014,7 +1043,9 @@ export default function MemberManagementConsoleClient({
                       {storeDisplayName}
                     </h1>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200/82 sm:text-[15px]">
-                      해당 가맹점 범위의 회원 등록, 등급 분포, 결제요청 대기, 에스크로 흐름을 한 화면에서 운영합니다.
+                      {isAllStoresMode
+                        ? "전체 가맹점 회원을 한 번에 조회하고, 가맹점 조건까지 포함해 회원 검색과 등급 운영을 수행합니다."
+                        : "해당 가맹점 범위의 회원 등록, 등급 분포, 결제요청 대기, 에스크로 흐름을 한 화면에서 운영합니다."}
                     </p>
                   </div>
                 </div>
@@ -1031,10 +1062,10 @@ export default function MemberManagementConsoleClient({
                     Store scope
                   </div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em] text-white">
-                    {normalizedForcedStorecode || "-"}
+                    {isAllStoresMode ? "ALL STORES" : normalizedForcedStorecode || "-"}
                   </div>
                   <div className="mt-1 text-xs text-slate-300/75">
-                    좌측 패널 경로와 동일한 storecode 범위
+                    {isAllStoresMode ? "전체 가맹점 범위로 회원 조회" : "좌측 패널 경로와 동일한 storecode 범위"}
                   </div>
                 </div>
 
@@ -1074,8 +1105,8 @@ export default function MemberManagementConsoleClient({
               address={activeAccount?.address || null}
               disconnectedMessage={disconnectedMessage}
               errorMessage={error || accessWarningMessage || undefined}
-              accessLabel="Scoped member access"
-              title="Store manager wallet"
+              accessLabel={isAllStoresMode ? "Admin member access" : "Scoped member access"}
+              title={isAllStoresMode ? "Admin wallet" : "Store manager wallet"}
             />
           </div>
         </section>
@@ -1103,18 +1134,23 @@ export default function MemberManagementConsoleClient({
                   회원 검색과 추가
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  회원 아이디, 예금주명, 등급으로 필터링하고 필요한 경우 바로 신규 회원을 등록할 수 있습니다.
+                  회원 아이디, 예금주명, 가맹점, 등급으로 필터링하고 필요한 경우 바로 신규 회원을 등록할 수 있습니다.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => {
+                  if (isAllStoresMode) {
+                    setActionError("회원 추가는 특정 가맹점을 선택한 상태에서만 사용할 수 있습니다.");
+                    setActionMessage("");
+                    return;
+                  }
                   setActionError("");
                   setActionMessage("");
                   setIsAddModalOpen(true);
                 }}
-                disabled={!canReadSignedData}
+                disabled={!canReadSignedData || isAllStoresMode}
                 className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 회원 추가
@@ -1122,6 +1158,17 @@ export default function MemberManagementConsoleClient({
             </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <input
+                value={draftFilters.searchStore}
+                onChange={(event) => {
+                  setDraftFilters((current) => ({
+                    ...current,
+                    searchStore: event.target.value,
+                  }));
+                }}
+                placeholder="가맹점명 / storecode 검색"
+                className={fieldClassName}
+              />
               <input
                 value={draftFilters.search}
                 onChange={(event) => {
@@ -1214,22 +1261,26 @@ export default function MemberManagementConsoleClient({
 
           <aside className="console-panel rounded-[30px] p-5">
             <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
-              Pending payments
+              {isAllStoresMode ? "Store scope" : "Pending payments"}
             </div>
             <h2 className="mt-2 text-xl font-semibold tracking-[-0.05em] text-slate-950">
-              결제요청 대기
+              {isAllStoresMode ? "가맹점 범위" : "결제요청 대기"}
             </h2>
             <div className="mt-4 rounded-[24px] border border-amber-100 bg-[linear-gradient(180deg,rgba(255,251,235,0.94),rgba(255,255,255,0.98))] p-4">
               <div className="text-3xl font-semibold tracking-[-0.05em] text-amber-700">
-                {data.paymentRequested.totalCount.toLocaleString()}
+                {isAllStoresMode
+                  ? visibleStoreCount.toLocaleString()
+                  : data.paymentRequested.totalCount.toLocaleString()}
               </div>
               <div className="mt-1 text-sm text-amber-700/80">
-                해당 가맹점 결제요청 상태 주문 수
+                {isAllStoresMode
+                  ? "현재 페이지 회원이 속한 가맹점 수"
+                  : "해당 가맹점 결제요청 상태 주문 수"}
               </div>
             </div>
 
             <div className="mt-4 space-y-3">
-              {pendingOrdersPreview.length > 0 ? (
+              {!isAllStoresMode && pendingOrdersPreview.length > 0 ? (
                 pendingOrdersPreview.map((order) => (
                   <div
                     key={`${order._id || ""}-${order.tradeId || ""}`}
@@ -1248,6 +1299,10 @@ export default function MemberManagementConsoleClient({
                     </div>
                   </div>
                 ))
+              ) : isAllStoresMode ? (
+                <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                  전체 가맹점 모드에서는 가맹점별 결제요청 미리보기를 숨깁니다.
+                </div>
               ) : (
                 <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
                   표시할 결제요청 대기 주문이 없습니다.
@@ -1293,11 +1348,13 @@ export default function MemberManagementConsoleClient({
             tone="emerald"
           />
           <MetricCard
-            label="Escrow balance"
-            value={formatKrwDisplay(data.escrow.escrowBalance)}
-            unit="KRW"
-            helper={`오늘 차감 ${formatKrwDisplay(data.escrow.todayMinusedEscrowAmount)} KRW`}
-            tone="amber"
+            label={isAllStoresMode ? "Visible stores" : "Escrow balance"}
+            value={isAllStoresMode ? visibleStoreCount.toLocaleString() : formatKrwDisplay(data.escrow.escrowBalance)}
+            unit={isAllStoresMode ? "stores" : "KRW"}
+            helper={isAllStoresMode
+              ? "현재 페이지 회원이 분포한 가맹점 수"
+              : `오늘 차감 ${formatKrwDisplay(data.escrow.todayMinusedEscrowAmount)} KRW`}
+            tone={isAllStoresMode ? "sky" : "amber"}
           />
         </section>
 
@@ -1349,6 +1406,7 @@ export default function MemberManagementConsoleClient({
               <thead className="bg-slate-950 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-200">
                 <tr>
                   <th className="px-6 py-4">등록일</th>
+                  <th className="px-6 py-4">가맹점</th>
                   <th className="px-6 py-4">회원</th>
                   <th className="px-6 py-4">등급</th>
                   <th className="px-6 py-4">추가자</th>
@@ -1363,6 +1421,11 @@ export default function MemberManagementConsoleClient({
                 {data.members.length > 0 ? (
                   data.members.map((member, index) => {
                     const statusMeta = getBuyOrderStatusMeta(member.buyOrderStatus);
+                    const memberStoreMeta = getMemberStoreMeta(member);
+                    const memberStoreDisplayName = getStoreDisplayName(
+                      memberStoreMeta,
+                      normalizeString(member.storecode) || normalizedForcedStorecode,
+                    );
                     const paymentDraftKey = getMemberPaymentDraftKey(member, index);
                     const paymentDraftValue = getPaymentDraftValue(paymentDraftKey);
                     const paymentUrlReady = Boolean(
@@ -1386,12 +1449,32 @@ export default function MemberManagementConsoleClient({
                           </div>
                         </td>
                         <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div
+                              role="img"
+                              aria-label={memberStoreDisplayName}
+                              className="h-11 w-11 shrink-0 rounded-2xl border border-slate-200 bg-slate-50"
+                              style={{
+                                backgroundImage: `url(${normalizeString(memberStoreMeta?.storeLogo) || "/logo.png"})`,
+                                backgroundPosition: "center",
+                                backgroundRepeat: "no-repeat",
+                                backgroundSize: "cover",
+                              }}
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-slate-900">
+                                {memberStoreDisplayName}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {normalizeString(member.storecode) || normalizedForcedStorecode || "all"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
                           <div className="space-y-1">
                             <div className="text-sm font-semibold text-slate-900">
                               {normalizeString(member.nickname) || "-"}
-                            </div>
-                            <div className="text-xs text-slate-500">
-                              storecode {normalizeString(member.storecode) || normalizedForcedStorecode}
                             </div>
                           </div>
                         </td>
@@ -1511,7 +1594,7 @@ export default function MemberManagementConsoleClient({
                   })
                 ) : (
                   <tr>
-                    <td colSpan={9} className="px-6 py-16 text-center text-sm text-slate-500">
+                    <td colSpan={10} className="px-6 py-16 text-center text-sm text-slate-500">
                       {loading ? "회원 목록을 불러오는 중입니다." : "표시할 회원이 없습니다."}
                     </td>
                   </tr>
@@ -1524,6 +1607,11 @@ export default function MemberManagementConsoleClient({
             {data.members.length > 0 ? (
               data.members.map((member, index) => {
                 const statusMeta = getBuyOrderStatusMeta(member.buyOrderStatus);
+                const memberStoreMeta = getMemberStoreMeta(member);
+                const memberStoreDisplayName = getStoreDisplayName(
+                  memberStoreMeta,
+                  normalizeString(member.storecode) || normalizedForcedStorecode,
+                );
                 const paymentDraftKey = getMemberPaymentDraftKey(member, index);
                 const paymentDraftValue = getPaymentDraftValue(paymentDraftKey);
                 const paymentUrlReady = Boolean(
@@ -1563,6 +1651,31 @@ export default function MemberManagementConsoleClient({
                     </div>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-xs font-medium text-slate-500">가맹점</div>
+                        <div className="mt-2 flex items-center gap-3">
+                          <div
+                            role="img"
+                            aria-label={memberStoreDisplayName}
+                            className="h-10 w-10 shrink-0 rounded-2xl border border-slate-200 bg-white"
+                            style={{
+                              backgroundImage: `url(${normalizeString(memberStoreMeta?.storeLogo) || "/logo.png"})`,
+                              backgroundPosition: "center",
+                              backgroundRepeat: "no-repeat",
+                              backgroundSize: "cover",
+                            }}
+                          />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-slate-900">
+                              {memberStoreDisplayName}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {normalizeString(member.storecode) || normalizedForcedStorecode || "all"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3">
                         <div className="text-xs font-medium text-slate-500">추가자</div>
                         <div className="mt-1 text-sm font-semibold text-slate-900">

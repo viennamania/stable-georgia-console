@@ -43,19 +43,17 @@ export async function POST(request: NextRequest) {
     || normalizeString(signedEscrowBody.storecode)
     || normalizeString(signedPaymentRequestedBody.storecode);
 
-  if (!selectedStorecode) {
-    return NextResponse.json({ error: "selectedStorecode is required" }, { status: 400 });
-  }
-
   const hasSignedMembersBody = Object.keys(signedMembersBody).length > 0;
-  const hasSignedEscrowBody = Object.keys(signedEscrowBody).length > 0;
-  const hasSignedPaymentRequestedBody = Object.keys(signedPaymentRequestedBody).length > 0;
+  const hasSignedEscrowBody = Boolean(selectedStorecode) && Object.keys(signedEscrowBody).length > 0;
+  const hasSignedPaymentRequestedBody = Boolean(selectedStorecode) && Object.keys(signedPaymentRequestedBody).length > 0;
 
-  const jobs: Array<Promise<{ ok: boolean; status: number; json: any }>> = [
-    postRemoteJson("/api/store/getOneStore", {
+  const jobs: Array<Promise<{ ok: boolean; status: number; json: any }>> = [];
+
+  if (selectedStorecode) {
+    jobs.push(postRemoteJson("/api/store/getOneStore", {
       storecode: selectedStorecode,
-    }),
-  ];
+    }));
+  }
 
   if (hasSignedMembersBody) {
     jobs.push(postRemoteJson("/api/user/getAllBuyers", signedMembersBody));
@@ -71,7 +69,7 @@ export async function POST(request: NextRequest) {
 
   const results = await Promise.all(jobs);
   let resultIndex = 0;
-  const storeResponse = results[resultIndex++];
+  const storeResponse = selectedStorecode ? results[resultIndex++] : null;
   const membersResponse = hasSignedMembersBody ? results[resultIndex++] : null;
   const escrowResponse = hasSignedEscrowBody ? results[resultIndex++] : null;
   const paymentRequestedResponse = hasSignedPaymentRequestedBody ? results[resultIndex++] : null;
@@ -96,8 +94,10 @@ export async function POST(request: NextRequest) {
     result: {
       fetchedAt: new Date().toISOString(),
       remoteBackendBaseUrl: getRemoteBackendBaseUrl(),
-      selectedStore: storeResponse.ok ? (storeResponse.json?.result || null) : null,
-      storeError: storeResponse.ok
+      selectedStore: storeResponse?.ok ? (storeResponse.json?.result || null) : null,
+      storeError: !storeResponse
+        ? ""
+        : storeResponse.ok
         ? ""
         : resolveRemoteError(storeResponse.json, "Failed to load store information"),
       members: memberUsers,
