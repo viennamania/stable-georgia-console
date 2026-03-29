@@ -42,10 +42,6 @@ export async function POST(request: NextRequest) {
     normalizeString(body.ordersQueryMode) === "collectOrdersForSeller"
       ? "collectOrdersForSeller"
       : "buyOrders";
-  const requesterWalletAddress = normalizeString(
-    signedOrdersBody.requesterWalletAddress || signedOrdersBody.walletAddress,
-  );
-  const requesterStorecode = normalizeString(signedOrdersBody.requesterStorecode) || "admin";
 
   if (!hasSignedOrdersBody) {
     return NextResponse.json({
@@ -63,27 +59,13 @@ export async function POST(request: NextRequest) {
 
   const remoteOrdersRoute = ordersQueryMode === "collectOrdersForSeller"
     ? "/api/order/getAllCollectOrdersForSeller"
-    : "/api/order/getAllBuyOrders";
-  const [signedOrdersResponse, tradeSummaryResponse] = await Promise.all([
-    postRemoteJson(remoteOrdersRoute, signedOrdersBody),
-    ordersQueryMode === "buyOrders"
-      ? postRemoteJson("/api/summary/getTradeSummary", {
-        requesterStorecode,
-        walletAddress: requesterWalletAddress,
-        storecode: normalizeString(signedOrdersBody.storecode),
-        fromDate: normalizeString(signedOrdersBody.fromDate),
-        toDate: normalizeString(signedOrdersBody.toDate),
-      })
-      : Promise.resolve(null),
-  ]);
+    : "/api/order/getAdminClearanceOrders";
+  const signedOrdersResponse = await postRemoteJson(remoteOrdersRoute, signedOrdersBody);
   const ordersError = signedOrdersResponse.ok
     ? ""
     : resolveRemoteError(signedOrdersResponse.json, "Failed to load clearance orders");
   const signedOrdersResult = signedOrdersResponse.ok
     ? signedOrdersResponse.json?.result || {}
-    : {};
-  const tradeSummaryResult = tradeSummaryResponse?.ok
-    ? tradeSummaryResponse.json?.result || {}
     : {};
 
   const mappedSummary = ordersQueryMode === "collectOrdersForSeller"
@@ -96,31 +78,18 @@ export async function POST(request: NextRequest) {
     : {
       totalCount: Number(signedOrdersResult.totalCount || 0),
       totalClearanceCount: Number(
-        signedOrdersResult.totalTransferCount
-          ?? signedOrdersResult.totalSettlementCount
-          ?? signedOrdersResult.totalClearanceCount
-          ?? tradeSummaryResult.totalTransferCount
-          ?? tradeSummaryResult.totalSettlementCount
+        signedOrdersResult.totalClearanceCount
+          ?? signedOrdersResult.totalTransferCount
           ?? 0,
       ),
       totalClearanceAmount: Number(
-        signedOrdersResult.totalTransferAmount
-          ?? signedOrdersResult.totalSettlementAmount
-          ?? signedOrdersResult.totalClearanceAmount
-          ?? tradeSummaryResult.totalTransferAmount
-          ?? tradeSummaryResult.totalSettlementAmount
-          ?? signedOrdersResult.totalUsdtAmount
-          ?? tradeSummaryResult.totalUsdtAmount
+        signedOrdersResult.totalClearanceAmount
+          ?? signedOrdersResult.totalTransferAmount
           ?? 0,
       ),
       totalClearanceAmountKRW: Number(
-        signedOrdersResult.totalTransferAmountKRW
-          ?? signedOrdersResult.totalSettlementAmountKRW
-          ?? signedOrdersResult.totalClearanceAmountKRW
-          ?? tradeSummaryResult.totalTransferAmountKRW
-          ?? tradeSummaryResult.totalSettlementAmountKRW
-          ?? signedOrdersResult.totalKrwAmount
-          ?? tradeSummaryResult.totalKrwAmount
+        signedOrdersResult.totalClearanceAmountKRW
+          ?? signedOrdersResult.totalTransferAmountKRW
           ?? 0,
       ),
     };
