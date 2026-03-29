@@ -83,6 +83,11 @@ type BuyOrder = {
   processedBy?: OrderActionActor | null;
   processedByName?: string;
   processedByWalletAddress?: string;
+  cancelledBy?: OrderActionActor | null;
+  cancelledByAdmin?: OrderActionActor | null;
+  cancelledByName?: string;
+  cancelledByWalletAddress?: string;
+  cancelTradeReason?: string;
   userType?: string;
   paymentMethod?: string;
   settlement?: SettlementInfo | null;
@@ -1223,6 +1228,42 @@ const getDepositProcessedByLabel = (order: BuyOrder) => {
     "processedByWalletAddress",
     "updatedByWalletAddress",
     "adminWalletAddress",
+  ];
+
+  for (const key of stringKeys) {
+    const next = String(rawOrder[key] || "").trim();
+    if (next) {
+      return key.toLowerCase().includes("wallet") ? shortAddress(next) : next;
+    }
+  }
+
+  return "";
+};
+
+const getCancelledByLabel = (order: BuyOrder) => {
+  const rawOrder = order as Record<string, unknown>;
+  const objectCandidates = [
+    rawOrder.cancelledBy,
+    rawOrder.cancelledByAdmin,
+    rawOrder.updatedBy,
+    rawOrder.operator,
+    rawOrder.manager,
+    rawOrder.staff,
+  ];
+
+  for (const candidate of objectCandidates) {
+    const label = getActorDisplayLabel(candidate);
+    if (label) {
+      return label;
+    }
+  }
+
+  const stringKeys = [
+    "cancelledByName",
+    "cancelledByWalletAddress",
+    "updatedByName",
+    "updatedByWalletAddress",
+    "canceller",
   ];
 
   for (const key of stringKeys) {
@@ -2745,9 +2786,26 @@ export default function BuyorderConsoleClient({
         }
       }
 
+      const optimisticCancelledAt = new Date().toISOString();
+      const optimisticCancelledBy: OrderActionActor = {
+        walletAddress: activeAccount.address,
+        nickname: accessActorLabel || null,
+        storecode: actionStorecode || null,
+        role: null,
+        publicIp: null,
+        signedAt: optimisticCancelledAt,
+        matchedBy: null,
+        confirmedAt: optimisticCancelledAt,
+      };
       patchOrderInDashboard(matchKey, {
         status: "cancelled",
-        updatedAt: new Date().toISOString(),
+        updatedAt: optimisticCancelledAt,
+        cancelledAt: optimisticCancelledAt,
+        cancelTradeReason: cancelReason,
+        cancelledBy: optimisticCancelledBy,
+        cancelledByAdmin: optimisticCancelledBy,
+        cancelledByName: optimisticCancelledBy.nickname || "",
+        cancelledByWalletAddress: activeAccount.address,
       });
       closeCancelModal();
       void loadDashboard({ silent: true });
@@ -2761,6 +2819,7 @@ export default function BuyorderConsoleClient({
     }
   }, [
     activeAccount,
+    accessActorLabel,
     cancelReason,
     closeCancelModal,
     filters.storecode,
@@ -4254,6 +4313,10 @@ export default function BuyorderConsoleClient({
                     const isConfirmingThisOrder = Boolean(confirmingTradeId && rowMatchKey === confirmingTradeId);
                     const canCancelOrder = isSignedIn && (status === "accepted" || status === "paymentRequested");
                     const isCancellingThisOrder = Boolean(cancellingTradeId && rowMatchKey === cancellingTradeId);
+                    const cancelledByLabel =
+                      status === "cancelled" || status === "canceled"
+                        ? getCancelledByLabel(order)
+                        : "";
                     const shouldHighlightSellerBankInfo = status === "paymentRequested";
                     const transactionHash = String(order.transactionHash || "").trim();
                     const isUsdtTransferCompleted =
@@ -4380,6 +4443,11 @@ export default function BuyorderConsoleClient({
                               >
                                 {statusMeta.label}
                               </span>
+                              {cancelledByLabel ? (
+                                <span className="text-[11px] font-medium text-rose-700">
+                                  취소자 {cancelledByLabel}
+                                </span>
+                              ) : null}
                               {isSettlementCompleted ? (
                                 <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">
                                   결제완료
