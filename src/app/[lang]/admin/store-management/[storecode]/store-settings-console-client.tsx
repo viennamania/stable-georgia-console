@@ -16,6 +16,7 @@ import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 import {
   STORE_ADMIN_WALLET_HISTORY_READ_SIGNING_PREFIX,
+  STORE_ROUTE_GET_ONE_STORE_ADMIN_SIGNED,
   STORE_ROUTE_GET_ADMIN_WALLET_HISTORY,
   STORE_ROUTE_SET_STORE_DESCRIPTION,
   STORE_ROUTE_SET_STORE_LOGO,
@@ -32,6 +33,7 @@ import {
   STORE_ROUTE_UPDATE_MAX_PAYMENT_AMOUNT,
   STORE_ROUTE_UPDATE_PAYACTION_KEYS,
   STORE_ROUTE_UPDATE_PAYMENT_URL,
+  STORE_SETTINGS_READ_SIGNING_PREFIX,
   STORE_SETTINGS_MUTATION_SIGNING_PREFIX,
 } from "@/lib/security/store-settings-admin";
 
@@ -680,22 +682,42 @@ export default function StoreSettingsConsoleClient({
 
       try {
         let signedStoreBody: Record<string, unknown> | null = null;
+        let signedAdminStoreBody: Record<string, unknown> | null = null;
         let signedHistoryBody: Record<string, unknown> | null = null;
         const signWarnings: string[] = [];
 
         if (canReadSignedData && activeAccount) {
           try {
-            signedStoreBody = await createCenterStoreAdminSignedBody({
+            signedAdminStoreBody = await createAdminSignedBody({
               account: activeAccount,
-              route: "/api/store/getOneStore",
-              storecode,
-              body: {
+              route: STORE_ROUTE_GET_ONE_STORE_ADMIN_SIGNED,
+              signingPrefix: STORE_SETTINGS_READ_SIGNING_PREFIX,
+              requesterStorecode: "admin",
+              requesterWalletAddress: activeAccount.address,
+              actionFields: {
                 storecode,
               },
             });
           } catch (error) {
+            try {
+              signedStoreBody = await createCenterStoreAdminSignedBody({
+                account: activeAccount,
+                route: "/api/store/getOneStore",
+                storecode,
+                body: {
+                  storecode,
+                },
+              });
+            } catch {
+              signWarnings.push(
+                error instanceof Error ? error.message : "가맹점 상세 서명 준비에 실패했습니다.",
+              );
+            }
+          }
+
+          if (!signedAdminStoreBody && !signedStoreBody) {
             signWarnings.push(
-              error instanceof Error ? error.message : "가맹점 상세 서명 준비에 실패했습니다.",
+              "관리자 서명 조회를 준비하지 못해 일부 민감 설정값이 마스킹될 수 있습니다.",
             );
           }
 
@@ -727,6 +749,7 @@ export default function StoreSettingsConsoleClient({
           body: JSON.stringify({
             storecode,
             signedStoreBody,
+            signedAdminStoreBody,
             signedHistoryBody,
           }),
         });

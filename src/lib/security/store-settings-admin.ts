@@ -1,9 +1,12 @@
 export const STORE_SETTINGS_MUTATION_SIGNING_PREFIX =
   "stable-georgia:store-settings-mutation:v1";
+export const STORE_SETTINGS_READ_SIGNING_PREFIX =
+  "stable-georgia:store-settings-read:v1";
 
 export const STORE_ADMIN_WALLET_HISTORY_READ_SIGNING_PREFIX =
   "stable-georgia:store-admin-wallet-history-read:v1";
 
+export const STORE_ROUTE_GET_ONE_STORE_ADMIN_SIGNED = "/api/store/getOneStoreAdminSigned";
 export const STORE_ROUTE_SET_STORE = "/api/store/setStore";
 export const STORE_ROUTE_SET_STORE_NAME = "/api/store/setStoreName";
 export const STORE_ROUTE_SET_STORE_DESCRIPTION = "/api/store/setStoreDescription";

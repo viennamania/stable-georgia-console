@@ -62,13 +62,19 @@ export async function POST(request: NextRequest) {
   }
 
   const signedStoreBody = asPlainObject(body.signedStoreBody);
+  const signedAdminStoreBody = asPlainObject(body.signedAdminStoreBody);
   const signedHistoryBody = asPlainObject(body.signedHistoryBody);
-  const storeRequestBody = Object.keys(signedStoreBody).length > 0
-    ? signedStoreBody
+  const storeRoute = Object.keys(signedAdminStoreBody).length > 0
+    ? "/api/store/getOneStoreAdminSigned"
+    : "/api/store/getOneStore";
+  const storeRequestBody = Object.keys(signedAdminStoreBody).length > 0
+    ? signedAdminStoreBody
+    : Object.keys(signedStoreBody).length > 0
+      ? signedStoreBody
     : { storecode };
 
   const [storeResponse, agentsResponse, usersResponse, historyResponse] = await Promise.all([
-    postRemoteJson("/api/store/getOneStore", storeRequestBody),
+    postRemoteJson(storeRoute, storeRequestBody),
     postRemoteJson("/api/agent/getAllAgents", {
       page: 1,
       limit: 200,
