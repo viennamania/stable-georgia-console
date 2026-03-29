@@ -313,13 +313,8 @@ export default function ClearanceOrdersTableSection({
                     <td className="border-b border-slate-100 px-3 py-3 align-top">
                       {transactionHash && transactionHash !== "0x" ? (
                         <div className="flex min-w-0 flex-col items-start gap-1 break-words">
-                          <div className="flex min-w-0 flex-col gap-0.5">
-                            <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-600">
-                              전송량
-                            </div>
-                            <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em] text-emerald-700">
-                              {formatUsdtValue(order.usdtAmount)} USDT
-                            </div>
+                          <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em] text-emerald-700">
+                            {formatUsdtValue(order.usdtAmount)} USDT
                           </div>
                           <a
                             href={getBscscanTxUrl(transactionHash)}
@@ -335,13 +330,8 @@ export default function ClearanceOrdersTableSection({
                         </div>
                       ) : (
                         <div className="min-w-0 break-words">
-                          <div className="flex min-w-0 flex-col gap-0.5">
-                            <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
-                              전송량
-                            </div>
-                            <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em] text-slate-950">
-                              {formatUsdtValue(order.usdtAmount)} USDT
-                            </div>
+                          <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em] text-slate-950">
+                            {formatUsdtValue(order.usdtAmount)} USDT
                           </div>
                           <div className="mt-1 inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-700">
                             전송대기
