@@ -9,42 +9,36 @@ const NAV_ITEMS = [
     label: "구매주문",
     eyebrow: "Buyorder",
     marker: "01",
-    description: "실시간 주문 스트림",
   },
   {
     href: "/admin/clearance-management",
     label: "청산주문",
     eyebrow: "Clearance",
     marker: "02",
-    description: "청산 주문 상황판",
   },
   {
     href: "/admin/clearance-order",
     label: "청산주문 생성",
     eyebrow: "Order Builder",
     marker: "03",
-    description: "가맹점별 청산주문 생성",
   },
   {
     href: "/admin/client-settings",
     label: "센터설정",
     eyebrow: "Client Settings",
     marker: "04",
-    description: "센터 프로필, 환율, 로고, 연동 설정",
   },
   {
     href: "/admin/store-management",
     label: "가맹점관리",
     eyebrow: "Store Management",
     marker: "05",
-    description: "가맹점 목록과 상세 운영 설정",
   },
   {
     href: "/admin/member-management",
     label: "회원관리",
     eyebrow: "Members",
     marker: "06",
-    description: "가맹점 선택형 회원 목록과 등록",
   },
 ];
 
@@ -118,9 +112,6 @@ export default function AdminShell({
                           ) : null}
                         </div>
                         <div className="mt-2 text-[15px] font-semibold tracking-[-0.03em]">{item.label}</div>
-                        <div className={`mt-1 text-xs leading-5 ${active ? "text-sky-50/78" : "text-slate-400 group-hover:text-slate-300"}`}>
-                          {item.description}
-                        </div>
                       </div>
                     </div>
                   </Link>

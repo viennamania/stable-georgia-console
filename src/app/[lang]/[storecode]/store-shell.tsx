@@ -9,35 +9,30 @@ const NAV_ITEMS = [
     label: "구매주문",
     eyebrow: "Buyorder",
     marker: "01",
-    description: "해당 가맹점 주문 현황",
   },
   {
     href: "/clearance-management",
     label: "청산주문",
     eyebrow: "Clearance",
     marker: "02",
-    description: "해당 가맹점 청산 현황",
   },
   {
     href: "/daily-close",
     label: "일별마감",
     eyebrow: "Daily close",
     marker: "03",
-    description: "해당 가맹점 일별 정산 요약",
   },
   {
     href: "/member-management",
     label: "회원관리",
     eyebrow: "Members",
     marker: "04",
-    description: "해당 가맹점 회원 목록과 추가",
   },
   {
     href: "/settings",
     label: "가맹점설정",
     eyebrow: "Settings",
     marker: "05",
-    description: "해당 가맹점 운영 설정 정보",
   },
 ] as const;
 
@@ -117,9 +112,6 @@ export default function StoreShell({
                           ) : null}
                         </div>
                         <div className="mt-2 text-[15px] font-semibold tracking-[-0.03em]">{item.label}</div>
-                        <div className={`mt-1 text-xs leading-5 ${active ? "text-sky-50/78" : "text-slate-400 group-hover:text-slate-300"}`}>
-                          {item.description}
-                        </div>
                       </div>
                     </div>
                   </Link>
