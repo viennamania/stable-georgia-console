@@ -55,6 +55,7 @@ type StoreRow = {
   liveOnAndOff?: boolean;
   adminWalletAddress?: string;
   settlementWalletAddress?: string;
+  settlementFeePercent?: number;
 };
 
 type DashboardResult = {
@@ -175,6 +176,17 @@ const formatUsdtDisplay = (value: number | null | undefined) =>
 
 const formatKrwDisplay = (value: number | null | undefined) =>
   Math.round(Number(value || 0)).toLocaleString("ko-KR");
+
+const formatPercentDisplay = (value: unknown) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return "-";
+  }
+  return `${parsed.toLocaleString("ko-KR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}%`;
+};
 
 const createDefaultFilters = (): FilterState => ({
   searchStore: "",
@@ -839,6 +851,8 @@ export default function StoreManagementConsoleClient({
                   <th className="px-6 py-4">가맹점</th>
                   <th className="px-6 py-4">에이전트</th>
                   <th className="px-6 py-4">운영상태</th>
+                  <th className="px-6 py-4">결제지갑</th>
+                  <th className="px-6 py-4">결제수수료율</th>
                   <th className="px-6 py-4 text-right">거래/정산</th>
                   <th className="px-6 py-4">운영지표</th>
                   <th className="px-6 py-4">액션</th>
@@ -911,6 +925,26 @@ export default function StoreManagementConsoleClient({
                           </div>
                         </div>
                       </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {shortAddress(store.settlementWalletAddress)}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            settlement wallet
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {formatPercentDisplay(store.settlementFeePercent)}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            정산 기준 수수료
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="space-y-1">
                           <div className="text-sm font-semibold text-slate-900">
@@ -965,7 +999,7 @@ export default function StoreManagementConsoleClient({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-6 py-16 text-center text-sm text-slate-500">
+                    <td colSpan={9} className="px-6 py-16 text-center text-sm text-slate-500">
                       {loading ? "가맹점 목록을 불러오는 중입니다." : "표시할 가맹점이 없습니다."}
                     </td>
                   </tr>
@@ -1024,6 +1058,18 @@ export default function StoreManagementConsoleClient({
                       <div className="text-xs font-medium text-slate-500">관리자 지갑</div>
                       <div className="mt-1 text-sm font-semibold text-slate-900">
                         {shortAddress(store.adminWalletAddress)}
+                      </div>
+                    </div>
+                    <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-xs font-medium text-slate-500">결제지갑</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {shortAddress(store.settlementWalletAddress)}
+                      </div>
+                    </div>
+                    <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-xs font-medium text-slate-500">결제수수료율</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {formatPercentDisplay(store.settlementFeePercent)}
                       </div>
                     </div>
                   </div>
