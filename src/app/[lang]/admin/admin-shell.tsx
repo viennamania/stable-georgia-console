@@ -39,6 +39,13 @@ const NAV_ITEMS = [
     marker: "05",
     description: "가맹점 목록과 상세 운영 설정",
   },
+  {
+    href: "/admin/member-management",
+    label: "회원관리",
+    eyebrow: "Members",
+    marker: "06",
+    description: "가맹점 선택형 회원 목록과 등록",
+  },
 ];
 
 export default function AdminShell({

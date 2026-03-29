@@ -8,7 +8,7 @@ import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-sto
 
 type MemberManagementConsoleClientProps = {
   lang: string;
-  forcedStorecode: string;
+  forcedStorecode?: string;
 };
 
 type FilterState = {
