@@ -45,6 +45,17 @@ type SettlementInfo = {
   agentFeeWalletAddress?: string;
 };
 
+type OrderActionActor = {
+  walletAddress?: string | null;
+  nickname?: string | null;
+  storecode?: string | null;
+  role?: string | null;
+  publicIp?: string | null;
+  signedAt?: string | null;
+  matchedBy?: string | null;
+  confirmedAt?: string | null;
+};
+
 type BuyOrder = {
   _id?: string;
   tradeId?: string;
@@ -63,6 +74,15 @@ type BuyOrder = {
   walletAddress?: string;
   autoConfirmPayment?: boolean | null;
   matchedByAdmin?: boolean | null;
+  paymentConfirmedBy?: OrderActionActor | null;
+  paymentConfirmedByName?: string;
+  paymentConfirmedByWalletAddress?: string;
+  confirmedBy?: OrderActionActor | null;
+  confirmedByName?: string;
+  confirmedByWalletAddress?: string;
+  processedBy?: OrderActionActor | null;
+  processedByName?: string;
+  processedByWalletAddress?: string;
   userType?: string;
   paymentMethod?: string;
   settlement?: SettlementInfo | null;
@@ -2569,11 +2589,29 @@ export default function BuyorderConsoleClient({
         throw new Error(payload?.error || "완료 처리에 실패했습니다.");
       }
 
+      const optimisticConfirmedAt = new Date().toISOString();
+      const optimisticConfirmedBy: OrderActionActor = {
+        walletAddress: activeAccount.address,
+        nickname: accessActorLabel || "관리자",
+        storecode: "admin",
+        role: "admin",
+        matchedBy: "global_admin",
+        confirmedAt: optimisticConfirmedAt,
+      };
+
       patchOrderInDashboard(matchKey, {
         status: "paymentConfirmed",
         transactionHash: "0x",
+        autoConfirmPayment: false,
         matchedByAdmin: true,
         updatedAt: new Date().toISOString(),
+        paymentConfirmedAt: optimisticConfirmedAt,
+        paymentConfirmedBy: optimisticConfirmedBy,
+        paymentConfirmedByName: optimisticConfirmedBy.nickname || "",
+        paymentConfirmedByWalletAddress: activeAccount.address,
+        processedBy: optimisticConfirmedBy,
+        processedByName: optimisticConfirmedBy.nickname || "",
+        processedByWalletAddress: activeAccount.address,
       });
       closeDepositModal();
       void loadDashboard({ silent: true });
@@ -2586,6 +2624,7 @@ export default function BuyorderConsoleClient({
       setConfirmingTradeId("");
     }
   }, [
+    accessActorLabel,
     activeAccount,
     closeDepositModal,
     depositAmountMatches,
