@@ -118,6 +118,9 @@ export async function POST(request: NextRequest) {
   const storesError = storesResponse.ok
     ? ""
     : resolveRemoteError(storesResponse.json, "Failed to load store list");
+  const withdrawalEventsError = withdrawalEventsResponse.ok
+    ? ""
+    : resolveRemoteError(withdrawalEventsResponse.json, "Failed to load withdrawal events");
   const ordersError = hasSignedOrdersBody && signedOrdersResponse && !signedOrdersResponse.ok
     ? resolveRemoteError(signedOrdersResponse.json, "Failed to load clearance orders")
     : "";
@@ -161,6 +164,7 @@ export async function POST(request: NextRequest) {
       withdrawalNextCursor: typeof withdrawalEventsResponse.json?.nextCursor === "string"
         ? withdrawalEventsResponse.json.nextCursor
         : null,
+      withdrawalEventsError,
     },
   });
 }

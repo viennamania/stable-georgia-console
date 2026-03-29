@@ -102,6 +102,7 @@ type ClearanceBaseResult = {
   selectedStore?: StoreItem | null;
   withdrawalEvents: BankTransferDashboardEvent[];
   withdrawalNextCursor: string | null;
+  withdrawalEventsError?: string;
 };
 
 type ClearanceOrdersResult = {
@@ -165,6 +166,7 @@ const EMPTY_CLEARANCE_DASHBOARD: ClearanceDashboardResult = {
   selectedStore: null,
   withdrawalEvents: EMPTY_WITHDRAWALS,
   withdrawalNextCursor: null,
+  withdrawalEventsError: "",
   ordersError: "",
   orders: EMPTY_ORDERS,
   totalCount: 0,
@@ -230,6 +232,21 @@ const createBaseLoadSignature = (walletAddress?: string | null, storecode?: stri
 const createOrdersLoadSignature = (filters: FilterState, walletAddress?: string | null) => {
   return [
     String(walletAddress || "").trim().toLowerCase(),
+    filters.storecode,
+    String(filters.limit),
+    String(filters.page),
+    filters.fromDate,
+    filters.toDate,
+    filters.searchMyOrders ? "1" : "0",
+  ].join("|");
+};
+
+const createOrdersResultSignature = (
+  filters: FilterState,
+  ordersQueryMode: ClearanceOrdersQueryMode,
+) => {
+  return [
+    ordersQueryMode,
     filters.storecode,
     String(filters.limit),
     String(filters.page),
@@ -484,6 +501,37 @@ const getStoreDisplayName = (store?: StoreItem | null) => {
 
 const getStoreLogoSrc = (store?: StoreItem | null) => {
   return String(store?.storeLogo || "").trim() || "/logo.png";
+};
+
+const doesStoreMatchQuery = (store: StoreItem | null | undefined, query: string) => {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const candidates = [
+    String(store?.storecode || "").trim().toLowerCase(),
+    String(store?.storeName || "").trim().toLowerCase(),
+    String(store?.companyName || "").trim().toLowerCase(),
+  ];
+
+  return candidates.some((value) => value.includes(normalizedQuery));
+};
+
+const dedupeStoresByStorecode = (items: Array<StoreItem | null | undefined>) => {
+  const nextMap = new Map<string, StoreItem>();
+
+  for (const item of items) {
+    const key = normalizeText(item?.storecode).toLowerCase()
+      || normalizeText(item?.storeName).toLowerCase()
+      || normalizeText(item?.companyName).toLowerCase();
+    if (!key || nextMap.has(key) || !item) {
+      continue;
+    }
+    nextMap.set(key, item);
+  }
+
+  return Array.from(nextMap.values());
 };
 
 const getStoreBankInfoCandidates = (store?: StoreItem | null) => {
@@ -759,6 +807,14 @@ export default function ClearanceManagementConsoleClient({
   const [actionModalError, setActionModalError] = useState("");
   const [processingOrderId, setProcessingOrderId] = useState("");
   const [copiedTradeId, setCopiedTradeId] = useState("");
+  const [storeSearchQuery, setStoreSearchQuery] = useState("");
+  const [storeSearchOpen, setStoreSearchOpen] = useState(false);
+  const [storeSearchLoading, setStoreSearchLoading] = useState(false);
+  const [storeSearchError, setStoreSearchError] = useState("");
+  const [storeSearchResults, setStoreSearchResults] = useState<StoreItem[]>([]);
+  const [resolvedOrdersResultSignature, setResolvedOrdersResultSignature] = useState(() =>
+    createOrdersResultSignature(createDefaultFilters(normalizedForcedStorecode), ordersQueryMode),
+  );
 
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
@@ -773,6 +829,8 @@ export default function ClearanceManagementConsoleClient({
   const ablyClientIdRef = useRef(`console-clearance-${Math.random().toString(36).slice(2, 10)}`);
   const desiredBaseLoadSignatureRef = useRef("");
   const desiredOrdersLoadSignatureRef = useRef("");
+  const storeSearchRef = useRef<HTMLDivElement | null>(null);
+  const storeSearchRequestIdRef = useRef(0);
 
   desiredBaseLoadSignatureRef.current = createBaseLoadSignature(
     activeAccount?.address,
@@ -784,6 +842,13 @@ export default function ClearanceManagementConsoleClient({
       storecode: effectiveStorecode,
     },
     activeAccount?.address,
+  );
+  const desiredOrdersResultSignature = createOrdersResultSignature(
+    {
+      ...filters,
+      storecode: effectiveStorecode,
+    },
+    ordersQueryMode,
   );
 
   const sortWithdrawalRealtimeItems = useCallback((items: WithdrawalRealtimeItem[]) => {
@@ -984,19 +1049,35 @@ export default function ClearanceManagementConsoleClient({
           !hideWithdrawalLiveSection && typeof result?.withdrawalNextCursor === "string"
             ? result.withdrawalNextCursor
             : null;
-        setData((current) => ({
-          ...(current || EMPTY_CLEARANCE_DASHBOARD),
-          fetchedAt: result?.fetchedAt || "",
-          remoteBackendBaseUrl: result?.remoteBackendBaseUrl || "",
-          stores: Array.isArray(result?.stores) ? result.stores : EMPTY_STORES,
-          storeTotalCount: Number(result?.storeTotalCount || 0),
-          storesError: normalizeText(result?.storesError),
-          selectedStore: result?.selectedStore || null,
-          withdrawalEvents: nextWithdrawalEvents,
-          withdrawalNextCursor: nextWithdrawalCursor,
-        }));
-        withdrawalRealtimeCursorRef.current = nextWithdrawalCursor || null;
-        replaceWithdrawalRealtimeItems(nextWithdrawalEvents);
+        const nextWithdrawalEventsError = normalizeText(result?.withdrawalEventsError);
+        setData((current) => {
+          const currentData = current || EMPTY_CLEARANCE_DASHBOARD;
+          const shouldPreserveWithdrawalEvents =
+            !hideWithdrawalLiveSection
+            && Boolean(nextWithdrawalEventsError)
+            && currentData.withdrawalEvents.length > 0;
+
+          return {
+            ...currentData,
+            fetchedAt: result?.fetchedAt || "",
+            remoteBackendBaseUrl: result?.remoteBackendBaseUrl || "",
+            stores: Array.isArray(result?.stores) ? result.stores : EMPTY_STORES,
+            storeTotalCount: Number(result?.storeTotalCount || 0),
+            storesError: normalizeText(result?.storesError),
+            selectedStore: result?.selectedStore || null,
+            withdrawalEvents: shouldPreserveWithdrawalEvents
+              ? currentData.withdrawalEvents
+              : nextWithdrawalEvents,
+            withdrawalNextCursor: shouldPreserveWithdrawalEvents
+              ? currentData.withdrawalNextCursor
+              : nextWithdrawalCursor,
+            withdrawalEventsError: nextWithdrawalEventsError,
+          };
+        });
+        if (!nextWithdrawalEventsError) {
+          withdrawalRealtimeCursorRef.current = nextWithdrawalCursor || null;
+          replaceWithdrawalRealtimeItems(nextWithdrawalEvents);
+        }
         setWithdrawalSyncError("");
         setError("");
       } catch (loadError) {
@@ -1036,6 +1117,13 @@ export default function ClearanceManagementConsoleClient({
         },
         activeAccount?.address,
       );
+      const resultSignature = createOrdersResultSignature(
+        {
+          ...filters,
+          storecode: effectiveStorecode,
+        },
+        ordersQueryMode,
+      );
 
       if (shouldWaitForSignedOrders) {
         if (!silent) {
@@ -1068,6 +1156,7 @@ export default function ClearanceManagementConsoleClient({
             ...(current || EMPTY_CLEARANCE_DASHBOARD),
             ordersError: "",
           }));
+          setResolvedOrdersResultSignature(resultSignature);
           setError("");
           return;
         }
@@ -1167,6 +1256,7 @@ export default function ClearanceManagementConsoleClient({
           totalClearanceAmount: Number(result?.totalClearanceAmount || 0),
           totalClearanceAmountKRW: Number(result?.totalClearanceAmountKRW || 0),
         }));
+        setResolvedOrdersResultSignature(resultSignature);
         setError("");
       } catch (loadError) {
         if (desiredOrdersLoadSignatureRef.current === loadSignature) {
@@ -1219,6 +1309,89 @@ export default function ClearanceManagementConsoleClient({
   }, []);
 
   useEffect(() => {
+    if (!storeSearchOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!storeSearchRef.current?.contains(event.target as Node)) {
+        setStoreSearchOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [storeSearchOpen]);
+
+  useEffect(() => {
+    if (hideStoreFilter) {
+      storeSearchRequestIdRef.current += 1;
+      setStoreSearchLoading(false);
+      setStoreSearchError("");
+      setStoreSearchResults(EMPTY_STORES);
+      return;
+    }
+
+    const query = storeSearchQuery.trim();
+    if (!query) {
+      storeSearchRequestIdRef.current += 1;
+      setStoreSearchLoading(false);
+      setStoreSearchError("");
+      return;
+    }
+
+    const requestId = storeSearchRequestIdRef.current + 1;
+    storeSearchRequestIdRef.current = requestId;
+    const timer = window.setTimeout(async () => {
+      setStoreSearchLoading(true);
+      setStoreSearchError("");
+
+      try {
+        const response = await fetch("/api/bff/admin/clearance-store-list", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          body: JSON.stringify({
+            limit: 20,
+            page: 1,
+            searchStore: query,
+          }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (storeSearchRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "가맹점 검색에 실패했습니다.");
+        }
+
+        setStoreSearchResults(
+          Array.isArray(payload?.result?.stores) ? payload.result.stores : EMPTY_STORES,
+        );
+      } catch (searchError) {
+        if (storeSearchRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setStoreSearchResults(EMPTY_STORES);
+        setStoreSearchError(
+          searchError instanceof Error ? searchError.message : "가맹점 검색에 실패했습니다.",
+        );
+      } finally {
+        if (storeSearchRequestIdRef.current === requestId) {
+          setStoreSearchLoading(false);
+        }
+      }
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [hideStoreFilter, storeSearchQuery]);
+
+  useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
 
@@ -1239,6 +1412,10 @@ export default function ClearanceManagementConsoleClient({
       return;
     }
 
+    setStoreSearchOpen(false);
+    setStoreSearchQuery("");
+    setStoreSearchResults(EMPTY_STORES);
+    setStoreSearchError("");
     setFilters((prev) => {
       if (prev.storecode === normalizedForcedStorecode) {
         return prev;
@@ -1363,6 +1540,7 @@ export default function ClearanceManagementConsoleClient({
 
   const stores = data?.stores || EMPTY_STORES;
   const storesError = normalizeText(data?.storesError);
+  const withdrawalEventsError = normalizeText(data?.withdrawalEventsError);
   const shouldRevealSignedOrderData = canReadSignedData || isWalletRecovering;
   const ordersError = shouldRevealSignedOrderData ? normalizeText(data?.ordersError) : "";
   const orders = shouldRevealSignedOrderData ? (data?.orders || EMPTY_ORDERS) : EMPTY_ORDERS;
@@ -1373,10 +1551,33 @@ export default function ClearanceManagementConsoleClient({
 
     return (
       stores.find((store) => normalizeText(store.storecode).toLowerCase() === filters.storecode.toLowerCase())
+      || storeSearchResults.find((store) => normalizeText(store.storecode).toLowerCase() === filters.storecode.toLowerCase())
       || data?.selectedStore
       || null
     );
-  }, [data?.selectedStore, filters.storecode, stores]);
+  }, [data?.selectedStore, filters.storecode, storeSearchResults, stores]);
+  const visibleStoreSearchOptions = useMemo(() => {
+    const normalizedQuery = storeSearchQuery.trim().toLowerCase();
+    const localMatches = stores.filter((store) => doesStoreMatchQuery(store, normalizedQuery));
+    const mergedStores = dedupeStoresByStorecode([
+      ...localMatches,
+      ...storeSearchResults,
+      selectedStoreSummary,
+    ]);
+
+    mergedStores.sort((left, right) => {
+      const leftSelected = normalizeText(left.storecode) === normalizeText(filters.storecode);
+      const rightSelected = normalizeText(right.storecode) === normalizeText(filters.storecode);
+
+      if (leftSelected === rightSelected) {
+        return getStoreDisplayName(left).localeCompare(getStoreDisplayName(right), "ko");
+      }
+
+      return leftSelected ? -1 : 1;
+    });
+
+    return mergedStores;
+  }, [filters.storecode, selectedStoreSummary, storeSearchQuery, storeSearchResults, stores]);
   const storeCoverageLabel = filters.storecode
     ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
     : "전체 가맹점";
@@ -1403,6 +1604,11 @@ export default function ClearanceManagementConsoleClient({
           filteredWithdrawalRealtimeItems[0].receivedAt,
         )
       : null;
+  const ordersMatchActiveQuery = resolvedOrdersResultSignature === desiredOrdersResultSignature;
+  const hasStaleVisibleOrders = orders.length > 0 && !ordersMatchActiveQuery;
+  const staleOrdersMessage = ordersLoading || ordersRefreshing
+    ? "현재 표시 중인 목록은 이전 필터 결과입니다. 최신 조건을 반영하는 중입니다."
+    : "현재 표시 중인 목록은 이전 필터 결과입니다. 최신 조건이 아직 반영되지 않았습니다.";
   const connectionIndicatorClassName =
     connectionState === "connected"
       ? "bg-emerald-500"
@@ -1449,6 +1655,16 @@ export default function ClearanceManagementConsoleClient({
         return;
       }
 
+      if (hasStaleVisibleOrders) {
+        setError("최신 필터 결과를 반영하는 중입니다. 동기화 후 다시 시도해주세요.");
+        return;
+      }
+
+      if (!canReadSignedData || isWalletRecovering) {
+        setError(`${accessActorLabel} 지갑 연결 상태를 확인한 뒤 다시 시도해주세요.`);
+        return;
+      }
+
       const orderId = String(order._id || "").trim();
       if (!orderId) {
         setError("주문 식별 정보가 부족합니다.");
@@ -1467,7 +1683,7 @@ export default function ClearanceManagementConsoleClient({
         order,
       });
     },
-    [accessActorLabel, activeAccount, allowOrderActions],
+    [accessActorLabel, activeAccount, allowOrderActions, canReadSignedData, hasStaleVisibleOrders, isWalletRecovering],
   );
 
   const closeActionModal = useCallback(() => {
@@ -1679,6 +1895,15 @@ export default function ClearanceManagementConsoleClient({
     });
   }, [filters.page, totalOrderPages]);
 
+  useEffect(() => {
+    if (!actionModalState || !hasStaleVisibleOrders || actionModalSubmitting) {
+      return;
+    }
+
+    setActionModalState(null);
+    setActionModalError("");
+  }, [actionModalState, actionModalSubmitting, hasStaleVisibleOrders]);
+
   return (
     <div className={shellClassName}>
       <div className={shellInnerClassName}>
@@ -1766,34 +1991,123 @@ export default function ClearanceManagementConsoleClient({
             ) : null}
             <div className={`grid gap-3 ${filterGridClassName}`}>
               {!hideStoreFilter ? (
-              <label className="space-y-2 text-sm">
+              <div className="space-y-2 text-sm">
                 <span className="font-medium text-slate-200">가맹점</span>
-                <select
-                  value={filters.storecode}
-                  onChange={(event) => {
-                    setFilters((prev) => ({
-                      ...prev,
-                      storecode: event.target.value,
-                      page: 1,
-                    }));
-                  }}
-                  className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                >
-                  <option value="">전체 가맹점</option>
-                  {stores.map((store) => {
-                    const storecode = String(store.storecode || "").trim();
-                    if (!storecode) {
-                      return null;
-                    }
+                <div ref={storeSearchRef} className="relative">
+                  <input
+                    value={storeSearchQuery}
+                    onFocus={() => setStoreSearchOpen(true)}
+                    onChange={(event) => {
+                      setStoreSearchOpen(true);
+                      setStoreSearchQuery(event.target.value);
+                    }}
+                    placeholder="storecode / 가맹점명 검색"
+                    className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                  />
+                  {!storeSearchOpen && !storeSearchQuery && selectedStoreSummary ? (
+                    <div className="pointer-events-none absolute inset-x-4 inset-y-0 flex items-center gap-3">
+                      <img
+                        src={getStoreLogoSrc(selectedStoreSummary)}
+                        alt={getStoreDisplayName(selectedStoreSummary) || filters.storecode}
+                        className="h-7 w-7 rounded-full border border-slate-200 bg-white object-cover"
+                      />
+                      <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+                        {getStoreDisplayName(selectedStoreSummary) || filters.storecode}
+                      </div>
+                      <div className="console-mono truncate text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                        {filters.storecode}
+                      </div>
+                    </div>
+                  ) : null}
+                  {storeSearchOpen ? (
+                    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
+                      <div className="max-h-80 overflow-y-auto p-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFilters((prev) => ({
+                              ...prev,
+                              storecode: "",
+                              page: 1,
+                            }));
+                            setStoreSearchQuery("");
+                            setStoreSearchOpen(false);
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                            filters.storecode
+                              ? "text-slate-700 hover:bg-slate-50"
+                              : "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
+                          }`}
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            All
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-slate-900">전체 가맹점</div>
+                            <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                              all stores
+                            </div>
+                          </div>
+                        </button>
 
-                    return (
-                      <option key={storecode} value={storecode}>
-                        {getStoreDisplayName(store) || storecode}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
+                        {visibleStoreSearchOptions.map((store) => {
+                          const storecode = normalizeText(store.storecode);
+                          if (!storecode) {
+                            return null;
+                          }
+
+                          const active =
+                            normalizeText(filters.storecode).toLowerCase() === storecode.toLowerCase();
+
+                          return (
+                            <button
+                              key={storecode}
+                              type="button"
+                              onClick={() => {
+                                setFilters((prev) => ({
+                                  ...prev,
+                                  storecode,
+                                  page: 1,
+                                }));
+                                setStoreSearchQuery("");
+                                setStoreSearchOpen(false);
+                              }}
+                              className={`mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                                active
+                                  ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
+                                  : "text-slate-700 hover:bg-slate-50"
+                              }`}
+                            >
+                              <img
+                                src={getStoreLogoSrc(store)}
+                                alt={getStoreDisplayName(store) || storecode}
+                                className="h-10 w-10 shrink-0 rounded-2xl border border-slate-200 bg-white object-cover"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-semibold text-slate-900">
+                                  {getStoreDisplayName(store) || storecode}
+                                </div>
+                                <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                                  {storecode}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+
+                        {storeSearchLoading ? (
+                          <div className="px-3 py-3 text-xs text-slate-500">가맹점을 검색하는 중입니다.</div>
+                        ) : null}
+                        {!storeSearchLoading && storeSearchQuery.trim() && visibleStoreSearchOptions.length === 0 ? (
+                          <div className="px-3 py-3 text-xs text-slate-500">
+                            검색 조건에 맞는 가맹점이 없습니다.
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               ) : null}
 
               <label className="space-y-2 text-sm">
@@ -1872,10 +2186,14 @@ export default function ClearanceManagementConsoleClient({
                 <div className="text-xs text-slate-400">날짜와 옵션 변경은 즉시 반영됩니다.</div>
               </div>
             </div>
-            <div className={`mt-3 text-xs ${storesError ? "text-rose-300" : "text-slate-400"}`}>
+            <div className={`mt-3 text-xs ${(storesError || storeSearchError) ? "text-rose-300" : "text-slate-400"}`}>
               {storesError
                 ? `가맹점 메타 동기화 실패: ${storesError}`
-                : "가맹점 메타는 로고와 계좌 매칭 보강에 사용됩니다."}
+                : storeSearchError
+                  ? `가맹점 검색 실패: ${storeSearchError}`
+                  : data?.storeTotalCount && data.storeTotalCount > stores.length
+                    ? `가맹점 메타는 로고와 계좌 매칭 보강에 사용됩니다. 현재 ${NUMBER_FORMATTER.format(stores.length)}개 preload, 나머지는 검색으로 찾을 수 있습니다.`
+                    : "가맹점 메타는 로고와 계좌 매칭 보강에 사용됩니다."}
             </div>
           </div>
         </section>
@@ -1994,11 +2312,16 @@ export default function ClearanceManagementConsoleClient({
               </div>
             </div>
 
-            {connectionError || withdrawalSyncError ? (
+            {connectionError || withdrawalSyncError || withdrawalEventsError ? (
               <div className="mt-4 space-y-2">
                 {connectionError ? (
                   <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                     연결 오류: {connectionError}
+                  </div>
+                ) : null}
+                {withdrawalEventsError ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    초기 이벤트 조회 실패: {withdrawalEventsError}
                   </div>
                 ) : null}
                 {withdrawalSyncError ? (
@@ -2013,7 +2336,9 @@ export default function ClearanceManagementConsoleClient({
           <div className="px-6 py-5">
             {withdrawalRealtimeEventCount === 0 ? (
               <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
-                아직 표시할 통장출금 webhook 이벤트가 없습니다.
+                {withdrawalEventsError
+                  ? "통장출금 webhook 초기 조회에 실패했습니다. 연결 상태를 확인한 뒤 다시 동기화됩니다."
+                  : "아직 표시할 통장출금 webhook 이벤트가 없습니다."}
               </div>
             ) : (
               <div className="-mx-1 overflow-x-auto px-1 pb-1">
@@ -2190,6 +2515,11 @@ export default function ClearanceManagementConsoleClient({
                     {ordersLoading ? "주문 로딩중" : "주문 새로고침중"}
                   </span>
                 ) : null}
+                {hasStaleVisibleOrders ? (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
+                    Applying latest filter
+                  </span>
+                ) : null}
                 <span className="rounded-full bg-slate-100 px-3 py-1">
                   Rows {NUMBER_FORMATTER.format(currentOrderRangeStart)}-{NUMBER_FORMATTER.format(currentOrderRangeEnd)} / {NUMBER_FORMATTER.format(totalOrderCount)}
                 </span>
@@ -2209,33 +2539,41 @@ export default function ClearanceManagementConsoleClient({
           ) : null}
 
           <div className="px-2 pb-2">
-            <table className="w-full table-fixed border-separate border-spacing-0">
-              <thead>
-                <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                  <th className="w-[21%] border-b border-slate-200 px-3 py-2.5">Trade / Created</th>
-                  <th className="w-[10%] border-b border-slate-200 px-3 py-2.5">Status</th>
-                  <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">Buyer</th>
-                  <th className="w-[16%] border-b border-slate-200 px-3 py-2.5">Seller / 입금계좌</th>
-                  <th className="w-[12%] border-b border-slate-200 px-3 py-2.5 text-right">Amount</th>
-                  <th className="w-[14%] border-b border-slate-200 px-3 py-2.5">출금상태</th>
-                  <th className="w-[12%] border-b border-slate-200 px-3 py-2.5">USDT 전송</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
-                      {isWalletRecovering
-                        ? "Loading clearance orders..."
-                        : !canReadSignedData
-                        ? disconnectedMessage
-                        : ordersLoading
-                          ? "Loading clearance orders..."
-                          : "No clearance orders returned for the current filter."}
-                    </td>
+            {hasStaleVisibleOrders ? (
+              <div className="px-2 pb-3 pt-1">
+                <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {staleOrdersMessage}
+                </div>
+              </div>
+            ) : null}
+            <div className={hasStaleVisibleOrders ? "pointer-events-none opacity-60" : ""}>
+              <table className="w-full table-fixed border-separate border-spacing-0">
+                <thead>
+                  <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+                    <th className="w-[21%] border-b border-slate-200 px-3 py-2.5">Trade / Created</th>
+                    <th className="w-[10%] border-b border-slate-200 px-3 py-2.5">Status</th>
+                    <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">Buyer</th>
+                    <th className="w-[16%] border-b border-slate-200 px-3 py-2.5">Seller / 입금계좌</th>
+                    <th className="w-[12%] border-b border-slate-200 px-3 py-2.5 text-right">Amount</th>
+                    <th className="w-[14%] border-b border-slate-200 px-3 py-2.5">출금상태</th>
+                    <th className="w-[12%] border-b border-slate-200 px-3 py-2.5">USDT 전송</th>
                   </tr>
-                ) : (
-                  orders.map((order, index) => {
+                </thead>
+                <tbody>
+                  {orders.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
+                        {isWalletRecovering
+                          ? "Loading clearance orders..."
+                          : !canReadSignedData
+                          ? disconnectedMessage
+                          : ordersLoading
+                            ? "Loading clearance orders..."
+                            : "No clearance orders returned for the current filter."}
+                      </td>
+                    </tr>
+                  ) : (
+                    orders.map((order, index) => {
                     const orderId = String(order._id || "").trim();
                     const tradeId = String(order.tradeId || "").trim();
                     const statusMeta = getStatusMeta(order.status);
@@ -2251,7 +2589,13 @@ export default function ClearanceManagementConsoleClient({
                     const depositCompletedActorLabel = getDepositCompletedActorLabel(order.buyer);
                     const isWithdrawalCompleted = order.buyer?.depositCompleted === true;
                     const isCancelled = String(order.status || "").trim() === "cancelled";
-                    const canManageWithdrawal = !isWithdrawalCompleted && !isCancelled;
+                    const canManageWithdrawal =
+                      !isWithdrawalCompleted
+                      && !isCancelled
+                      && allowOrderActions
+                      && canReadSignedData
+                      && !isWalletRecovering
+                      && !hasStaleVisibleOrders;
                     const isProcessingThisOrder = processingOrderId === orderId;
                     const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
 
@@ -2371,9 +2715,9 @@ export default function ClearanceManagementConsoleClient({
                                     <button
                                       type="button"
                                       onClick={() => openActionModal("complete", order)}
-                                      disabled={isProcessingThisOrder || actionModalSubmitting}
+                                      disabled={!canManageWithdrawal || isProcessingThisOrder || actionModalSubmitting}
                                       className={`rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition ${
-                                        isProcessingThisOrder || actionModalSubmitting
+                                        !canManageWithdrawal || isProcessingThisOrder || actionModalSubmitting
                                           ? "cursor-not-allowed bg-emerald-300"
                                           : "bg-emerald-600 hover:bg-emerald-700"
                                       }`}
@@ -2385,9 +2729,9 @@ export default function ClearanceManagementConsoleClient({
                                     <button
                                       type="button"
                                       onClick={() => openActionModal("cancel", order)}
-                                      disabled={isProcessingThisOrder || actionModalSubmitting}
+                                      disabled={!canManageWithdrawal || isProcessingThisOrder || actionModalSubmitting}
                                       className={`rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition ${
-                                        isProcessingThisOrder || actionModalSubmitting
+                                        !canManageWithdrawal || isProcessingThisOrder || actionModalSubmitting
                                           ? "cursor-not-allowed bg-rose-300"
                                           : "bg-rose-600 hover:bg-rose-700"
                                       }`}
@@ -2438,9 +2782,10 @@ export default function ClearanceManagementConsoleClient({
                       </tr>
                     );
                   })
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {totalOrderCount > 0 ? (
