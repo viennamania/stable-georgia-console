@@ -123,7 +123,62 @@ export default function AdminShell({
           </div>
         </aside>
 
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1">
+          <div className="sticky top-0 z-30 border-b border-slate-200 bg-[#edf3f8]/95 backdrop-blur lg:hidden">
+            <div className="px-4 py-4">
+              <div className="rounded-[28px] bg-slate-950 px-4 py-4 text-white shadow-[0_20px_45px_-28px_rgba(15,23,42,0.8)]">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                  Stable Georgia
+                </div>
+                <div className="mt-2 text-xl font-semibold tracking-[-0.04em] text-white">
+                  Console
+                </div>
+                <div className="mt-3 text-xs leading-5 text-slate-300">
+                  구매주문, 청산주문, 설정과 운영 화면으로 모바일에서도 바로 이동할 수 있습니다.
+                </div>
+
+                <nav className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1">
+                  {NAV_ITEMS.map((item) => {
+                    const href = `/${lang}${item.href}`;
+                    const active = pathname === href || pathname.startsWith(`${href}/`);
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={href}
+                        className={`shrink-0 rounded-[20px] border px-3 py-3 transition ${
+                          active
+                            ? "border-sky-300/55 bg-[linear-gradient(135deg,rgba(56,189,248,0.24),rgba(14,165,233,0.14),rgba(15,23,42,0.2))] text-white shadow-[0_16px_34px_-24px_rgba(56,189,248,0.95)] ring-1 ring-inset ring-sky-200/20"
+                            : "border-white/10 bg-white/6 text-slate-200"
+                        }`}
+                      >
+                        <div className="flex min-w-[148px] items-start gap-3">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-xs font-semibold tracking-[0.18em] ${
+                              active
+                                ? "border-sky-200/35 bg-white/12 text-sky-50"
+                                : "border-white/10 bg-white/5 text-slate-300"
+                            }`}
+                          >
+                            {item.marker}
+                          </div>
+                          <div className="min-w-0">
+                            <div className={`text-[9px] uppercase tracking-[0.16em] ${active ? "text-sky-100/75" : "text-slate-500"}`}>
+                              {item.eyebrow}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold tracking-[-0.03em]">{item.label}</div>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+            </div>
+          </div>
+
+          {children}
+        </div>
       </div>
     </div>
   );
