@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 
@@ -63,6 +63,13 @@ type DashboardResult = {
   remoteBackendBaseUrl: string;
   stores: StoreRow[];
   totalCount: number;
+  summary: {
+    visibleCount: number;
+    withPaymentUrlCount: number;
+    totalBuyerCount: number;
+    totalUsdtAmount: number;
+    totalSettlementAmountKRW: number;
+  };
   storeError: string;
   agents: AgentMeta[];
   agentsError: string;
@@ -89,6 +96,13 @@ const EMPTY_DASHBOARD_RESULT: DashboardResult = {
   remoteBackendBaseUrl: "",
   stores: [],
   totalCount: 0,
+  summary: {
+    visibleCount: 0,
+    withPaymentUrlCount: 0,
+    totalBuyerCount: 0,
+    totalUsdtAmount: 0,
+    totalSettlementAmountKRW: 0,
+  },
   storeError: "",
   agents: [],
   agentsError: "",
@@ -261,6 +275,43 @@ function FeedbackBanner({ feedback }: { feedback: FeedbackState }) {
   );
 }
 
+function StoreLogoBadge({
+  storecode,
+  storeName,
+  storeLogo,
+  className,
+}: {
+  storecode?: string;
+  storeName?: string;
+  storeLogo?: string;
+  className?: string;
+}) {
+  const resolvedLogo = normalizeString(storeLogo);
+  const fallbackCode = normalizeString(storecode).slice(0, 2).toUpperCase() || "ST";
+
+  return (
+    <div
+      role="img"
+      aria-label={normalizeString(storeName) || normalizeString(storecode) || "store"}
+      className={className}
+      style={resolvedLogo
+        ? {
+            backgroundImage: `url(${resolvedLogo})`,
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            backgroundSize: "cover",
+          }
+        : undefined}
+    >
+      {resolvedLogo ? null : (
+        <span className="text-xs font-semibold text-slate-500">
+          {fallbackCode}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function StoreManagementConsoleClient({
   lang,
 }: StoreManagementConsoleClientProps) {
@@ -309,7 +360,7 @@ export default function StoreManagementConsoleClient({
           try {
             signedStoresBody = await createCenterStoreAdminSignedBody({
               account: activeAccount,
-              route: "/api/store/getAllStores",
+              route: "/api/store/getAdminStoreList",
               storecode: "admin",
               body: {
                 page: filters.page,
@@ -351,6 +402,13 @@ export default function StoreManagementConsoleClient({
           remoteBackendBaseUrl: normalizeString(result.remoteBackendBaseUrl),
           stores: Array.isArray(result.stores) ? result.stores : [],
           totalCount: normalizeNumber(result.totalCount),
+          summary: {
+            visibleCount: normalizeNumber(result.summary?.visibleCount),
+            withPaymentUrlCount: normalizeNumber(result.summary?.withPaymentUrlCount),
+            totalBuyerCount: normalizeNumber(result.summary?.totalBuyerCount),
+            totalUsdtAmount: normalizeNumber(result.summary?.totalUsdtAmount),
+            totalSettlementAmountKRW: normalizeNumber(result.summary?.totalSettlementAmountKRW),
+          },
           storeError: normalizeString(result.storeError),
           agents: Array.isArray(result.agents) ? result.agents : [],
           agentsError: normalizeString(result.agentsError),
@@ -383,32 +441,6 @@ export default function StoreManagementConsoleClient({
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
-
-  const summary = useMemo(() => {
-    return data.stores.reduce<{
-      visible: number;
-      withPaymentUrl: number;
-      totalBuyerCount: number;
-      totalUsdtAmount: number;
-      totalSettlementAmountKRW: number;
-    }>(
-      (acc, store) => {
-        acc.visible += store.viewOnAndOff === false ? 0 : 1;
-        acc.withPaymentUrl += normalizeString(store.paymentUrl) ? 1 : 0;
-        acc.totalBuyerCount += normalizeNumber(store.totalBuyerCount);
-        acc.totalUsdtAmount += normalizeNumber(store.totalUsdtAmount);
-        acc.totalSettlementAmountKRW += normalizeNumber(store.totalSettlementAmountKRW);
-        return acc;
-      },
-      {
-        visible: 0,
-        withPaymentUrl: 0,
-        totalBuyerCount: 0,
-        totalUsdtAmount: 0,
-        totalSettlementAmountKRW: 0,
-      },
-    );
-  }, [data.stores]);
 
   const totalPages = Math.max(1, Math.ceil(Math.max(0, data.totalCount) / Math.max(1, filters.limit)));
   const disconnectedMessage = isWalletRecovering
@@ -596,22 +628,22 @@ export default function StoreManagementConsoleClient({
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
                   <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-300/70">
-                    Total stores
+                    Matched stores
                   </div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em] text-white">
                     {loading ? "Syncing..." : `${data.totalCount.toLocaleString()} stores`}
                   </div>
-                  <div className="mt-1 text-xs text-slate-300/75">전체 등록 가맹점 수</div>
+                  <div className="mt-1 text-xs text-slate-300/75">현재 필터 기준 가맹점 수</div>
                 </div>
 
                 <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
                   <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-300/70">
-                    Visible on page
+                    Visible stores
                   </div>
                   <div className="mt-3 text-xl font-semibold tracking-[-0.04em] text-white">
-                    {loading ? "..." : `${summary.visible.toLocaleString()} visible`}
+                    {loading ? "..." : `${data.summary.visibleCount.toLocaleString()} visible`}
                   </div>
-                  <div className="mt-1 text-xs text-slate-300/75">현재 페이지 노출중인 가맹점</div>
+                  <div className="mt-1 text-xs text-slate-300/75">현재 필터에서 노출중인 가맹점</div>
                 </div>
 
                 <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
@@ -654,7 +686,7 @@ export default function StoreManagementConsoleClient({
                 가맹점 검색과 생성
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                가맹점 이름과 에이전트로 필터링하고, 관리자 지갑 서명으로 신규 가맹점을 바로 생성할 수 있습니다.
+                storecode, 가맹점명, 에이전트 기준으로 빠르게 필터링하고 관리자 지갑 서명으로 신규 가맹점을 생성합니다.
               </p>
             </div>
 
@@ -680,7 +712,7 @@ export default function StoreManagementConsoleClient({
                   searchStore: event.target.value,
                 }));
               }}
-              placeholder="가맹점 이름 검색"
+              placeholder="storecode / 가맹점명 검색"
               className={fieldClassName}
             />
             <select
@@ -770,10 +802,10 @@ export default function StoreManagementConsoleClient({
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <MetricCard
-            label="Registered stores"
+            label="Matched stores"
             value={data.totalCount.toLocaleString()}
             unit="stores"
-            helper="전체 가맹점 수"
+            helper="현재 필터 기준 전체 가맹점"
             tone="slate"
           />
           <MetricCard
@@ -784,24 +816,24 @@ export default function StoreManagementConsoleClient({
             tone="sky"
           />
           <MetricCard
-            label="Buyers on page"
-            value={summary.totalBuyerCount.toLocaleString()}
+            label="Buyers on scope"
+            value={data.summary.totalBuyerCount.toLocaleString()}
             unit="buyers"
-            helper="현재 페이지 누적 회원 수 합계"
+            helper="현재 필터 기준 누적 회원 수"
             tone="amber"
           />
           <MetricCard
             label="Trade volume"
-            value={formatUsdtDisplay(summary.totalUsdtAmount)}
+            value={formatUsdtDisplay(data.summary.totalUsdtAmount)}
             unit="USDT"
-            helper={`정산 KRW ${formatKrwDisplay(summary.totalSettlementAmountKRW)}`}
+            helper={`정산 KRW ${formatKrwDisplay(data.summary.totalSettlementAmountKRW)}`}
             tone="emerald"
           />
           <MetricCard
             label="Payment URLs"
-            value={summary.withPaymentUrl.toLocaleString()}
+            value={data.summary.withPaymentUrlCount.toLocaleString()}
             unit="ready"
-            helper="결제 URL 설정 완료"
+            helper="현재 필터에서 결제 URL 설정 완료"
             tone="slate"
           />
         </section>
@@ -874,20 +906,12 @@ export default function StoreManagementConsoleClient({
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-start gap-3">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-                            {normalizeString(store.storeLogo) ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={normalizeString(store.storeLogo)}
-                                alt={normalizeString(store.storeName) || "store"}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-xs font-semibold text-slate-500">
-                                {normalizeString(store.storecode).slice(0, 2).toUpperCase() || "ST"}
-                              </span>
-                            )}
-                          </div>
+                          <StoreLogoBadge
+                            storecode={store.storecode}
+                            storeName={store.storeName}
+                            storeLogo={store.storeLogo}
+                            className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"
+                          />
                           <div className="min-w-0 space-y-1">
                             <div className="text-sm font-semibold text-slate-900">
                               {normalizeString(store.storeName) || "이름 미설정"}
@@ -1016,20 +1040,12 @@ export default function StoreManagementConsoleClient({
                   className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-                      {normalizeString(store.storeLogo) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={normalizeString(store.storeLogo)}
-                          alt={normalizeString(store.storeName) || "store"}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-xs font-semibold text-slate-500">
-                          {normalizeString(store.storecode).slice(0, 2).toUpperCase() || "ST"}
-                        </span>
-                      )}
-                    </div>
+                    <StoreLogoBadge
+                      storecode={store.storecode}
+                      storeName={store.storeName}
+                      storeLogo={store.storeLogo}
+                      className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="text-base font-semibold text-slate-950">
                         {normalizeString(store.storeName) || "이름 미설정"}

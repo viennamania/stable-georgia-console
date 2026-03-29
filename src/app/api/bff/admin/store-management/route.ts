@@ -52,11 +52,11 @@ export async function POST(request: NextRequest) {
       };
 
   const [storesResponse, agentsResponse] = await Promise.all([
-    postRemoteJson("/api/store/getAllStores", storeListBody),
-    postRemoteJson("/api/agent/getAllAgents", {
+    postRemoteJson("/api/store/getAdminStoreList", storeListBody),
+    postRemoteJson("/api/agent/getAgentDirectory", {
       page: 1,
       limit: 200,
-      searchStore: "",
+      searchAgent: "",
     }),
   ]);
 
@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         ? storesResponse.json.result.stores
         : [],
       totalCount: Number(storesResponse.json?.result?.totalCount || 0),
+      summary: storesResponse.json?.result?.summary || null,
       storeError: "",
       agents: Array.isArray(agentsResponse.json?.result?.agents)
         ? agentsResponse.json.result.agents
