@@ -44,11 +44,10 @@ export async function POST(request: NextRequest) {
   const page = Math.max(parsePositiveInt(body.page, 1), 1);
   const searchStore = normalizeString(body.searchStore);
 
-  const response = await postRemoteJson("/api/store/getAllStores", {
+  const response = await postRemoteJson("/api/store/getClearanceStoreDirectory", {
     limit,
     page,
     searchStore,
-    sortBy: "storeNameDesc",
   });
 
   if (!response.ok) {

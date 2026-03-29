@@ -2,11 +2,11 @@
 
 import * as Ably from "ably";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConnectButton, useActiveAccount } from "thirdweb/react";
 import { createWallet, inAppWallet } from "thirdweb/wallets";
 
-import ClearanceManagementConsoleClient from "@/app/[lang]/admin/clearance-management/clearance-management-console-client";
 import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 import {
@@ -15,6 +15,18 @@ import {
   type BankTransferDashboardEvent,
 } from "@/lib/realtime/banktransfer";
 import { thirdwebClient } from "@/lib/thirdweb-client";
+
+const ClearanceOrderEmbeddedStream = dynamic(
+  () => import("./clearance-order-embedded-stream"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="console-panel rounded-[30px] border border-slate-200/80 bg-white/95 px-6 py-8 text-sm text-slate-500">
+        청산주문 스트림을 준비하는 중입니다...
+      </div>
+    ),
+  },
+);
 
 type BankInfo = {
   bankName?: string;
@@ -47,28 +59,6 @@ type StoreDetail = StoreListItem & {
   adminWalletAddress?: string;
 };
 
-type SellerBalanceItem = {
-  nickname?: string;
-  walletAddress?: string;
-  currentUsdtBalance?: number;
-  pendingTransferCount?: number;
-  pendingTransferUsdtAmount?: number;
-};
-
-type SellerBankTradeLookupInfo = {
-  bankName?: string;
-  accountHolder?: string;
-  accountNumber?: string;
-  realAccountNumber?: string;
-  defaultAccountNumber?: string;
-  balance?: number | string;
-};
-
-type SellerBankTradeStat = {
-  _id?: string;
-  bankUserInfo?: SellerBankTradeLookupInfo[];
-};
-
 type SellerBankBalanceSummary = {
   bankName: string;
   accountHolder: string;
@@ -79,12 +69,8 @@ type SellerBankBalanceSummary = {
 type StoreContextResult = {
   store: StoreDetail | null;
   storeError?: string;
-  hasPrivilegedStoreRead?: boolean;
   storeReadMessage?: string;
-  sellersBalance: SellerBalanceItem[];
-  sellersBalanceError?: string;
   rate?: number;
-  rateError?: string;
 };
 
 const STORECODE_QUERY_KEY = "storecode";
@@ -92,11 +78,11 @@ const STORE_SETTINGS_MUTATION_SIGNING_PREFIX =
   "stable-georgia:store-settings-mutation:v1";
 const SET_BUY_ORDER_FOR_CLEARANCE_SIGNING_PREFIX =
   "stable-georgia:set-buy-order-for-clearance:v1";
-const BUYER_BANK_BALANCE_REFRESH_MS = 10_000;
+const BUYER_BANK_BALANCE_POLL_INTERVAL_MS = 60_000;
+const BUYER_BANK_BALANCE_FALLBACK_POLL_INTERVAL_MS = 15_000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const SUMMARY_VALUE_ANIMATION_MS = 700;
 const EMPTY_STORES: StoreListItem[] = [];
-const EMPTY_SELLER_BALANCES: SellerBalanceItem[] = [];
 const EMPTY_SELLER_BANK_BALANCES: SellerBankBalanceSummary[] = [];
 const BANK_OPTION_TONE_STYLES = {
   sky: {
@@ -280,27 +266,6 @@ const formatBankLabel = (bankInfo: BankInfo | null | undefined) => {
 
 const formatBankAccount = (bankInfo: BankInfo | null | undefined) => {
   return normalizeAccountNumber(bankInfo?.realAccountNumber || bankInfo?.accountNumber) || "-";
-};
-
-const getSellerBankBalanceSummary = (item: SellerBankTradeStat): SellerBankBalanceSummary => {
-  const bankInfo = Array.isArray(item.bankUserInfo) ? item.bankUserInfo[0] : null;
-  const bankName = normalizeText(bankInfo?.bankName);
-  const accountHolder = normalizeText(bankInfo?.accountHolder);
-  const accountNumber =
-    normalizeText(bankInfo?.defaultAccountNumber)
-    || normalizeText(bankInfo?.realAccountNumber)
-    || normalizeText(bankInfo?.accountNumber)
-    || normalizeText(item._id)
-    || "-";
-  const rawBalance = Number(bankInfo?.balance);
-  const balance = Number.isFinite(rawBalance) ? rawBalance : null;
-
-  return {
-    bankName: bankName || "은행명 없음",
-    accountHolder: accountHolder || "예금주 없음",
-    accountNumber,
-    balance,
-  };
 };
 
 const getStoreDisplayName = (store: StoreListItem | StoreDetail | null | undefined) => {
@@ -726,12 +691,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
       setStoreContext({
         store: result.store || null,
         storeError: normalizeText(result.storeError),
-        hasPrivilegedStoreRead: Boolean(result.hasPrivilegedStoreRead),
         storeReadMessage: normalizeText(result.storeReadMessage),
-        sellersBalance: Array.isArray(result.sellersBalance) ? result.sellersBalance : EMPTY_SELLER_BALANCES,
-        sellersBalanceError: normalizeText(result.sellersBalanceError),
         rate: Number(result.rate || 0),
-        rateError: normalizeText(result.rateError),
       });
       setRate(Number(result.rate || 0));
     } catch (error) {
@@ -771,26 +732,24 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     try {
       const signedBody = await createCenterStoreAdminSignedBody({
         account: activeAccount,
-        route: "/api/order/getAllBuyOrders",
+        route: "/api/order/getClearanceSellerBankBalanceSummary",
         storecode: "admin",
         requesterWalletAddress: activeAccount.address,
         body: {
           storecode: "",
-          limit: 1,
-          page: 1,
+          privateSale: false,
           fromDate: buyerBankBalanceDate,
           toDate: buyerBankBalanceDate,
         },
       });
 
-      const response = await fetch("/api/bff/admin/signed-order-action", {
+      const response = await fetch("/api/bff/admin/clearance-seller-bank-balance-summary", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         cache: "no-store",
         body: JSON.stringify({
-          route: "/api/order/getAllBuyOrders",
           signedBody,
         }),
       });
@@ -800,10 +759,17 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
         throw new Error(payload?.error || "구매자 통장 잔고를 불러오지 못했습니다.");
       }
 
-      const nextBalances = Array.isArray(payload?.result?.totalBySellerBankAccountNumber)
-        ? payload.result.totalBySellerBankAccountNumber.map((item: SellerBankTradeStat) =>
-            getSellerBankBalanceSummary(item),
-          )
+      const nextBalances = Array.isArray(payload?.result?.items)
+        ? payload.result.items.map((item: Record<string, unknown>) => ({
+            bankName: normalizeText(item.bankName) || "은행명 없음",
+            accountHolder: normalizeText(item.accountHolder) || "예금주 없음",
+            accountNumber:
+              normalizeText(item.accountNumber)
+              || normalizeText(item.realAccountNumber)
+              || normalizeText(item._id)
+              || "-",
+            balance: Number.isFinite(Number(item.balance)) ? Number(item.balance) : null,
+          }))
         : EMPTY_SELLER_BANK_BALANCES;
 
       if (requestId !== sellerBankBalancesRequestIdRef.current) {
@@ -838,10 +804,12 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
 
     const interval = setInterval(() => {
       void loadSellerBankBalances();
-    }, BUYER_BANK_BALANCE_REFRESH_MS);
+    }, isTodayBuyerBankBalanceDate
+      ? BUYER_BANK_BALANCE_POLL_INTERVAL_MS
+      : BUYER_BANK_BALANCE_FALLBACK_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [activeAccount, loadSellerBankBalances]);
+  }, [activeAccount, isTodayBuyerBankBalanceDate, loadSellerBankBalances]);
 
   const applyRealtimeSellerBankBalance = useCallback((event: BankTransferDashboardEvent) => {
     const normalizedAccountNumber = normalizeAccountNumber(event.bankAccountNumber);
@@ -1700,14 +1668,11 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   </article>
                 </div>
 
-                <ClearanceManagementConsoleClient
+                <ClearanceOrderEmbeddedStream
                   key={`${selectedStorecode}-${embeddedRefreshKey}`}
-                  lang={lang}
-                  embedded
-                  forcedStorecode={selectedStorecode}
-                  hideStoreFilter
-                  hideWithdrawalLiveSection
-                  ordersQueryMode="collectOrdersForSeller"
+                  activeAccount={activeAccount}
+                  storecode={selectedStorecode}
+                  refreshKey={embeddedRefreshKey}
                 />
               </>
             )}

@@ -70,20 +70,11 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const sellersBalanceResponse = await postRemoteJson("/api/user/getAllStoreSellersForBalance", {
-    storecode,
-    limit: 100,
-    page: 1,
-  });
-
   const rateResponse = await postRemoteJson("/api/client/getUsdtKRWRateSell", {});
 
   const storeError = storeResponse.ok
     ? ""
     : resolveRemoteError(storeResponse.json, "Failed to load clearance store");
-  const sellersBalanceError = sellersBalanceResponse.ok
-    ? ""
-    : resolveRemoteError(sellersBalanceResponse.json, "Failed to load seller balances");
   const rateError = rateResponse.ok
     ? ""
     : resolveRemoteError(rateResponse.json, "Failed to load clearance rate");
@@ -97,12 +88,6 @@ export async function POST(request: NextRequest) {
       storeError,
       hasPrivilegedStoreRead,
       storeReadMessage,
-      sellersBalance: sellersBalanceResponse.ok
-        ? (Array.isArray(sellersBalanceResponse.json?.result?.users)
-          ? sellersBalanceResponse.json.result.users
-          : [])
-        : [],
-      sellersBalanceError,
       rate: rateResponse.ok ? Number(rateResponse.json?.result || 0) : 0,
       rateError,
     },
