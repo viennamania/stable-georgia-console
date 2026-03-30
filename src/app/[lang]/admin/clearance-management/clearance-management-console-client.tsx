@@ -402,7 +402,7 @@ export default function ClearanceManagementConsoleClient({
   const loadOrdersDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const shouldWaitForSignedOrders = !canReadSignedData && isWalletRecovering;
+      const supportsPublicMaskedOrders = ordersQueryMode === "buyOrders";
       const loadSignature = createOrdersLoadSignature(
         {
           ...filters,
@@ -410,14 +410,6 @@ export default function ClearanceManagementConsoleClient({
         },
         activeAccount?.address,
       );
-
-      if (shouldWaitForSignedOrders) {
-        if (!silent) {
-          setOrdersLoading(true);
-        }
-        setOrdersRefreshing(false);
-        return;
-      }
 
       if (inflightOrdersLoadRef.current) {
         queuedSilentOrdersRefreshRef.current = true;
@@ -432,37 +424,29 @@ export default function ClearanceManagementConsoleClient({
       }
 
       try {
-        if (!canReadSignedData) {
-          if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
-            queuedSilentOrdersRefreshRef.current = true;
-            return;
-          }
-
-          setData((current) => ({
-            ...(current || EMPTY_CLEARANCE_DASHBOARD),
-            ordersError: "",
-          }));
-          setError("");
-          return;
-        }
-
-        const signingAccount = activeAccount;
-        if (!signingAccount) {
-          if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
-            queuedSilentOrdersRefreshRef.current = true;
-            return;
-          }
-
-          setData((current) => ({
-            ...(current || EMPTY_CLEARANCE_DASHBOARD),
-            ordersError: "주문 조회 지갑 정보를 확인하지 못했습니다.",
-          }));
-          setError("");
-          return;
-        }
-
         let signedOrdersBody: Record<string, unknown> | null = null;
-        let nextOrdersError = "";
+        const signingAccount = canReadSignedData ? activeAccount : null;
+
+        if (!signingAccount && !supportsPublicMaskedOrders) {
+          if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
+            queuedSilentOrdersRefreshRef.current = true;
+            return;
+          }
+
+          setData((current) => ({
+            ...(current || EMPTY_CLEARANCE_DASHBOARD),
+            ordersAccessLevel: "public",
+            ordersError: "",
+            orders: EMPTY_ORDERS,
+            totalCount: 0,
+            totalClearanceCount: 0,
+            totalClearanceAmount: 0,
+            totalClearanceAmountKRW: 0,
+          }));
+          setError("");
+          return;
+        }
+
         const ordersRoute = ordersQueryMode === "collectOrdersForSeller"
           ? "/api/order/getAllCollectOrdersForSeller"
           : "/api/order/getAdminClearanceOrders";
@@ -470,41 +454,27 @@ export default function ClearanceManagementConsoleClient({
           ? effectiveStorecode
           : "admin";
 
-        try {
-          signedOrdersBody = await createCenterStoreAdminSignedBody({
-            account: signingAccount,
-            route: ordersRoute,
-            storecode: signingStorecode,
-            requesterWalletAddress: signingAccount.address,
-            body: {
-              storecode: effectiveStorecode,
-              limit: filters.limit,
-              page: filters.page,
-              walletAddress: signingAccount.address,
-              searchMyOrders: filters.searchMyOrders,
-              privateSale: true,
-              fromDate: filters.fromDate,
-              toDate: filters.toDate,
-            },
-          });
-        } catch (signError) {
-          nextOrdersError = signError instanceof Error
-            ? signError.message
-            : "주문 조회 서명을 준비하지 못했습니다.";
-        }
-
-        if (!signedOrdersBody) {
-          if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
-            queuedSilentOrdersRefreshRef.current = true;
-            return;
+        if (signingAccount) {
+          try {
+            signedOrdersBody = await createCenterStoreAdminSignedBody({
+              account: signingAccount,
+              route: ordersRoute,
+              storecode: signingStorecode,
+              requesterWalletAddress: signingAccount.address,
+              body: {
+                storecode: effectiveStorecode,
+                limit: filters.limit,
+                page: filters.page,
+                walletAddress: signingAccount.address,
+                searchMyOrders: filters.searchMyOrders,
+                privateSale: true,
+                fromDate: filters.fromDate,
+                toDate: filters.toDate,
+              },
+            });
+          } catch {
+            signedOrdersBody = null;
           }
-
-          setData((current) => ({
-            ...(current || EMPTY_CLEARANCE_DASHBOARD),
-            ordersError: nextOrdersError,
-          }));
-          setError("");
-          return;
         }
 
         const response = await fetch("/api/bff/admin/clearance-orders", {
@@ -515,6 +485,13 @@ export default function ClearanceManagementConsoleClient({
           cache: "no-store",
           body: JSON.stringify({
             signedOrdersBody,
+            orderFilters: {
+              storecode: effectiveStorecode,
+              limit: filters.limit,
+              page: filters.page,
+              fromDate: filters.fromDate,
+              toDate: filters.toDate,
+            },
             ordersQueryMode,
           }),
         });
@@ -530,10 +507,11 @@ export default function ClearanceManagementConsoleClient({
         }
 
         const result = payload.result as ClearanceOrdersResult;
-        const mergedOrdersError = nextOrdersError || normalizeText(result?.ordersError);
+        const mergedOrdersError = normalizeText(result?.ordersError);
 
         setData((current) => ({
           ...(current || EMPTY_CLEARANCE_DASHBOARD),
+          ordersAccessLevel: normalizeText(result?.ordersAccessLevel) || "public",
           ordersError: mergedOrdersError,
           orders: Array.isArray(result?.orders) ? result.orders : EMPTY_ORDERS,
           totalCount: Number(result?.totalCount || 0),
@@ -558,7 +536,7 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [activeAccount, canReadSignedData, effectiveStorecode, filters, isWalletRecovering, ordersQueryMode],
+    [activeAccount, canReadSignedData, effectiveStorecode, filters, ordersQueryMode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
@@ -737,9 +715,10 @@ export default function ClearanceManagementConsoleClient({
 
   const stores = data?.stores || EMPTY_STORES;
   const storesError = normalizeText(data?.storesError);
-  const shouldRevealSignedOrderData = canReadSignedData || isWalletRecovering;
-  const ordersError = shouldRevealSignedOrderData ? normalizeText(data?.ordersError) : "";
-  const orders = shouldRevealSignedOrderData ? (data?.orders || EMPTY_ORDERS) : EMPTY_ORDERS;
+  const hasPrivilegedOrderAccess = normalizeText(data?.ordersAccessLevel) === "privileged";
+  const supportsPublicMaskedOrders = ordersQueryMode === "buyOrders";
+  const ordersError = normalizeText(data?.ordersError);
+  const orders = data?.orders || EMPTY_ORDERS;
   const selectedStoreSummary = useMemo(() => {
     if (!filters.storecode) {
       return null;
@@ -823,6 +802,11 @@ export default function ClearanceManagementConsoleClient({
         return;
       }
 
+      if (!hasPrivilegedOrderAccess) {
+        setError(`${accessActorLabel} 지갑을 연결하고 서명해야 청산 완료/취소를 처리할 수 있습니다.`);
+        return;
+      }
+
       const orderId = String(order._id || "").trim();
       if (!orderId) {
         setError("주문 식별 정보가 부족합니다.");
@@ -841,7 +825,7 @@ export default function ClearanceManagementConsoleClient({
         order,
       });
     },
-    [accessActorLabel, activeAccount, allowOrderActions],
+    [accessActorLabel, activeAccount, allowOrderActions, hasPrivilegedOrderAccess],
   );
 
   const closeActionModal = useCallback(() => {
@@ -998,10 +982,10 @@ export default function ClearanceManagementConsoleClient({
   ]);
 
   const currentOrderPage = Math.max(1, filters.page);
-  const totalOrderCount = shouldRevealSignedOrderData ? Number(data?.totalCount || 0) : 0;
-  const totalClearanceCount = shouldRevealSignedOrderData ? Number(data?.totalClearanceCount || 0) : 0;
-  const totalClearanceAmount = shouldRevealSignedOrderData ? Number(data?.totalClearanceAmount || 0) : 0;
-  const totalClearanceAmountKRW = shouldRevealSignedOrderData ? Number(data?.totalClearanceAmountKRW || 0) : 0;
+  const totalOrderCount = Number(data?.totalCount || 0);
+  const totalClearanceCount = Number(data?.totalClearanceCount || 0);
+  const totalClearanceAmount = Number(data?.totalClearanceAmount || 0);
+  const totalClearanceAmountKRW = Number(data?.totalClearanceAmountKRW || 0);
   const totalOrderPages = Math.max(1, Math.ceil(totalOrderCount / Math.max(1, filters.limit)));
   const currentOrderRangeStart = totalOrderCount === 0 ? 0 : (currentOrderPage - 1) * filters.limit + 1;
   const currentOrderRangeEnd = totalOrderCount === 0 ? 0 : Math.min(totalOrderCount, currentOrderPage * filters.limit);
@@ -1321,12 +1305,18 @@ export default function ClearanceManagementConsoleClient({
           ordersLoading={ordersLoading}
           ordersRefreshing={ordersRefreshing}
           isWalletRecovering={isWalletRecovering}
-          canReadSignedData={canReadSignedData}
+          hasPrivilegedOrderAccess={hasPrivilegedOrderAccess}
           disconnectedMessage={disconnectedMessage}
+          showMaskedNotice={
+            supportsPublicMaskedOrders
+            && Boolean(data?.fetchedAt)
+            && !hasPrivilegedOrderAccess
+            && !ordersError
+          }
           processingOrderId={processingOrderId}
           actionModalSubmitting={actionModalSubmitting}
           actionModalMode={actionModalState?.mode || null}
-          allowOrderActions={allowOrderActions}
+          allowOrderActions={allowOrderActions && hasPrivilegedOrderAccess}
           copiedTradeId={copiedTradeId}
           totalOrderCount={totalOrderCount}
           currentOrderRangeStart={currentOrderRangeStart}

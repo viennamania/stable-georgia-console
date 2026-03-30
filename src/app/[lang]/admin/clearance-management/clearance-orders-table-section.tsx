@@ -32,8 +32,9 @@ type ClearanceOrdersTableSectionProps = {
   ordersLoading: boolean;
   ordersRefreshing: boolean;
   isWalletRecovering: boolean;
-  canReadSignedData: boolean;
+  hasPrivilegedOrderAccess: boolean;
   disconnectedMessage: string;
+  showMaskedNotice: boolean;
   processingOrderId: string;
   actionModalSubmitting: boolean;
   actionModalMode?: ClearanceActionMode | null;
@@ -60,8 +61,9 @@ export default function ClearanceOrdersTableSection({
   ordersLoading,
   ordersRefreshing,
   isWalletRecovering,
-  canReadSignedData,
+  hasPrivilegedOrderAccess,
   disconnectedMessage,
+  showMaskedNotice,
   processingOrderId,
   actionModalSubmitting,
   actionModalMode,
@@ -113,6 +115,15 @@ export default function ClearanceOrdersTableSection({
         </div>
       ) : null}
 
+      {showMaskedNotice ? (
+        <div className="px-6 pt-3">
+          <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-4 text-sm leading-7 text-slate-600">
+            현재 주문 목록은 공개 마스킹 뷰입니다. 구매자/판매자 이름, 지갑주소, 계좌정보는 일부 마스킹되며
+            청산 완료/취소 처리 기능은 숨겨집니다. {disconnectedMessage}
+          </div>
+        </div>
+      ) : null}
+
       <div className="px-2 pb-2">
         <table className="w-full table-fixed border-separate border-spacing-0">
           <thead>
@@ -132,7 +143,7 @@ export default function ClearanceOrdersTableSection({
                 <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
                   {isWalletRecovering
                     ? "Loading clearance orders..."
-                    : !canReadSignedData
+                    : !hasPrivilegedOrderAccess && !showMaskedNotice
                     ? disconnectedMessage
                     : ordersLoading
                       ? "Loading clearance orders..."

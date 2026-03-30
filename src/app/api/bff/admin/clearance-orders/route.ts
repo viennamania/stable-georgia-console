@@ -20,6 +20,19 @@ const asPlainObject = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
+const parsePositiveInt = (value: unknown, fallback: number) => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
 const resolveRemoteError = (payload: any, fallback: string) => {
   return normalizeString(payload?.error)
     || normalizeString(payload?.message)
@@ -37,17 +50,26 @@ export async function POST(request: NextRequest) {
   }
 
   const signedOrdersBody = asPlainObject(body.signedOrdersBody);
+  const orderFilters = asPlainObject(body.orderFilters);
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
   const ordersQueryMode: OrdersQueryMode =
     normalizeString(body.ordersQueryMode) === "collectOrdersForSeller"
       ? "collectOrdersForSeller"
       : "buyOrders";
+  const unsignedOrdersBody = {
+    storecode: normalizeString(orderFilters.storecode),
+    limit: Math.min(parsePositiveInt(orderFilters.limit, 30), 200),
+    page: Math.max(parsePositiveInt(orderFilters.page, 1), 1),
+    fromDate: normalizeString(orderFilters.fromDate),
+    toDate: normalizeString(orderFilters.toDate),
+  };
 
-  if (!hasSignedOrdersBody) {
+  if (!hasSignedOrdersBody && ordersQueryMode === "collectOrdersForSeller") {
     return NextResponse.json({
       result: {
         remoteBackendBaseUrl: getRemoteBackendBaseUrl(),
         ordersError: "",
+        ordersAccessLevel: "public",
         orders: [],
         totalCount: 0,
         totalClearanceCount: 0,
@@ -60,7 +82,10 @@ export async function POST(request: NextRequest) {
   const remoteOrdersRoute = ordersQueryMode === "collectOrdersForSeller"
     ? "/api/order/getAllCollectOrdersForSeller"
     : "/api/order/getAdminClearanceOrders";
-  const signedOrdersResponse = await postRemoteJson(remoteOrdersRoute, signedOrdersBody);
+  const signedOrdersResponse = await postRemoteJson(
+    remoteOrdersRoute,
+    hasSignedOrdersBody ? signedOrdersBody : unsignedOrdersBody,
+  );
   const ordersError = signedOrdersResponse.ok
     ? ""
     : resolveRemoteError(signedOrdersResponse.json, "Failed to load clearance orders");
@@ -98,6 +123,9 @@ export async function POST(request: NextRequest) {
     result: {
       remoteBackendBaseUrl: getRemoteBackendBaseUrl(),
       ordersError,
+      ordersAccessLevel: String(
+        signedOrdersResult?.view || (hasSignedOrdersBody ? "privileged" : "public"),
+      ),
       orders: signedOrdersResult.orders || [],
       ...mappedSummary,
     },

@@ -292,8 +292,9 @@ export default function ClearanceOrderEmbeddedStream({
         ordersLoading={ordersLoading}
         ordersRefreshing={ordersRefreshing}
         isWalletRecovering={false}
-        canReadSignedData={canReadSignedData}
+        hasPrivilegedOrderAccess={canReadSignedData}
         disconnectedMessage={disconnectedMessage}
+        showMaskedNotice={false}
         processingOrderId=""
         actionModalSubmitting={false}
         actionModalMode={null}

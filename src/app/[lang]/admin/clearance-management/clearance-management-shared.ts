@@ -87,6 +87,7 @@ export type ClearanceBaseResult = {
 };
 
 export type ClearanceOrdersResult = {
+  ordersAccessLevel?: string;
   ordersError?: string;
   orders: ClearanceOrder[];
   totalCount: number;
@@ -147,6 +148,7 @@ export const EMPTY_CLEARANCE_DASHBOARD: ClearanceDashboardResult = {
   selectedStore: null,
   withdrawalEvents: EMPTY_WITHDRAWALS,
   withdrawalNextCursor: null,
+  ordersAccessLevel: "public",
   ordersError: "",
   orders: EMPTY_ORDERS,
   totalCount: 0,
