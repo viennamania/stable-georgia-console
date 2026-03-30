@@ -129,10 +129,10 @@ export default function ClearanceOrdersTableSection({
         <table className="w-full table-fixed border-separate border-spacing-0">
           <thead>
             <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-              <th className="w-[21%] border-b border-slate-200 px-3 py-2.5">Trade</th>
+              <th className="w-[18%] border-b border-slate-200 px-3 py-2.5">Trade</th>
               <th className="w-[10%] border-b border-slate-200 px-3 py-2.5">상태</th>
               <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">구매자 / 출금계좌</th>
-              <th className="w-[16%] border-b border-slate-200 px-3 py-2.5">판매자 / 입금계좌</th>
+              <th className="w-[19%] border-b border-slate-200 px-3 py-2.5">판매자 / 입금계좌</th>
               <th className="w-[12%] border-b border-slate-200 px-3 py-2.5 text-right">Amount</th>
               <th className="w-[14%] border-b border-slate-200 px-3 py-2.5">출금상태</th>
               <th className="w-[12%] border-b border-slate-200 px-3 py-2.5">USDT 전송</th>
@@ -184,19 +184,12 @@ export default function ClearanceOrdersTableSection({
                           className="h-9 w-9 shrink-0 rounded-2xl border border-slate-200 bg-white object-cover"
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-start justify-between gap-3">
-                            <div className="w-[9rem] shrink-0">
-                              <div className="truncate font-semibold text-slate-950">
-                                {getStoreDisplayName(order.store) || order.storecode || "-"}
-                              </div>
-                              <div className="mt-0.5 truncate text-[11px] text-slate-500">
-                                {order.storecode || "-"}
-                              </div>
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-slate-950">
+                              {getStoreDisplayName(order.store) || order.storecode || "-"}
                             </div>
-                            <div className="min-w-[6rem] shrink-0 text-right">
-                              <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${creationMeta.className}`}>
-                                {creationMeta.label}
-                              </span>
+                            <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                              {order.storecode || "-"}
                             </div>
                           </div>
                           <div className="mt-2 break-all font-semibold text-slate-900">
@@ -222,8 +215,13 @@ export default function ClearanceOrdersTableSection({
                               "-"
                             )}
                           </div>
-                          <div className="mt-1 break-words text-[11px] text-slate-500">
-                            {createdAtLabel === "-" ? "-" : `${createdAtLabel} · ${createdTimeAgoLabel}`}
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                            <span className="break-words">
+                              {createdAtLabel === "-" ? "-" : `${createdAtLabel} · ${createdTimeAgoLabel}`}
+                            </span>
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${creationMeta.className}`}>
+                              {creationMeta.label}
+                            </span>
                           </div>
                         </div>
                       </div>
