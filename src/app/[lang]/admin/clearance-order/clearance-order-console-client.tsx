@@ -10,6 +10,10 @@ import { createWallet, inAppWallet } from "thirdweb/wallets";
 import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 import {
+  STORE_ROUTE_TOGGLE_LIVE,
+  STORE_SETTINGS_MUTATION_SIGNING_PREFIX,
+} from "@/lib/security/store-settings-admin";
+import {
   BANKTRANSFER_ABLY_CHANNEL,
   BANKTRANSFER_ABLY_EVENT_NAME,
   type BankTransferDashboardEvent,
@@ -40,6 +44,8 @@ type StoreListItem = {
   storeName?: string;
   companyName?: string;
   storeLogo?: string;
+  viewOnAndOff?: boolean;
+  liveOnAndOff?: boolean;
   favoriteOnAndOff?: boolean;
   clearanceSortOrder?: number;
 };
@@ -75,8 +81,6 @@ type StoreContextResult = {
 };
 
 const STORECODE_QUERY_KEY = "storecode";
-const STORE_SETTINGS_MUTATION_SIGNING_PREFIX =
-  "stable-georgia:store-settings-mutation:v1";
 const SET_BUY_ORDER_FOR_CLEARANCE_SIGNING_PREFIX =
   "stable-georgia:set-buy-order-for-clearance:v1";
 const BUYER_BANK_BALANCE_POLL_INTERVAL_MS = 60_000;
@@ -517,6 +521,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedStorecode, setSelectedStorecode] = useState("");
   const [updatingOrderStorecode, setUpdatingOrderStorecode] = useState("");
+  const [pendingLiveStorecode, setPendingLiveStorecode] = useState("");
+  const [isStoreStripExpanded, setIsStoreStripExpanded] = useState(true);
   const [orderSaveError, setOrderSaveError] = useState("");
   const [storeContext, setStoreContext] = useState<StoreContextResult | null>(null);
   const [storeContextLoading, setStoreContextLoading] = useState(false);
@@ -961,6 +967,75 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     }
   }, [activeAccount, searchKeyword, stores, updatingOrderStorecode]);
 
+  const patchStoreLiveState = useCallback((storecode: string, liveOnAndOff: boolean) => {
+    const normalizedStorecode = normalizeText(storecode);
+    setStores((current) => current.map((store) => {
+      if (normalizeText(store.storecode) !== normalizedStorecode) {
+        return store;
+      }
+
+      return {
+        ...store,
+        liveOnAndOff,
+      };
+    }));
+  }, []);
+
+  const toggleStoreLive = useCallback(async (store: StoreListItem) => {
+    if (!activeAccount) {
+      setOrderSaveError("관리자 지갑을 연결해야 운영상태를 변경할 수 있습니다.");
+      return;
+    }
+
+    const storecode = normalizeText(store.storecode);
+    if (!storecode) {
+      setOrderSaveError("가맹점 코드가 없어 운영상태를 변경할 수 없습니다.");
+      return;
+    }
+
+    const nextValue = store.liveOnAndOff === false;
+    setOrderSaveError("");
+    setPendingLiveStorecode(storecode);
+
+    try {
+      const signedBody = await createAdminSignedBody({
+        account: activeAccount,
+        route: STORE_ROUTE_TOGGLE_LIVE,
+        signingPrefix: STORE_SETTINGS_MUTATION_SIGNING_PREFIX,
+        requesterStorecode: "admin",
+        requesterWalletAddress: activeAccount.address,
+        actionFields: {
+          storecode,
+          liveOnAndOff: nextValue,
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/signed-store-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route: STORE_ROUTE_TOGGLE_LIVE,
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "가맹점 운영상태 변경에 실패했습니다.");
+      }
+
+      patchStoreLiveState(storecode, nextValue);
+    } catch (error) {
+      setOrderSaveError(
+        error instanceof Error ? error.message : "가맹점 운영상태 변경에 실패했습니다.",
+      );
+    } finally {
+      setPendingLiveStorecode("");
+    }
+  }, [activeAccount, patchStoreLiveState]);
+
   const selectedStore = storeContext?.store || null;
   const hasPrivilegedStoreRead = storeContext?.hasPrivilegedStoreRead === true;
   const storeSensitiveReadMessage = normalizeText(storeContext?.storeReadMessage)
@@ -1043,6 +1118,21 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     });
     return map;
   }, [stores]);
+
+  const selectedStoreListItem = useMemo(
+    () => stores.find((store) => normalizeText(store.storecode) === selectedStorecode) || null,
+    [selectedStorecode, stores],
+  );
+
+  const visibleStoreCount = useMemo(
+    () => stores.filter((store) => store.viewOnAndOff !== false).length,
+    [stores],
+  );
+
+  const liveStoreCount = useMemo(
+    () => stores.filter((store) => store.liveOnAndOff !== false).length,
+    [stores],
+  );
 
   const buildClearanceOrderBody = useCallback(() => {
     const normalizedWalletAddress = normalizeWalletAddress(clearanceWalletAddress);
@@ -1234,147 +1324,264 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
           </div>
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
-          <aside className="console-panel rounded-[30px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.98),rgba(240,247,255,0.94))] p-4 lg:h-fit lg:self-start lg:sticky lg:top-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                  Stores
+        <div className="space-y-5">
+          <aside className="console-panel sticky top-3 z-20 overflow-hidden rounded-[30px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.98),rgba(240,247,255,0.94))] shadow-[0_24px_60px_-42px_rgba(14,165,233,0.45)] backdrop-blur sm:top-4">
+            <div className="border-b border-sky-100/80 px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                    Stores
+                  </div>
+                  <h2 className="console-display text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                    가맹점 목록 / 노출상태
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600">
+                      전체 {NUMBER_FORMATTER.format(stores.length)}개
+                    </span>
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                      노출중 {NUMBER_FORMATTER.format(visibleStoreCount)}개
+                    </span>
+                    <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-sky-700">
+                      운영중 {NUMBER_FORMATTER.format(liveStoreCount)}개
+                    </span>
+                  </div>
                 </div>
-                <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
-                  가맹점 선택
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  void fetchStores();
-                }}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-              >
-                새로고침
-              </button>
-            </div>
 
-            <div className="mt-4">
-              <input
-                value={searchKeyword}
-                onChange={(event) => setSearchKeyword(event.target.value)}
-                placeholder="storecode / 가맹점명 검색"
-                className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-              />
-            </div>
-
-            {searchKeyword.trim() ? (
-              <div className="mt-3 text-xs text-amber-600">
-                검색 중에는 순서 변경이 비활성화됩니다.
-              </div>
-            ) : null}
-
-            {orderSaveError ? (
-              <div className="mt-3 rounded-[18px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                {orderSaveError}
-              </div>
-            ) : null}
-
-            <div className="mt-4 max-h-[66vh] space-y-2 overflow-y-auto pr-1">
-              {storesLoading ? (
-                <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                  가맹점 목록을 불러오는 중입니다...
-                </div>
-              ) : null}
-
-              {!storesLoading && storesError ? (
-                <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-5 text-sm text-rose-700">
-                  {storesError}
-                </div>
-              ) : null}
-
-              {!storesLoading && !storesError && filteredStores.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                  검색 결과가 없습니다.
-                </div>
-              ) : null}
-
-              {filteredStores.map((store) => {
-                const storecode = normalizeText(store.storecode);
-                const selected = storecode === selectedStorecode;
-                const storeLabel = getStoreDisplayName(store);
-                const storeIndex = storePositionMap.get(storecode) ?? -1;
-                const canMoveUp =
-                  !searchKeyword.trim() && storeIndex > 0 && !updatingOrderStorecode;
-                const canMoveDown =
-                  !searchKeyword.trim()
-                  && storeIndex >= 0
-                  && storeIndex < stores.length - 1
-                  && !updatingOrderStorecode;
-                return (
-                  <div
-                    key={storecode}
-                    className={`flex items-center gap-2 rounded-[22px] border px-3 py-3 transition ${
-                      selected
-                        ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
-                        : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStorecode(storecode)}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                    >
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {selectedStoreListItem ? (
+                    <div className="hidden min-w-[240px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/85 px-3 py-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] lg:flex">
                       <StoreLogo
-                        src={getStoreLogoSrc(store)}
-                        alt={storeLabel}
-                        className={`h-12 w-12 shrink-0 rounded-2xl border ${
-                          selected ? "border-white/15 bg-white/10" : "border-sky-100 bg-sky-50/70"
-                        }`}
+                        src={getStoreLogoSrc(selectedStoreListItem)}
+                        alt={getStoreDisplayName(selectedStoreListItem)}
+                        className="h-11 w-11 shrink-0 rounded-2xl border border-sky-100 bg-sky-50/70"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold">{storeLabel}</div>
-                        <div className={`mt-1 truncate text-[11px] ${selected ? "text-slate-300" : "text-slate-500"}`}>
-                          {storecode}
+                        <div className="truncate text-sm font-semibold text-slate-950">
+                          {getStoreDisplayName(selectedStoreListItem)}
+                        </div>
+                        <div className="mt-1 truncate text-[11px] text-slate-500">
+                          {normalizeText(selectedStoreListItem.storecode) || "-"}
                         </div>
                       </div>
-                    </button>
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                        selectedStoreListItem.liveOnAndOff === false
+                          ? "border-slate-200 bg-slate-50 text-slate-600"
+                          : "border-sky-200 bg-sky-50 text-sky-700"
+                      }`}>
+                        {selectedStoreListItem.liveOnAndOff === false ? "중지됨" : "운영중"}
+                      </span>
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setIsStoreStripExpanded((prev) => !prev)}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                  >
+                    {isStoreStripExpanded ? "목록 접기" : "목록 펼치기"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void fetchStores();
+                    }}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                  >
+                    새로고침
+                  </button>
+                </div>
+              </div>
 
-                    <div className="flex shrink-0 flex-col gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void moveStoreOrder(storecode, -1);
-                        }}
-                        disabled={!canMoveUp}
-                        className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-semibold transition ${
-                          selected
-                            ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                            : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
-                        } ${canMoveUp ? "cursor-pointer" : "cursor-not-allowed opacity-40"}`}
-                        aria-label={`${storeLabel} 위로 이동`}
-                        title="위로 이동"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void moveStoreOrder(storecode, 1);
-                        }}
-                        disabled={!canMoveDown}
-                        className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-semibold transition ${
-                          selected
-                            ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                            : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
-                        } ${canMoveDown ? "cursor-pointer" : "cursor-not-allowed opacity-40"}`}
-                        aria-label={`${storeLabel} 아래로 이동`}
-                        title="아래로 이동"
-                      >
-                        ↓
-                      </button>
+              {selectedStoreListItem ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 lg:hidden">
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-700">
+                    선택된 가맹점 {getStoreDisplayName(selectedStoreListItem)}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">
+                    {normalizeText(selectedStoreListItem.storecode) || "-"}
+                  </span>
+                </div>
+              ) : null}
+
+              {isStoreStripExpanded ? (
+                <>
+                  <div className="mt-4">
+                    <input
+                      value={searchKeyword}
+                      onChange={(event) => setSearchKeyword(event.target.value)}
+                      placeholder="storecode / 가맹점명 검색"
+                      className="h-12 w-full rounded-[20px] border border-slate-200 bg-white px-4 text-[15px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                    />
+                  </div>
+
+                  {searchKeyword.trim() ? (
+                    <div className="mt-3 text-xs text-amber-600">
+                      검색 중에는 순서 변경이 비활성화됩니다.
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {orderSaveError ? (
+                <div className="mt-3 rounded-[18px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  {orderSaveError}
+                </div>
+              ) : null}
+            </div>
+
+            {isStoreStripExpanded ? (
+              <div className="px-4 py-4">
+                {storesLoading ? (
+                  <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                    가맹점 목록을 불러오는 중입니다...
+                  </div>
+                ) : null}
+
+                {!storesLoading && storesError ? (
+                  <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-5 text-sm text-rose-700">
+                    {storesError}
+                  </div>
+                ) : null}
+
+                {!storesLoading && !storesError && filteredStores.length === 0 ? (
+                  <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                    검색 결과가 없습니다.
+                  </div>
+                ) : null}
+
+                {!storesLoading && !storesError && filteredStores.length > 0 ? (
+                  <div className="overflow-x-auto overscroll-x-contain">
+                    <div className="flex min-w-full gap-3 pb-1">
+                      {filteredStores.map((store) => {
+                        const storecode = normalizeText(store.storecode);
+                        const selected = storecode === selectedStorecode;
+                        const storeLabel = getStoreDisplayName(store);
+                        const storeIndex = storePositionMap.get(storecode) ?? -1;
+                        const canMoveLeft =
+                          !searchKeyword.trim() && storeIndex > 0 && !updatingOrderStorecode;
+                        const canMoveRight =
+                          !searchKeyword.trim()
+                          && storeIndex >= 0
+                          && storeIndex < stores.length - 1
+                          && !updatingOrderStorecode;
+
+                        return (
+                          <article
+                            key={storecode}
+                            className={`w-[280px] shrink-0 rounded-[24px] border p-4 transition ${
+                              selected
+                                ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
+                                : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setSelectedStorecode(storecode)}
+                              className="flex w-full items-start gap-3 text-left"
+                            >
+                              <StoreLogo
+                                src={getStoreLogoSrc(store)}
+                                alt={storeLabel}
+                                className={`h-12 w-12 shrink-0 rounded-2xl border ${
+                                  selected ? "border-white/15 bg-white/10" : "border-sky-100 bg-sky-50/70"
+                                }`}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-semibold">{storeLabel}</div>
+                                <div className={`mt-1 truncate text-[11px] ${selected ? "text-slate-300" : "text-slate-500"}`}>
+                                  {storecode}
+                                </div>
+                              </div>
+                            </button>
+
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                                store.viewOnAndOff === false
+                                  ? selected
+                                    ? "border-rose-200/40 bg-rose-400/10 text-rose-100"
+                                    : "border-rose-200 bg-rose-50 text-rose-700"
+                                  : selected
+                                    ? "border-emerald-200/40 bg-emerald-400/10 text-emerald-100"
+                                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              }`}>
+                                {store.viewOnAndOff === false ? "비노출" : "노출중"}
+                              </span>
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                                store.liveOnAndOff === false
+                                  ? selected
+                                    ? "border-slate-300/30 bg-slate-200/10 text-slate-200"
+                                    : "border-slate-200 bg-slate-50 text-slate-600"
+                                  : selected
+                                    ? "border-sky-200/40 bg-sky-400/10 text-sky-100"
+                                    : "border-sky-200 bg-sky-50 text-sky-700"
+                              }`}>
+                                {store.liveOnAndOff === false ? "중지됨" : "운영중"}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 flex items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void toggleStoreLive(store);
+                                }}
+                                disabled={!activeAccount || pendingLiveStorecode === storecode}
+                                className={`inline-flex h-9 items-center justify-center rounded-full px-3 text-[11px] font-semibold transition ${
+                                  store.liveOnAndOff === false
+                                    ? "border border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
+                                    : "border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100"
+                                } disabled:cursor-not-allowed disabled:opacity-50`}
+                              >
+                                {pendingLiveStorecode === storecode
+                                  ? "처리중..."
+                                  : store.liveOnAndOff === false
+                                    ? "운영 시작"
+                                    : "중지하기"}
+                              </button>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void moveStoreOrder(storecode, -1);
+                                  }}
+                                  disabled={!canMoveLeft}
+                                  className={`flex h-8 w-8 items-center justify-center rounded-lg border text-[11px] font-semibold transition ${
+                                    selected
+                                      ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+                                  } ${canMoveLeft ? "cursor-pointer" : "cursor-not-allowed opacity-40"}`}
+                                  aria-label={`${storeLabel} 왼쪽으로 이동`}
+                                  title="왼쪽으로 이동"
+                                >
+                                  ←
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void moveStoreOrder(storecode, 1);
+                                  }}
+                                  disabled={!canMoveRight}
+                                  className={`flex h-8 w-8 items-center justify-center rounded-lg border text-[11px] font-semibold transition ${
+                                    selected
+                                      ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+                                  } ${canMoveRight ? "cursor-pointer" : "cursor-not-allowed opacity-40"}`}
+                                  aria-label={`${storeLabel} 오른쪽으로 이동`}
+                                  title="오른쪽으로 이동"
+                                >
+                                  →
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                ) : null}
+              </div>
+            ) : null}
           </aside>
 
           <section className="flex min-h-[72vh] min-w-0 flex-col gap-5">
@@ -1460,7 +1667,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   가맹점을 선택하세요
                 </div>
                 <div className="mt-3 max-w-xl text-sm leading-7 text-slate-500">
-                  좌측 목록에서 가맹점을 선택하면 해당 가맹점 기준 청산주문 생성, 출금 live,
+                  상단 목록에서 가맹점을 선택하면 해당 가맹점 기준 청산주문 생성, 출금 live,
                   `Clearance stream`을 표시합니다.
                 </div>
               </div>
