@@ -11,6 +11,7 @@ import {
   getBscscanTxUrl,
   getBuyerBankSummary,
   getBuyerDisplayName,
+  getCancelledByLabel,
   getClearanceOrderCreatorLabel,
   getDepositCompletedActorLabel,
   getSellerBankSummary,
@@ -168,7 +169,8 @@ export default function ClearanceOrdersTableSection({
                 const transactionHash = String(order.transactionHash || "").trim();
                 const depositCompletedActorLabel = getDepositCompletedActorLabel(order.buyer);
                 const isWithdrawalCompleted = order.buyer?.depositCompleted === true;
-                const isCancelled = String(order.status || "").trim() === "cancelled";
+                const isCancelled = ["cancelled", "canceled"].includes(String(order.status || "").trim().toLowerCase());
+                const cancelledByLabel = isCancelled ? getCancelledByLabel(order) : "";
                 const isProcessingThisOrder = processingOrderId === orderId;
                 const isCopiedTradeId = Boolean(tradeId && copiedTradeId === tradeId);
 
@@ -288,8 +290,11 @@ export default function ClearanceOrdersTableSection({
                             ) : null}
                           </div>
                         ) : isCancelled ? (
-                          <div className="break-words text-[11px] text-slate-500">
-                            취소된 주문으로 출금이 완료되지 않았습니다.
+                          <div className="space-y-0.5 break-words text-[11px] text-slate-500">
+                            <div>취소자 {cancelledByLabel || "-"}</div>
+                            {order.cancelledAt ? (
+                              <div>{formatAdminActionDateTime(order.cancelledAt)}</div>
+                            ) : null}
                           </div>
                         ) : (
                           <div className="flex w-full flex-col gap-1.5">

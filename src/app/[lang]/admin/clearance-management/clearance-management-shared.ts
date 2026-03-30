@@ -48,6 +48,10 @@ export type ClearanceOrder = {
   paymentRequestedAt?: string;
   paymentConfirmedAt?: string;
   cancelledAt?: string;
+  cancelledBy?: ClearanceActor | null;
+  cancelledByAdmin?: ClearanceActor | null;
+  cancelledByName?: string | null;
+  cancelledByWalletAddress?: string | null;
   paymentAmount?: number;
   autoConfirmPayment?: boolean | null;
   usdtAmount?: number;
@@ -689,6 +693,21 @@ export const getClearanceOrderCreatorMetaLabel = (order: ClearanceOrder) => {
 export const getDepositCompletedActorLabel = (buyer?: ClearanceOrder["buyer"] | null) => {
   const actor = buyer?.depositCompletedBy;
   return actor?.nickname || shortAddress(actor?.walletAddress);
+};
+
+export const getCancelledByLabel = (order: ClearanceOrder) => {
+  const actor = order?.cancelledByAdmin || order?.cancelledBy;
+  const nickname = normalizeText(actor?.nickname) || normalizeText(order?.cancelledByName);
+  if (nickname) {
+    return nickname;
+  }
+
+  const walletAddress = normalizeText(actor?.walletAddress) || normalizeText(order?.cancelledByWalletAddress);
+  if (walletAddress) {
+    return shortAddress(walletAddress);
+  }
+
+  return "";
 };
 
 const isSystemDepositCompletedActor = (buyer?: ClearanceOrder["buyer"] | null) => {
