@@ -1,6 +1,7 @@
 "use client";
 
 import * as Ably from "ably";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
@@ -3193,6 +3194,9 @@ export default function BuyorderConsoleClient({
     : `Rows ${NUMBER_FORMATTER.format(currentOrderRangeStart)}-${NUMBER_FORMATTER.format(currentOrderRangeEnd)} / ${NUMBER_FORMATTER.format(totalOrderCount)}`;
   const showUnmatchedLoadingOverlay = loading && unmatchedTransfers.length > 0;
   const showOrdersLoadingOverlay = loading && orders.length > 0;
+  const tradeHistoryHref = normalizeString(draftFilters.storecode)
+    ? `/${lang}/admin/buyorder/trade-history?storecode=${encodeURIComponent(normalizeString(draftFilters.storecode))}`
+    : `/${lang}/admin/buyorder/trade-history`;
   const visibleOrderPages = useMemo(() => {
     const start = Math.max(1, currentOrderPage - 2);
     const end = Math.min(totalOrderPages, start + 4);
@@ -3261,6 +3265,15 @@ export default function BuyorderConsoleClient({
                     <p className="max-w-3xl text-sm leading-7 text-slate-300">
                       {heroDescription}
                     </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Link
+                      href={tradeHistoryHref}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/15"
+                    >
+                      P2P 거래내역 보기
+                    </Link>
                   </div>
 
                   <div className="max-w-xl">
