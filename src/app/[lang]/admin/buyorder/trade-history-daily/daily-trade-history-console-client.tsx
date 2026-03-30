@@ -688,7 +688,7 @@ export default function DailyTradeHistoryConsoleClient({
               <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
                 {item.label}
               </div>
-              <div className="console-display mt-3 text-right text-[1.5rem] font-semibold leading-[1.12] tracking-[-0.05em] text-slate-950 sm:text-[1.65rem]">
+              <div className="console-display mt-3 text-right text-[1.32rem] font-semibold leading-[1.1] tracking-[-0.045em] text-slate-950 sm:text-[1.46rem]">
                 {item.value}
               </div>
             </div>
