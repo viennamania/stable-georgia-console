@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 
@@ -9,87 +8,48 @@ import BuyorderSubnav from "@/components/admin/buyorder-subnav";
 import AdminWalletCard from "@/components/admin/admin-wallet-card";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 
-type BankInfo = {
-  bankName?: string;
-  accountHolder?: string;
-  accountNumber?: string;
-  realAccountNumber?: string;
+type DailyHistoryRow = {
+  date?: string;
+  totalCount?: number;
+  totalUsdtAmount?: number;
+  totalKrwAmount?: number;
+  totalSettlementCount?: number;
+  totalSettlementAmount?: number;
+  totalSettlementAmountKRW?: number;
+  totalAgentFeeAmount?: number;
+  totalAgentFeeAmountKRW?: number;
+  totalFeeAmount?: number;
+  totalFeeAmountKRW?: number;
+  totalClearanceCount?: number;
+  totalClearanceUsdtAmount?: number;
+  totalClearanceKrwAmount?: number;
 };
 
-type SettlementInfo = {
-  status?: string;
-  settlementAmount?: number | string;
-  settlementAmountKRW?: number | string;
-  feeAmount?: number | string;
-  feeAmountKRW?: number | string;
-  agentFeeAmount?: number | string;
-  agentFeeAmountKRW?: number | string;
-};
-
-type OrderActionActor = {
-  walletAddress?: string | null;
-  nickname?: string | null;
-  storecode?: string | null;
-  role?: string | null;
-  confirmedAt?: string | null;
-};
-
-type TradeOrder = {
-  _id?: string;
-  tradeId?: string;
-  storecode?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  paymentConfirmedAt?: string;
-  status?: string;
-  userType?: string;
-  rate?: number;
-  krwAmount?: number;
-  usdtAmount?: number;
-  nickname?: string;
-  walletAddress?: string;
-  paymentConfirmedBy?: OrderActionActor | null;
-  paymentConfirmedByName?: string;
-  paymentConfirmedByWalletAddress?: string;
-  buyer?: {
-    nickname?: string;
-    walletAddress?: string;
-    depositName?: string;
-    depositBankAccountNumber?: string;
-    bankInfo?: BankInfo;
-  } | null;
-  seller?: {
-    nickname?: string;
-    walletAddress?: string;
-    signerAddress?: string;
-    bankInfo?: BankInfo;
-  } | null;
-  store?: {
-    storecode?: string;
-    storeName?: string;
-    companyName?: string;
-    storeLogo?: string;
-    bankInfo?: BankInfo;
-  } | null;
-  settlement?: SettlementInfo | null;
-};
-
-type TradeHistoryResult = {
+type DailyTradeHistoryResult = {
   fetchedAt: string;
   remoteBackendBaseUrl: string;
-  ordersAccessLevel: string;
-  ordersError: string;
-  orders: TradeOrder[];
+  statsAccessLevel: string;
+  statsError: string;
+  rows: DailyHistoryRow[];
   totalCount: number;
-  totalKrwAmount: number;
-  totalUsdtAmount: number;
+  totalPages: number;
+  page: number;
+  limit: number;
+  totalTradeCount: number;
+  totalTradeUsdtAmount: number;
+  totalTradeKrwAmount: number;
   totalSettlementCount: number;
   totalSettlementAmount: number;
   totalSettlementAmountKRW: number;
-  totalFeeAmount: number;
-  totalFeeAmountKRW: number;
   totalAgentFeeAmount: number;
   totalAgentFeeAmountKRW: number;
+  totalFeeAmount: number;
+  totalFeeAmountKRW: number;
+  totalClearanceCount: number;
+  totalClearanceUsdtAmount: number;
+  totalClearanceKrwAmount: number;
+  fromDate: string;
+  toDate: string;
 };
 
 type StoreDirectoryResult = {
@@ -104,26 +64,33 @@ type FilterState = {
   page: number;
   fromDate: string;
   toDate: string;
-  searchKeyword: string;
-  userType: string;
 };
 
-const EMPTY_TRADE_HISTORY_RESULT: TradeHistoryResult = {
+const EMPTY_RESULT: DailyTradeHistoryResult = {
   fetchedAt: "",
   remoteBackendBaseUrl: "",
-  ordersAccessLevel: "public",
-  ordersError: "",
-  orders: [],
+  statsAccessLevel: "public",
+  statsError: "",
+  rows: [],
   totalCount: 0,
-  totalKrwAmount: 0,
-  totalUsdtAmount: 0,
+  totalPages: 1,
+  page: 1,
+  limit: 30,
+  totalTradeCount: 0,
+  totalTradeUsdtAmount: 0,
+  totalTradeKrwAmount: 0,
   totalSettlementCount: 0,
   totalSettlementAmount: 0,
   totalSettlementAmountKRW: 0,
-  totalFeeAmount: 0,
-  totalFeeAmountKRW: 0,
   totalAgentFeeAmount: 0,
   totalAgentFeeAmountKRW: 0,
+  totalFeeAmount: 0,
+  totalFeeAmountKRW: 0,
+  totalClearanceCount: 0,
+  totalClearanceUsdtAmount: 0,
+  totalClearanceKrwAmount: 0,
+  fromDate: "",
+  toDate: "",
 };
 
 const EMPTY_STORE_DIRECTORY_RESULT: StoreDirectoryResult = {
@@ -140,17 +107,8 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
   minute: "2-digit",
 });
 
-const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat("ko", {
-  numeric: "auto",
-});
-
 const KRW_FORMATTER = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 0,
-});
-
-const RATE_FORMATTER = new Intl.NumberFormat("ko-KR", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
 });
 
 const USDT_FORMATTER = new Intl.NumberFormat("en-US", {
@@ -177,10 +135,8 @@ const createDefaultFilters = (storecode = ""): FilterState => ({
   storecode,
   limit: 30,
   page: 1,
-  fromDate: createInputDate(-6),
+  fromDate: createInputDate(-29),
   toDate: createInputDate(0),
-  searchKeyword: "",
-  userType: "all",
 });
 
 const buildPaginationItems = (currentPage: number, totalPages: number) => {
@@ -202,19 +158,6 @@ const shortAddress = (value?: string | null) => {
   return `${safe.slice(0, 6)}...${safe.slice(-4)}`;
 };
 
-const getStoreDisplayName = (store?: AdminStoreStripItem | null) =>
-  normalizeText(store?.storeName)
-  || normalizeText(store?.companyName)
-  || normalizeText(store?.storecode)
-  || "전체 가맹점";
-
-const getOrderStoreName = (order?: TradeOrder | null) =>
-  normalizeText(order?.store?.storeName)
-  || normalizeText(order?.store?.companyName)
-  || normalizeText(order?.store?.storecode)
-  || normalizeText(order?.storecode)
-  || "가맹점";
-
 const formatDateTime = (value?: string | null) => {
   if (!value) {
     return "-";
@@ -228,41 +171,6 @@ const formatDateTime = (value?: string | null) => {
   return DATE_FORMATTER.format(parsed);
 };
 
-const formatTimeAgo = (value?: string | null) => {
-  if (!value) {
-    return "-";
-  }
-
-  const parsed = new Date(value);
-  const time = parsed.getTime();
-  if (Number.isNaN(time)) {
-    return "-";
-  }
-
-  const diffMs = time - Date.now();
-  const absMs = Math.abs(diffMs);
-
-  if (absMs < 45_000) {
-    return diffMs >= 0 ? "곧" : "방금 전";
-  }
-
-  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-    ["year", 1000 * 60 * 60 * 24 * 365],
-    ["month", 1000 * 60 * 60 * 24 * 30],
-    ["day", 1000 * 60 * 60 * 24],
-    ["hour", 1000 * 60 * 60],
-    ["minute", 1000 * 60],
-  ];
-
-  for (const [unit, size] of units) {
-    if (absMs >= size) {
-      return RELATIVE_TIME_FORMATTER.format(Math.round(diffMs / size), unit);
-    }
-  }
-
-  return RELATIVE_TIME_FORMATTER.format(Math.round(diffMs / 1000), "second");
-};
-
 const formatKrw = (value?: number | string | null) => {
   const numeric = Number(value || 0);
   return `${KRW_FORMATTER.format(numeric)} KRW`;
@@ -273,48 +181,33 @@ const formatUsdt = (value?: number | string | null) => {
   return `${USDT_FORMATTER.format(numeric)} USDT`;
 };
 
-const formatRate = (value?: number | string | null) => {
-  const numeric = Number(value || 0);
-  return RATE_FORMATTER.format(numeric);
-};
-
-const getUserTypeLabel = (value?: string | null) => {
+const formatDateLabel = (value?: string | null) => {
   const safe = normalizeText(value);
-  if (safe === "AAA") {
-    return "1등급";
+  if (!safe) {
+    return "-";
   }
-  if (safe === "BBB") {
-    return "2등급";
+
+  const parsed = new Date(`${safe}T00:00:00+09:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return safe;
   }
-  if (safe === "CCC") {
-    return "3등급";
-  }
-  if (safe === "DDD") {
-    return "4등급";
-  }
-  return "일반";
+
+  return parsed.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    timeZone: "Asia/Seoul",
+  });
 };
 
-const getBankInfoDisplay = (bankInfo?: BankInfo | null, fallbackAccountNumber?: string | null) => {
-  const bankName = normalizeText(bankInfo?.bankName);
-  const holder = normalizeText(bankInfo?.accountHolder);
-  const accountNumber = normalizeText(bankInfo?.accountNumber)
-    || normalizeText(bankInfo?.realAccountNumber)
-    || normalizeText(fallbackAccountNumber);
+const getStoreDisplayName = (store?: AdminStoreStripItem | null) =>
+  normalizeText(store?.storeName)
+  || normalizeText(store?.companyName)
+  || normalizeText(store?.storecode)
+  || "전체 가맹점";
 
-  return {
-    bankName: bankName || "-",
-    holder: holder || "-",
-    accountNumber: accountNumber || "-",
-    summary:
-      [bankName, holder].filter(Boolean).join(" / ")
-      || bankName
-      || holder
-      || "-",
-  };
-};
-
-export default function P2PTradeHistoryConsoleClient({
+export default function DailyTradeHistoryConsoleClient({
   lang,
   initialStorecode = "",
 }: {
@@ -324,28 +217,22 @@ export default function P2PTradeHistoryConsoleClient({
   const activeAccount = useActiveAccount();
   const walletConnectionStatus = useActiveWalletConnectionStatus();
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters(normalizeText(initialStorecode)));
-  const [searchKeywordInput, setSearchKeywordInput] = useState(() => "");
-  const [data, setData] = useState<TradeHistoryResult>(EMPTY_TRADE_HISTORY_RESULT);
+  const [data, setData] = useState<DailyTradeHistoryResult>(EMPTY_RESULT);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [storeDirectory, setStoreDirectory] = useState<StoreDirectoryResult>(EMPTY_STORE_DIRECTORY_RESULT);
   const [storeDirectoryLoading, setStoreDirectoryLoading] = useState(true);
   const [storeDirectoryError, setStoreDirectoryError] = useState("");
-  const [copiedTradeId, setCopiedTradeId] = useState("");
   const [signerWarmup, setSignerWarmup] = useState(false);
   const requestIdRef = useRef(0);
   const warmupRetryCountRef = useRef(0);
   const warmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (warmupTimerRef.current) {
         clearTimeout(warmupTimerRef.current);
-      }
-      if (copyResetTimerRef.current) {
-        clearTimeout(copyResetTimerRef.current);
       }
     };
   }, []);
@@ -386,7 +273,7 @@ export default function P2PTradeHistoryConsoleClient({
     }
   }, []);
 
-  const loadTradeHistory = useCallback(async (options?: { silent?: boolean; preferSigned?: boolean }) => {
+  const loadDailyHistory = useCallback(async (options?: { silent?: boolean; preferSigned?: boolean }) => {
     const requestId = ++requestIdRef.current;
     const silent = options?.silent === true;
     const preferSigned = options?.preferSigned !== false;
@@ -399,13 +286,13 @@ export default function P2PTradeHistoryConsoleClient({
     setError("");
 
     try {
-      let signedOrdersBody: Record<string, unknown> | null = null;
+      let signedStatsBody: Record<string, unknown> | null = null;
 
       if (preferSigned && activeAccount) {
         try {
-          signedOrdersBody = await createCenterStoreAdminSignedBody({
+          signedStatsBody = await createCenterStoreAdminSignedBody({
             account: activeAccount,
-            route: "/api/order/getAdminP2PTradeHistory",
+            route: "/api/order/getAdminTradeHistoryDaily",
             storecode: "admin",
             requesterWalletAddress: activeAccount.address,
             body: {
@@ -414,8 +301,6 @@ export default function P2PTradeHistoryConsoleClient({
               page: filters.page,
               fromDate: filters.fromDate,
               toDate: filters.toDate,
-              searchKeyword: filters.searchKeyword,
-              userType: filters.userType,
             },
           });
           warmupRetryCountRef.current = 0;
@@ -429,12 +314,12 @@ export default function P2PTradeHistoryConsoleClient({
             }
             warmupTimerRef.current = setTimeout(() => {
               warmupTimerRef.current = null;
-              void loadTradeHistory({ silent: true, preferSigned: true });
+              void loadDailyHistory({ silent: true, preferSigned: true });
             }, 700);
             return;
           }
 
-          signedOrdersBody = null;
+          signedStatsBody = null;
           setSignerWarmup(false);
         }
       } else {
@@ -442,50 +327,59 @@ export default function P2PTradeHistoryConsoleClient({
         setSignerWarmup(false);
       }
 
-      const response = await fetch("/api/bff/admin/p2p-trade-history", {
+      const response = await fetch("/api/bff/admin/daily-trade-history", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         cache: "no-store",
         body: JSON.stringify({
-          signedOrdersBody,
-          orderFilters: filters,
+          signedStatsBody,
+          statsFilters: filters,
         }),
       });
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || "Failed to load P2P trade history");
+        throw new Error(payload?.error || "Failed to load daily trade history");
       }
 
       if (requestId !== requestIdRef.current) {
         return;
       }
 
-      const result = (payload?.result || {}) as TradeHistoryResult;
+      const result = (payload?.result || {}) as DailyTradeHistoryResult;
       setData({
         fetchedAt: normalizeText(result?.fetchedAt),
         remoteBackendBaseUrl: normalizeText(result?.remoteBackendBaseUrl),
-        ordersAccessLevel: normalizeText(result?.ordersAccessLevel) || "public",
-        ordersError: normalizeText(result?.ordersError),
-        orders: Array.isArray(result?.orders) ? result.orders : [],
+        statsAccessLevel: normalizeText(result?.statsAccessLevel) || "public",
+        statsError: normalizeText(result?.statsError),
+        rows: Array.isArray(result?.rows) ? result.rows : [],
         totalCount: Number(result?.totalCount || 0),
-        totalKrwAmount: Number(result?.totalKrwAmount || 0),
-        totalUsdtAmount: Number(result?.totalUsdtAmount || 0),
+        totalPages: Number(result?.totalPages || 1),
+        page: Number(result?.page || filters.page || 1),
+        limit: Number(result?.limit || filters.limit || 30),
+        totalTradeCount: Number(result?.totalTradeCount || 0),
+        totalTradeUsdtAmount: Number(result?.totalTradeUsdtAmount || 0),
+        totalTradeKrwAmount: Number(result?.totalTradeKrwAmount || 0),
         totalSettlementCount: Number(result?.totalSettlementCount || 0),
         totalSettlementAmount: Number(result?.totalSettlementAmount || 0),
         totalSettlementAmountKRW: Number(result?.totalSettlementAmountKRW || 0),
-        totalFeeAmount: Number(result?.totalFeeAmount || 0),
-        totalFeeAmountKRW: Number(result?.totalFeeAmountKRW || 0),
         totalAgentFeeAmount: Number(result?.totalAgentFeeAmount || 0),
         totalAgentFeeAmountKRW: Number(result?.totalAgentFeeAmountKRW || 0),
+        totalFeeAmount: Number(result?.totalFeeAmount || 0),
+        totalFeeAmountKRW: Number(result?.totalFeeAmountKRW || 0),
+        totalClearanceCount: Number(result?.totalClearanceCount || 0),
+        totalClearanceUsdtAmount: Number(result?.totalClearanceUsdtAmount || 0),
+        totalClearanceKrwAmount: Number(result?.totalClearanceKrwAmount || 0),
+        fromDate: normalizeText(result?.fromDate),
+        toDate: normalizeText(result?.toDate),
       });
     } catch (loadError) {
       if (requestId !== requestIdRef.current) {
         return;
       }
-      setError(loadError instanceof Error ? loadError.message : "Failed to load P2P trade history");
+      setError(loadError instanceof Error ? loadError.message : "Failed to load daily trade history");
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false);
@@ -499,8 +393,8 @@ export default function P2PTradeHistoryConsoleClient({
   }, [loadStoreDirectory]);
 
   useEffect(() => {
-    void loadTradeHistory();
-  }, [loadTradeHistory]);
+    void loadDailyHistory();
+  }, [loadDailyHistory]);
 
   const selectedStore = useMemo(
     () =>
@@ -510,89 +404,62 @@ export default function P2PTradeHistoryConsoleClient({
     [filters.storecode, storeDirectory.stores],
   );
 
-  const orderLimit = Math.max(1, Number(filters.limit) || 1);
-  const totalPages = Math.max(1, Math.ceil(Number(data.totalCount || 0) / orderLimit));
-  const currentPage = Math.min(Math.max(1, Number(filters.page) || 1), totalPages);
-  const currentRangeStart = data.orders.length === 0 ? 0 : ((currentPage - 1) * orderLimit) + 1;
-  const currentRangeEnd = data.orders.length === 0 ? 0 : currentRangeStart + data.orders.length - 1;
+  const totalPages = Math.max(1, Number(data.totalPages || 1));
+  const currentPage = Math.min(Math.max(1, Number(data.page || filters.page || 1)), totalPages);
+  const currentRangeStart = data.rows.length === 0 ? 0 : ((currentPage - 1) * filters.limit) + 1;
+  const currentRangeEnd = data.rows.length === 0 ? 0 : currentRangeStart + data.rows.length - 1;
   const paginationItems = useMemo(
     () => buildPaginationItems(currentPage, totalPages),
     [currentPage, totalPages],
   );
-  const hasPrivilegedOrderAccess = data.ordersAccessLevel === "privileged";
+  const hasPrivilegedAccess = data.statsAccessLevel === "privileged";
   const querySummaryLabel = selectedStore
-    ? `${getStoreDisplayName(selectedStore)} · 완료 거래 ${Number(data.totalCount || 0).toLocaleString()}건`
-    : `전체 가맹점 · 완료 거래 ${Number(data.totalCount || 0).toLocaleString()}건`;
+    ? `${getStoreDisplayName(selectedStore)} · 일자 ${Number(data.totalCount || 0).toLocaleString()}개`
+    : `전체 가맹점 · 일자 ${Number(data.totalCount || 0).toLocaleString()}개`;
   const walletAccessLabel = activeAccount?.address
     ? "Admin signed"
     : walletConnectionStatus === "connecting"
-    ? "Wallet syncing"
-    : "Wallet disconnected";
+      ? "Wallet syncing"
+      : "Wallet disconnected";
   const walletTitle = activeAccount?.address ? shortAddress(activeAccount.address) : "관리자 지갑";
-  const selectedStoreQuery = normalizeText(filters.storecode);
-  const backToBuyorderHref = selectedStoreQuery
-    ? `/${lang}/admin/buyorder?storecode=${encodeURIComponent(selectedStoreQuery)}`
-    : `/${lang}/admin/buyorder`;
 
   const metrics = [
     {
-      label: "완료 거래수",
-      value: `${Number(data.totalCount || 0).toLocaleString()}건`,
+      label: "집계 일수",
+      value: `${Number(data.totalCount || 0).toLocaleString()}일`,
     },
     {
-      label: "완료 거래량",
-      value: formatUsdt(data.totalUsdtAmount),
+      label: "P2P 거래수",
+      value: `${Number(data.totalTradeCount || 0).toLocaleString()}건`,
     },
     {
-      label: "완료 거래금액",
-      value: formatKrw(data.totalKrwAmount),
+      label: "P2P 거래량",
+      value: formatUsdt(data.totalTradeUsdtAmount),
+    },
+    {
+      label: "P2P 거래금액",
+      value: formatKrw(data.totalTradeKrwAmount),
     },
     {
       label: "가맹점 결제수",
       value: `${Number(data.totalSettlementCount || 0).toLocaleString()}건`,
     },
     {
-      label: "가맹점 결제금액",
-      value: formatKrw(data.totalSettlementAmountKRW),
+      label: "청산 거래수",
+      value: `${Number(data.totalClearanceCount || 0).toLocaleString()}건`,
     },
     {
-      label: "수수료 합계",
-      value: formatKrw(data.totalFeeAmountKRW),
+      label: "청산 거래량",
+      value: formatUsdt(data.totalClearanceUsdtAmount),
+    },
+    {
+      label: "청산 거래금액",
+      value: formatKrw(data.totalClearanceKrwAmount),
     },
   ];
 
-  const copyTradeId = useCallback(async (tradeId: string) => {
-    const safeTradeId = normalizeText(tradeId);
-    if (!safeTradeId || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(safeTradeId);
-      setCopiedTradeId(safeTradeId);
-      if (copyResetTimerRef.current) {
-        clearTimeout(copyResetTimerRef.current);
-      }
-      copyResetTimerRef.current = setTimeout(() => {
-        setCopiedTradeId("");
-      }, 1800);
-    } catch {
-      // Ignore clipboard failures.
-    }
-  }, []);
-
-  const applySearchKeyword = useCallback(() => {
-    setFilters((prev) => ({
-      ...prev,
-      searchKeyword: searchKeywordInput.trim(),
-      page: 1,
-    }));
-  }, [searchKeywordInput]);
-
   const resetFilters = useCallback(() => {
-    const next = createDefaultFilters("");
-    setSearchKeywordInput("");
-    setFilters(next);
+    setFilters(createDefaultFilters(""));
   }, []);
 
   const updateDateRange = useCallback((fromDate: string, toDate: string) => {
@@ -612,7 +479,7 @@ export default function P2PTradeHistoryConsoleClient({
             <div className="space-y-5">
               <div className="console-mono flex flex-wrap items-center gap-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300">
                 <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1">
-                  Buyorder / Trade History
+                  Buyorder / Daily Trade History
                 </span>
                 <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1">
                   {querySummaryLabel}
@@ -621,25 +488,19 @@ export default function P2PTradeHistoryConsoleClient({
 
               <div className="max-w-4xl space-y-3">
                 <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
-                  P2P 거래내역
+                  일별통계
                 </h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                  완료된 P2P 거래만 별도로 모아 보고, 거래번호부터 가맹점, 구매자, 판매자,
-                  입금자명, 계좌번호까지 한 번에 검색할 수 있게 정리했습니다.
+                  P2P 완료 거래와 청산 거래를 날짜별로 묶어 보고, 가맹점 결제와 수수료 흐름까지 한 번에
+                  확인할 수 있게 정리했습니다.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Link
-                  href={backToBuyorderHref}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/15"
-                >
-                  구매주문 화면으로
-                </Link>
                 <button
                   type="button"
                   onClick={() => {
-                    void loadTradeHistory({ silent: true });
+                    void loadDailyHistory({ silent: true });
                   }}
                   className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/15"
                 >
@@ -650,7 +511,7 @@ export default function P2PTradeHistoryConsoleClient({
               <BuyorderSubnav
                 lang={lang}
                 selectedStorecode={filters.storecode}
-                active="trade-history"
+                active="trade-history-daily"
               />
 
               <div className="console-dark-card max-w-xl rounded-[24px] p-4">
@@ -663,9 +524,9 @@ export default function P2PTradeHistoryConsoleClient({
                 <div className="mt-2 text-xs text-slate-400">
                   {signerWarmup
                     ? "서명 준비 중입니다. 관리자 권한 조회를 다시 시도하고 있습니다."
-                    : hasPrivilegedOrderAccess
-                    ? "관리자 권한으로 민감정보가 풀린 거래내역을 보고 있습니다."
-                    : "공개 마스킹 뷰로 완료 거래를 보고 있습니다."}
+                    : hasPrivilegedAccess
+                      ? "관리자 권한으로 일별 통계를 조회하고 있습니다."
+                      : "일별 통계는 관리자 지갑 없이도 조회할 수 있습니다."}
                 </div>
               </div>
             </div>
@@ -674,7 +535,7 @@ export default function P2PTradeHistoryConsoleClient({
               address={activeAccount?.address}
               accessLabel={walletAccessLabel}
               title={walletTitle}
-              disconnectedMessage="관리자 지갑을 연결하면 마스킹이 해제된 완료 거래내역을 확인할 수 있습니다."
+              disconnectedMessage="일별 통계는 지갑 없이도 조회할 수 있고, 연결하면 관리자 권한 상태를 함께 확인할 수 있습니다."
             />
           </div>
         </section>
@@ -715,10 +576,10 @@ export default function P2PTradeHistoryConsoleClient({
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="space-y-1">
               <p className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                Search
+                Daily filters
               </p>
               <h2 className="console-display text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                완료 거래 검색
+                날짜별 통계 검색
               </h2>
             </div>
             <div className="text-sm text-slate-500">
@@ -727,82 +588,67 @@ export default function P2PTradeHistoryConsoleClient({
           </div>
 
           <div className="mt-6 rounded-[28px] bg-slate-950 px-4 py-4 text-white md:px-5 md:py-5">
-            <form
-              className="grid gap-3 xl:grid-cols-12"
-              onSubmit={(event) => {
-                event.preventDefault();
-                applySearchKeyword();
-              }}
-            >
-              <label className="space-y-2 text-sm xl:col-span-5">
-                <span className="font-medium text-slate-200">통합 검색</span>
-                <input
-                  value={searchKeywordInput}
-                  onChange={(event) => setSearchKeywordInput(event.target.value)}
-                  placeholder="거래번호, 가맹점, 구매자, 판매자, 입금자명, 계좌번호"
-                  className="h-11 w-full rounded-2xl border border-white/20 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-sky-50"
-                />
-              </label>
-
-              <label className="space-y-2 text-sm xl:col-span-2">
+            <div className="grid gap-3 xl:grid-cols-12">
+              <label className="space-y-2 text-sm xl:col-span-4">
                 <span className="font-medium text-slate-200">시작일</span>
                 <input
                   type="date"
                   value={filters.fromDate}
                   onChange={(event) => updateDateRange(event.target.value, filters.toDate)}
-                  className="h-11 w-full rounded-2xl border border-white/20 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-sky-300 focus:bg-sky-50"
+                  className="h-11 w-full rounded-2xl border border-white/12 bg-white/8 px-4 text-sm text-white outline-none transition focus:border-sky-300/50 focus:bg-white/12"
                 />
               </label>
 
-              <label className="space-y-2 text-sm xl:col-span-2">
+              <label className="space-y-2 text-sm xl:col-span-4">
                 <span className="font-medium text-slate-200">종료일</span>
                 <input
                   type="date"
                   value={filters.toDate}
                   onChange={(event) => updateDateRange(filters.fromDate, event.target.value)}
-                  className="h-11 w-full rounded-2xl border border-white/20 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-sky-300 focus:bg-sky-50"
+                  className="h-11 w-full rounded-2xl border border-white/12 bg-white/8 px-4 text-sm text-white outline-none transition focus:border-sky-300/50 focus:bg-white/12"
                 />
               </label>
 
               <label className="space-y-2 text-sm xl:col-span-2">
-                <span className="font-medium text-slate-200">회원등급</span>
+                <span className="font-medium text-slate-200">페이지당</span>
                 <select
-                  value={filters.userType}
+                  value={filters.limit}
                   onChange={(event) =>
                     setFilters((prev) => ({
                       ...prev,
-                      userType: event.target.value,
+                      limit: Number(event.target.value),
                       page: 1,
                     }))
                   }
-                  className="h-11 w-full rounded-2xl border border-white/20 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-sky-300 focus:bg-sky-50"
+                  className="h-11 w-full rounded-2xl border border-white/12 bg-white/8 px-4 text-sm text-white outline-none transition focus:border-sky-300/50 focus:bg-white/12"
                 >
-                  <option value="all">전체등급</option>
-                  <option value="EMPTY">일반회원</option>
-                  <option value="AAA">1등급</option>
-                  <option value="BBB">2등급</option>
-                  <option value="CCC">3등급</option>
-                  <option value="DDD">4등급</option>
+                  <option value={20}>20</option>
+                  <option value={30}>30</option>
+                  <option value={60}>60</option>
+                  <option value={100}>100</option>
                 </select>
               </label>
 
-              <div className="flex items-end gap-2 xl:col-span-1">
+              <div className="flex items-end gap-2 xl:col-span-2">
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => {
+                    void loadDailyHistory({ silent: true });
+                  }}
                   className="h-11 flex-1 rounded-2xl bg-sky-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
                 >
-                  검색
+                  조회
                 </button>
               </div>
-            </form>
+            </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 {[
-                  { label: "오늘", days: 1 },
                   { label: "7일", days: 7 },
                   { label: "30일", days: 30 },
                   { label: "90일", days: 90 },
+                  { label: "180일", days: 180 },
                 ].map((item) => {
                   const fromDate = createInputDate(-(item.days - 1));
                   const toDate = createInputDate(0);
@@ -825,39 +671,18 @@ export default function P2PTradeHistoryConsoleClient({
                 })}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="flex items-center gap-2 text-xs text-slate-400">
-                  <span>페이지당</span>
-                  <select
-                    value={filters.limit}
-                    onChange={(event) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        limit: Number(event.target.value),
-                        page: 1,
-                      }))
-                    }
-                    className="h-9 rounded-xl border border-white/20 bg-white px-3 text-sm text-slate-950 outline-none"
-                  >
-                    <option value={20}>20</option>
-                    <option value={30}>30</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="h-9 rounded-xl border border-white/12 bg-white/8 px-3 text-sm text-slate-200 transition hover:border-white/20 hover:bg-white/10"
-                >
-                  초기화
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="h-9 rounded-xl border border-white/12 bg-white/8 px-3 text-sm text-slate-200 transition hover:border-white/20 hover:bg-white/10"
+              >
+                초기화
+              </button>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((item) => (
             <div key={item.label} className="console-panel rounded-[26px] px-5 py-5">
               <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
@@ -876,19 +701,13 @@ export default function P2PTradeHistoryConsoleClient({
           </section>
         ) : null}
 
-        {!hasPrivilegedOrderAccess ? (
-          <section className="rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
-            관리자 지갑이 연결되지 않았거나 서명 준비 중이라서, 현재는 민감정보를 마스킹한 완료 거래내역을 보여주고 있습니다.
-          </section>
-        ) : null}
-
         <section className="console-panel rounded-[30px] p-0">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
             <div>
               <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
-                Completed trades
+                Daily summary
               </div>
-              <div className="mt-1 text-lg font-semibold text-slate-950">P2P 완료 거래 스트림</div>
+              <div className="mt-1 text-lg font-semibold text-slate-950">P2P + 청산 일별 집계</div>
             </div>
             <div className="text-xs text-slate-500">
               {loading ? "불러오는 중..." : `마지막 동기화 ${data.fetchedAt ? formatDateTime(data.fetchedAt) : "-"}`}
@@ -896,140 +715,88 @@ export default function P2PTradeHistoryConsoleClient({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-[1240px] w-full table-auto border-collapse">
+            <table className="min-w-[1280px] w-full table-auto border-collapse">
               <thead className="bg-slate-950/95 text-left text-white">
                 <tr>
-                  <th className="px-4 py-3 text-sm font-semibold">거래</th>
-                  <th className="px-4 py-3 text-sm font-semibold">구매자 / 출금계좌</th>
-                  <th className="px-4 py-3 text-sm font-semibold">입금자</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">금액</th>
-                  <th className="px-4 py-3 text-sm font-semibold">판매자 / 입금계좌</th>
-                  <th className="px-4 py-3 text-sm font-semibold">입금처리</th>
+                  <th className="px-4 py-3 text-sm font-semibold">날짜</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right">P2P 거래수</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right">P2P 거래량 / 금액</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right">결제수 / 미결제수</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right">결제량 / 금액</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right">AG 수수료</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right">PG 수수료</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right">청산수</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right">청산량 / 금액</th>
                 </tr>
               </thead>
               <tbody>
-                {!loading && data.orders.length === 0 ? (
+                {!loading && data.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
-                      완료된 P2P 거래내역이 없습니다.
+                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
+                      조회된 일별 통계가 없습니다.
                     </td>
                   </tr>
                 ) : null}
 
-                {data.orders.map((order, index) => {
-                  const buyerBankInfo = getBankInfoDisplay(
-                    order.buyer?.bankInfo,
-                    order.buyer?.depositBankAccountNumber,
+                {data.rows.map((row, index) => {
+                  const unsettledCount = Math.max(
+                    0,
+                    Number(row.totalCount || 0) - Number(row.totalSettlementCount || 0),
                   );
-                  const sellerBankInfo = getBankInfoDisplay(order.seller?.bankInfo);
-                  const paymentActorName = normalizeText(order.paymentConfirmedBy?.nickname)
-                    || normalizeText(order.paymentConfirmedByName)
-                    || "-";
-                  const paymentActorWallet = normalizeText(order.paymentConfirmedBy?.walletAddress)
-                    || normalizeText(order.paymentConfirmedByWalletAddress)
-                    || "";
-                  const paymentActorRole = normalizeText(order.paymentConfirmedBy?.role);
-                  const completedAt = normalizeText(order.paymentConfirmedAt) || normalizeText(order.updatedAt);
 
                   return (
                     <tr
-                      key={normalizeText(order._id) || normalizeText(order.tradeId) || `${index}`}
+                      key={`${normalizeText(row.date)}-${index}`}
                       className={index % 2 === 0 ? "bg-white" : "bg-slate-50/60"}
                     >
                       <td className="px-4 py-4 align-top">
-                        <div className="flex min-w-[220px] items-start gap-3">
-                          <div
-                            className="h-12 w-12 shrink-0 rounded-2xl border border-slate-200 bg-white bg-cover bg-center bg-no-repeat"
-                            style={{ backgroundImage: `url(${normalizeText(order.store?.storeLogo) || "/logo.png"})` }}
-                          />
-                          <div className="min-w-0 space-y-2">
-                            <div>
-                              <div className="text-base font-semibold text-slate-950">
-                                {getOrderStoreName(order)}
-                              </div>
-                              <div className="text-xs text-slate-500">
-                                {normalizeText(order.store?.storecode) || "-"}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void copyTradeId(normalizeText(order.tradeId));
-                              }}
-                              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-900 transition hover:border-slate-300 hover:bg-slate-50"
-                            >
-                              <span>{normalizeText(order.tradeId) || "-"}</span>
-                              <span className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
-                                {copiedTradeId === normalizeText(order.tradeId) ? "복사됨" : "copy"}
-                              </span>
-                            </button>
-                            <div className="text-sm text-slate-500">
-                              {formatDateTime(completedAt)} · {formatTimeAgo(completedAt)}
-                            </div>
-                          </div>
+                        <div className="min-w-[160px]">
+                          <div className="text-base font-semibold text-slate-950">{formatDateLabel(row.date)}</div>
+                          <div className="mt-1 text-xs text-slate-500">{normalizeText(row.date) || "-"}</div>
                         </div>
                       </td>
-
-                      <td className="px-4 py-4 align-top">
-                        <div className="min-w-[220px] space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                              {getUserTypeLabel(order.userType)}
-                            </span>
-                            <span className="text-sm font-semibold text-slate-950">
-                              {normalizeText(order.nickname) || normalizeText(order.buyer?.nickname) || "-"}
-                            </span>
-                          </div>
-                          <div className="text-sm text-slate-500">{shortAddress(order.walletAddress || order.buyer?.walletAddress)}</div>
-                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                            <div>{buyerBankInfo.summary}</div>
-                            <div className="mt-1 font-medium text-slate-950">{buyerBankInfo.accountNumber}</div>
-                          </div>
-                        </div>
+                      <td className="px-4 py-4 align-top text-right text-sm font-semibold text-slate-950">
+                        {Number(row.totalCount || 0).toLocaleString()}건
                       </td>
-
-                      <td className="px-4 py-4 align-top">
-                        <div className="min-w-[140px] space-y-2">
-                          <div className="text-sm font-semibold text-slate-950">
-                            {normalizeText(order.buyer?.depositName) || buyerBankInfo.holder}
-                          </div>
-                          <div className="text-sm text-slate-500">
-                            {buyerBankInfo.bankName}
-                          </div>
-                        </div>
-                      </td>
-
                       <td className="px-4 py-4 align-top text-right">
-                        <div className="min-w-[180px] space-y-2">
-                          <div className="text-base font-semibold text-slate-950">{formatKrw(order.krwAmount)}</div>
-                          <div className="text-sm text-slate-500">{formatUsdt(order.usdtAmount)}</div>
-                          <div className="text-xs text-slate-400">환율 {formatRate(order.rate)}</div>
+                        <div className="min-w-[170px] space-y-1">
+                          <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalUsdtAmount)}</div>
+                          <div className="text-sm text-slate-500">{formatKrw(row.totalKrwAmount)}</div>
                         </div>
                       </td>
-
-                      <td className="px-4 py-4 align-top">
-                        <div className="min-w-[230px] space-y-2">
+                      <td className="px-4 py-4 align-top text-right">
+                        <div className="min-w-[150px] space-y-1">
                           <div className="text-sm font-semibold text-slate-950">
-                            {normalizeText(order.seller?.nickname) || "-"}
+                            {Number(row.totalSettlementCount || 0).toLocaleString()}건
                           </div>
-                          <div className="text-sm text-slate-500">
-                            {shortAddress(order.seller?.walletAddress || order.seller?.signerAddress)}
-                          </div>
-                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                            <div>{sellerBankInfo.summary}</div>
-                            <div className="mt-1 font-medium text-slate-950">{sellerBankInfo.accountNumber}</div>
-                          </div>
+                          <div className="text-sm text-slate-500">{unsettledCount.toLocaleString()}건</div>
                         </div>
                       </td>
-
-                      <td className="px-4 py-4 align-top">
-                        <div className="min-w-[210px] space-y-2">
-                          <div className="text-sm font-semibold text-slate-950">{paymentActorName}</div>
-                          <div className="text-sm text-slate-500">{paymentActorWallet ? shortAddress(paymentActorWallet) : "-"}</div>
-                          <div className="text-xs uppercase tracking-[0.14em] text-slate-400">
-                            {paymentActorRole || "actor"}
-                          </div>
-                          <div className="text-sm text-slate-500">{formatDateTime(completedAt)}</div>
+                      <td className="px-4 py-4 align-top text-right">
+                        <div className="min-w-[170px] space-y-1">
+                          <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalSettlementAmount)}</div>
+                          <div className="text-sm text-slate-500">{formatKrw(row.totalSettlementAmountKRW)}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 align-top text-right">
+                        <div className="min-w-[170px] space-y-1">
+                          <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalAgentFeeAmount)}</div>
+                          <div className="text-sm text-slate-500">{formatKrw(row.totalAgentFeeAmountKRW)}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 align-top text-right">
+                        <div className="min-w-[170px] space-y-1">
+                          <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalFeeAmount)}</div>
+                          <div className="text-sm text-slate-500">{formatKrw(row.totalFeeAmountKRW)}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 align-top text-right text-sm font-semibold text-slate-950">
+                        {Number(row.totalClearanceCount || 0).toLocaleString()}건
+                      </td>
+                      <td className="px-4 py-4 align-top text-right">
+                        <div className="min-w-[170px] space-y-1">
+                          <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalClearanceUsdtAmount)}</div>
+                          <div className="text-sm text-slate-500">{formatKrw(row.totalClearanceKrwAmount)}</div>
                         </div>
                       </td>
                     </tr>
@@ -1041,7 +808,7 @@ export default function P2PTradeHistoryConsoleClient({
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
             <div className="text-sm text-slate-500">
-              총 {Number(data.totalCount || 0).toLocaleString()}건 중 {Number(currentRangeStart).toLocaleString()}-{Number(currentRangeEnd).toLocaleString()}
+              총 {Number(data.totalCount || 0).toLocaleString()}일 중 {Number(currentRangeStart).toLocaleString()}-{Number(currentRangeEnd).toLocaleString()}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <button

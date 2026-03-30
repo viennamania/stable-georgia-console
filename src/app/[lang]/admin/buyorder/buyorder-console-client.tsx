@@ -3197,6 +3197,9 @@ export default function BuyorderConsoleClient({
   const tradeHistoryHref = normalizeString(draftFilters.storecode)
     ? `/${lang}/admin/buyorder/trade-history?storecode=${encodeURIComponent(normalizeString(draftFilters.storecode))}`
     : `/${lang}/admin/buyorder/trade-history`;
+  const tradeHistoryDailyHref = normalizeString(draftFilters.storecode)
+    ? `/${lang}/admin/buyorder/trade-history-daily?storecode=${encodeURIComponent(normalizeString(draftFilters.storecode))}`
+    : `/${lang}/admin/buyorder/trade-history-daily`;
   const visibleOrderPages = useMemo(() => {
     const start = Math.max(1, currentOrderPage - 2);
     const end = Math.min(totalOrderPages, start + 4);
@@ -3273,6 +3276,12 @@ export default function BuyorderConsoleClient({
                       className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/15"
                     >
                       P2P 거래내역 보기
+                    </Link>
+                    <Link
+                      href={tradeHistoryDailyHref}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/15"
+                    >
+                      일별통계 보기
                     </Link>
                   </div>
 
