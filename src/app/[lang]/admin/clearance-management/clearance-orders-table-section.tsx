@@ -182,16 +182,26 @@ export default function ClearanceOrdersTableSection({
                           alt={getStoreDisplayName(order.store) || order.storecode || "Store"}
                           className="h-9 w-9 shrink-0 rounded-2xl border border-slate-200 bg-white object-cover"
                         />
-                        <div className="min-w-0 break-words">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <div className="min-w-0 break-words font-semibold text-slate-950">
-                              {getStoreDisplayName(order.store) || order.storecode || "-"}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-start justify-between gap-3">
+                            <div className="w-[9rem] shrink-0">
+                              <div className="truncate font-semibold text-slate-950">
+                                {getStoreDisplayName(order.store) || order.storecode || "-"}
+                              </div>
+                              <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                                {order.storecode || "-"}
+                              </div>
                             </div>
-                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${creationMeta.className}`}>
-                              {creationMeta.label}
-                            </span>
+                            <div className="min-w-[6rem] shrink-0">
+                              <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
+                                Created
+                              </div>
+                              <span className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${creationMeta.className}`}>
+                                {creationMeta.label}
+                              </span>
+                            </div>
                           </div>
-                          <div className="mt-1 break-all font-semibold text-slate-900">
+                          <div className="mt-2 break-all font-semibold text-slate-900">
                             {tradeId ? (
                               <button
                                 type="button"
@@ -214,7 +224,7 @@ export default function ClearanceOrdersTableSection({
                               "-"
                             )}
                           </div>
-                          <div className="mt-0.5 break-words text-[11px] text-slate-500">
+                          <div className="mt-1 break-words text-[11px] text-slate-500">
                             {createdAtLabel === "-" ? "-" : `${createdAtLabel} · ${createdTimeAgoLabel}`}
                           </div>
                         </div>
