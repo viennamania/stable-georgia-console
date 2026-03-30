@@ -1541,7 +1541,7 @@ export default function MemberManagementConsoleClient({
                   <th className="px-6 py-4">등록일</th>
                   <th className="px-6 py-4">가맹점</th>
                   <th className="px-6 py-4">회원</th>
-                  <th className="w-[168px] px-6 py-4">등급</th>
+                  <th className="w-[196px] px-6 py-4">등급</th>
                   <th className="w-[112px] px-4 py-4">추가자</th>
                   <th className="px-6 py-4">회원 통장</th>
                   <th className="px-6 py-4 text-right">구매 요약</th>
@@ -1611,14 +1611,14 @@ export default function MemberManagementConsoleClient({
                             </div>
                           </div>
                         </td>
-                        <td className="w-[168px] px-6 py-4">
+                        <td className="w-[196px] px-6 py-4">
                           <div className="space-y-2">
                             <MemberGradeBadge userType={member.userType} />
                             <button
                               type="button"
                               onClick={() => openGradeModal(member, index)}
                               disabled={!canReadSignedData}
-                              className="inline-flex h-8 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                              className="inline-flex h-8 whitespace-nowrap items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
                             >
                               등급 변경
                             </button>
