@@ -4,6 +4,20 @@ import { getRemoteBackendBaseUrl, postRemoteJson } from "@/lib/server/remote-bac
 
 export const runtime = "nodejs";
 
+const globalStoreManagementRouteState = globalThis as typeof globalThis & {
+  __consoleAdminStoreManagementAgentsCache?: {
+    expiresAt: number;
+    agents: unknown[];
+  };
+};
+
+const AGENT_DIRECTORY_FALLBACK_TTL_MS = Number.parseInt(
+  process.env.CONSOLE_AGENT_DIRECTORY_FALLBACK_TTL_MS || "",
+  10,
+) > 0
+  ? Number.parseInt(process.env.CONSOLE_AGENT_DIRECTORY_FALLBACK_TTL_MS || "", 10)
+  : 5 * 60 * 1000;
+
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") {
     return "";
@@ -23,6 +37,21 @@ const resolveRemoteError = (payload: any, fallback: string) => {
     || normalizeString(payload?.message)
     || normalizeString(payload?.result?.error)
     || fallback;
+};
+
+const readAgentFallbackCache = () => {
+  const cached = globalStoreManagementRouteState.__consoleAdminStoreManagementAgentsCache;
+  if (!cached || cached.expiresAt <= Date.now()) {
+    return [];
+  }
+  return Array.isArray(cached.agents) ? cached.agents : [];
+};
+
+const writeAgentFallbackCache = (agents: unknown[]) => {
+  globalStoreManagementRouteState.__consoleAdminStoreManagementAgentsCache = {
+    agents,
+    expiresAt: Date.now() + AGENT_DIRECTORY_FALLBACK_TTL_MS,
+  };
 };
 
 export async function POST(request: NextRequest) {
@@ -69,6 +98,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const remoteAgents = Array.isArray(agentsResponse.json?.result?.agents)
+    ? agentsResponse.json.result.agents
+    : [];
+  const cachedAgents = readAgentFallbackCache();
+  const resolvedAgents = agentsResponse.ok
+    ? remoteAgents
+    : cachedAgents;
+
+  if (agentsResponse.ok && remoteAgents.length > 0) {
+    writeAgentFallbackCache(remoteAgents);
+  }
+
   return NextResponse.json({
     result: {
       fetchedAt: new Date().toISOString(),
@@ -79,10 +120,8 @@ export async function POST(request: NextRequest) {
       totalCount: Number(storesResponse.json?.result?.totalCount || 0),
       summary: storesResponse.json?.result?.summary || null,
       storeError: "",
-      agents: Array.isArray(agentsResponse.json?.result?.agents)
-        ? agentsResponse.json.result.agents
-        : [],
-      agentsError: agentsResponse.ok
+      agents: resolvedAgents,
+      agentsError: agentsResponse.ok || resolvedAgents.length > 0
         ? ""
         : resolveRemoteError(agentsResponse.json, "Failed to load agents"),
     },
