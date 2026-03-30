@@ -9,6 +9,7 @@ import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 import {
   STORE_ROUTE_SET_STORE,
+  STORE_ROUTE_TOGGLE_VIEW,
   STORE_SETTINGS_MUTATION_SIGNING_PREFIX,
 } from "@/lib/security/store-settings-admin";
 
@@ -327,6 +328,7 @@ export default function StoreManagementConsoleClient({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addStoreForm, setAddStoreForm] = useState<AddStoreFormState>(EMPTY_ADD_STORE_FORM);
   const [creatingStore, setCreatingStore] = useState(false);
+  const [pendingVisibilityStorecode, setPendingVisibilityStorecode] = useState("");
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
 
@@ -447,7 +449,7 @@ export default function StoreManagementConsoleClient({
     ? "지갑 연결 상태를 확인하는 중입니다."
     : "관리자 지갑을 연결하면 signed store action을 사용할 수 있습니다.";
   const accessWarningMessage = !canReadSignedData && !isWalletRecovering
-    ? "신규 가맹점 생성과 상세 설정 저장은 관리자 지갑 서명이 필요합니다."
+    ? "신규 가맹점 생성, 운영상태 변경, 상세 설정 저장은 관리자 지갑 서명이 필요합니다."
     : "";
   const heroStatusLabel = loading
     ? "Loading store ledger"
@@ -596,6 +598,102 @@ export default function StoreManagementConsoleClient({
       setCreatingStore(false);
     }
   };
+
+  const patchStoreVisibility = useCallback((storecode: string, viewOnAndOff: boolean) => {
+    const normalizedStorecode = normalizeString(storecode);
+    setData((current) => {
+      const previousVisibleCount = current.summary.visibleCount;
+      const nextStores = current.stores.map((store) => {
+        if (normalizeString(store.storecode) !== normalizedStorecode) {
+          return store;
+        }
+        return {
+          ...store,
+          viewOnAndOff,
+        };
+      });
+
+      const targetStore = current.stores.find((store) => normalizeString(store.storecode) === normalizedStorecode);
+      const previousWasVisible = targetStore?.viewOnAndOff !== false;
+      const nextVisibleCount = previousWasVisible === viewOnAndOff
+        ? previousVisibleCount
+        : previousVisibleCount + (viewOnAndOff ? 1 : -1);
+
+      return {
+        ...current,
+        stores: nextStores,
+        summary: {
+          ...current.summary,
+          visibleCount: Math.max(0, nextVisibleCount),
+        },
+      };
+    });
+  }, []);
+
+  const toggleStoreVisibility = useCallback(async (store: StoreRow) => {
+    if (!activeAccount) {
+      setFeedback({
+        tone: "error",
+        message: "관리자 지갑 연결이 필요합니다.",
+      });
+      return;
+    }
+
+    const storecode = normalizeString(store.storecode);
+    if (!storecode) {
+      setFeedback({
+        tone: "error",
+        message: "가맹점 코드가 없어 상태를 변경할 수 없습니다.",
+      });
+      return;
+    }
+
+    const nextValue = store.viewOnAndOff === false;
+    setPendingVisibilityStorecode(storecode);
+
+    try {
+      const signedBody = await createAdminSignedBody({
+        account: activeAccount,
+        route: STORE_ROUTE_TOGGLE_VIEW,
+        signingPrefix: STORE_SETTINGS_MUTATION_SIGNING_PREFIX,
+        requesterStorecode: "admin",
+        requesterWalletAddress: activeAccount.address,
+        actionFields: {
+          storecode,
+          viewOnAndOff: nextValue,
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/signed-store-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route: STORE_ROUTE_TOGGLE_VIEW,
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "가맹점 노출 상태 변경에 실패했습니다.");
+      }
+
+      patchStoreVisibility(storecode, nextValue);
+      setFeedback({
+        tone: "success",
+        message: `${normalizeString(store.storeName) || storecode} 가맹점을 ${nextValue ? "노출중" : "비노출"} 상태로 변경했습니다.`,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: error instanceof Error ? error.message : "가맹점 노출 상태 변경에 실패했습니다.",
+      });
+    } finally {
+      setPendingVisibilityStorecode("");
+    }
+  }, [activeAccount, patchStoreVisibility]);
 
   return (
     <div className="min-h-screen px-4 py-4 sm:px-5 lg:px-8">
@@ -944,6 +1042,24 @@ export default function StoreManagementConsoleClient({
                           }`}>
                             {store.viewOnAndOff === false ? "비노출" : "노출중"}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void toggleStoreVisibility(store);
+                            }}
+                            disabled={!canReadSignedData || pendingVisibilityStorecode === normalizeString(store.storecode)}
+                            className={`inline-flex h-8 items-center justify-center rounded-full px-3 text-[11px] font-semibold transition ${
+                              store.viewOnAndOff === false
+                                ? "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100"
+                                : "border border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100"
+                            } disabled:cursor-not-allowed disabled:opacity-50`}
+                          >
+                            {pendingVisibilityStorecode === normalizeString(store.storecode)
+                              ? "처리중..."
+                              : store.viewOnAndOff === false
+                                ? "노출하기"
+                                : "비노출하기"}
+                          </button>
                           <div className="text-xs text-slate-500">
                             admin {shortAddress(store.adminWalletAddress)}
                           </div>
@@ -1112,6 +1228,24 @@ export default function StoreManagementConsoleClient({
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void toggleStoreVisibility(store);
+                      }}
+                      disabled={!canReadSignedData || pendingVisibilityStorecode === normalizeString(store.storecode)}
+                      className={`inline-flex h-10 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition ${
+                        store.viewOnAndOff === false
+                          ? "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100"
+                          : "border border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      {pendingVisibilityStorecode === normalizeString(store.storecode)
+                        ? "처리중..."
+                        : store.viewOnAndOff === false
+                          ? "노출하기"
+                          : "비노출하기"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
