@@ -3072,7 +3072,7 @@ export default function BuyorderConsoleClient({
     ? "해당 가맹점 범위의 구매주문, 미신청입금, 판매자 계좌 흐름을 서명 기반으로 확인합니다."
     : "입금 이벤트, 주문 큐, 판매자 계좌 흐름을 하나의 운영 콘솔에서 실시간으로 추적합니다.";
 
-  const tradeSummary = hasPrivilegedOrderAccess ? (data?.tradeSummary || EMPTY_TRADE_SUMMARY) : EMPTY_TRADE_SUMMARY;
+  const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
   const animatedTradeSummaryTotalCount = useAnimatedNumber(tradeSummary.totalCount);
   const animatedTradeSummaryTotalUsdtAmount = useAnimatedNumber(tradeSummary.totalUsdtAmount);
   const animatedTradeSummaryTotalKrwAmount = useAnimatedNumber(tradeSummary.totalKrwAmount);
@@ -3125,8 +3125,9 @@ export default function BuyorderConsoleClient({
     && ordersQueryState === "loading"
     && orders.length === 0
     && totalOrderCount === 0;
-  const shouldShowSignedSummaryPlaceholder =
-    signedOrderDataLoading
+  const shouldShowTradeSummaryPlaceholder =
+    !data?.fetchedAt
+    && (loading || ordersQueryState === "loading")
     && tradeSummary.totalCount === 0
     && tradeSummary.totalSettlementCount === 0;
   const shouldShowSellerBankStatsLoading = signedOrderDataLoading && sellerBankTradeSummaries.length === 0;
@@ -3823,7 +3824,7 @@ export default function BuyorderConsoleClient({
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Count</div>
                 <div className="mt-1 text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                  {shouldShowSignedSummaryPlaceholder
+                  {shouldShowTradeSummaryPlaceholder
                     ? "..."
                     : NUMBER_FORMATTER.format(animatedTradeSummaryTotalCount)}
                 </div>
@@ -3835,7 +3836,7 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래량</div>
                 <div className="mt-2 flex items-end justify-end gap-3 text-right">
                   <span className="text-[1.4rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {shouldShowSignedSummaryPlaceholder
+                    {shouldShowTradeSummaryPlaceholder
                       ? "..."
                       : formatUsdtValue(animatedTradeSummaryTotalUsdtAmount)}
                   </span>
@@ -3847,7 +3848,7 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">거래금액</div>
                 <div className="mt-2 flex items-end justify-end gap-3 text-right">
                   <span className="text-[1.4rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {shouldShowSignedSummaryPlaceholder
+                    {shouldShowTradeSummaryPlaceholder
                       ? "..."
                       : formatKrwValue(animatedTradeSummaryTotalKrwAmount)}
                   </span>
@@ -3866,7 +3867,7 @@ export default function BuyorderConsoleClient({
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Count</div>
                 <div className="mt-1 text-[1.7rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                  {shouldShowSignedSummaryPlaceholder
+                  {shouldShowTradeSummaryPlaceholder
                     ? "..."
                     : NUMBER_FORMATTER.format(animatedTradeSummaryTotalSettlementCount)}
                 </div>
@@ -3878,7 +3879,7 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제량</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {shouldShowSignedSummaryPlaceholder
+                    {shouldShowTradeSummaryPlaceholder
                       ? "..."
                       : formatUsdtValue(animatedTradeSummaryTotalSettlementAmount)}
                   </span>
@@ -3890,7 +3891,7 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">결제금액</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {shouldShowSignedSummaryPlaceholder
+                    {shouldShowTradeSummaryPlaceholder
                       ? "..."
                       : formatKrwValue(animatedTradeSummaryTotalSettlementAmountKrw)}
                   </span>
@@ -3902,7 +3903,7 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료량</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-emerald-600" style={{ fontFamily: "monospace" }}>
-                    {shouldShowSignedSummaryPlaceholder
+                    {shouldShowTradeSummaryPlaceholder
                       ? "..."
                       : formatUsdtValue(animatedTradeSummaryTotalFeeAmount)}
                   </span>
@@ -3914,7 +3915,7 @@ export default function BuyorderConsoleClient({
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">수수료금액</div>
                 <div className="mt-2 flex items-end justify-end gap-2 text-right">
                   <span className="text-[1.25rem] font-bold leading-none text-amber-600" style={{ fontFamily: "monospace" }}>
-                    {shouldShowSignedSummaryPlaceholder
+                    {shouldShowTradeSummaryPlaceholder
                       ? "..."
                       : formatKrwValue(animatedTradeSummaryTotalFeeAmountKrw)}
                   </span>

@@ -143,8 +143,10 @@ export async function POST(request: NextRequest) {
         totalBuyOrders: totalBuyOrdersResponse.json?.result?.totalCount || 0,
         totalClearanceOrders: totalClearanceOrdersResponse.json?.result?.totalCount || 0,
         audioOnBuyOrders: totalBuyOrdersResponse.json?.result?.audioOnCount || 0,
-        p2pTradeCount: tradeSummaryResponse.json?.result?.totalCount || 0,
-        storePaymentCount: tradeSummaryResponse.json?.result?.totalSettlementCount || 0,
+        p2pTradeCount: Number(ordersResult.totalCount || tradeSummaryResponse.json?.result?.totalCount || 0),
+        storePaymentCount: Number(
+          ordersResult.totalSettlementCount || tradeSummaryResponse.json?.result?.totalSettlementCount || 0,
+        ),
       },
       tradeSummary: {
         totalCount: Number(ordersResult.totalCount || tradeSummaryResponse.json?.result?.totalCount || 0),
