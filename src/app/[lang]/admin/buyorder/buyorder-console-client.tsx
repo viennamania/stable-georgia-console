@@ -219,6 +219,7 @@ const EMPTY_BANK_TRANSFER_LIVE_LOGS: BankTransferLiveLogItem[] = [];
 type DashboardResult = {
   fetchedAt: string;
   remoteBackendBaseUrl: string;
+  ordersAccessLevel: string;
   metrics: {
     totalBuyOrders: number;
     totalClearanceOrders: number;
@@ -298,6 +299,7 @@ const EMPTY_BANKTRANSFER_TODAY_SUMMARY: DashboardResult["banktransferTodaySummar
 const EMPTY_DASHBOARD_RESULT: DashboardResult = {
   fetchedAt: "",
   remoteBackendBaseUrl: "",
+  ordersAccessLevel: "public",
   metrics: EMPTY_DASHBOARD_METRICS,
   tradeSummary: EMPTY_TRADE_SUMMARY,
   sellerBankTradeStats: EMPTY_SELLER_BANK_TRADE_STATS,
@@ -1875,8 +1877,8 @@ export default function BuyorderConsoleClient({
     ? "Stable Georgia / Store Buyorder Console"
     : "Stable Georgia / Ops Read Console";
   const ordersDisconnectedMessage = isStoreScoped
-    ? "지갑을 연결하고 서명하면 해당 가맹점 주문 조회가 열립니다."
-    : "지갑을 연결하면 보호된 주문 조회가 열립니다.";
+    ? "지갑을 연결하면 마스킹이 해제되고 해당 가맹점 주문 처리 기능이 열립니다."
+    : "지갑을 연결하면 마스킹이 해제되고 보호된 주문 처리 기능이 열립니다.";
   const walletCardMessage = isWalletRecovering
     ? "지갑 연결 상태를 확인하는 중입니다."
     : ordersDisconnectedMessage;
@@ -2024,8 +2026,6 @@ export default function BuyorderConsoleClient({
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const shouldLoadOrders = canReadSignedData;
-      const shouldWaitForSignedOrders = !canReadSignedData && isWalletRecovering;
       const selectedStorecode = normalizedForcedStorecode || filters.storecode;
 
       if (inflightLoadRef.current) {
@@ -2041,14 +2041,11 @@ export default function BuyorderConsoleClient({
         setRefreshing(true);
       } else {
         setLoading(true);
-        if (shouldLoadOrders || shouldWaitForSignedOrders) {
-          setOrdersQueryState("loading");
-        }
+        setOrdersQueryState("loading");
       }
 
       try {
         let signedOrdersBody: Record<string, unknown> | null = null;
-        let signErrorMessage = "";
 
         if (canReadSignedData && activeAccount) {
           try {
@@ -2069,10 +2066,8 @@ export default function BuyorderConsoleClient({
                 searchOrderStatusCompleted: filters.searchOrderStatusCompleted,
               },
             });
-          } catch (signError) {
-            signErrorMessage = signError instanceof Error
-              ? signError.message
-              : "주문 조회 서명을 준비하지 못했습니다.";
+          } catch {
+            signedOrdersBody = null;
           }
         }
 
@@ -2084,6 +2079,16 @@ export default function BuyorderConsoleClient({
           cache: "no-store",
           body: JSON.stringify({
             signedOrdersBody,
+            orderFilters: {
+              storecode: selectedStorecode,
+              limit: filters.limit,
+              page: filters.page,
+              fromDate: filters.fromDate,
+              toDate: filters.toDate,
+              searchTradeId: filters.searchTradeId,
+              searchOrderStatusCancelled: filters.searchOrderStatusCancelled,
+              searchOrderStatusCompleted: filters.searchOrderStatusCompleted,
+            },
             selectedStorecode,
             unmatchedFilters: {
               limit: 24,
@@ -2108,6 +2113,7 @@ export default function BuyorderConsoleClient({
             ...baseResult,
             fetchedAt: String(result?.fetchedAt || ""),
             remoteBackendBaseUrl: String(result?.remoteBackendBaseUrl || ""),
+            ordersAccessLevel: String(result?.ordersAccessLevel || "public"),
             metrics: {
               totalBuyOrders: Number(result?.metrics?.totalBuyOrders || 0),
               totalClearanceOrders: Number(result?.metrics?.totalClearanceOrders || 0),
@@ -2134,14 +2140,6 @@ export default function BuyorderConsoleClient({
             unmatchedTotalAmount: Number(result?.unmatchedTotalAmount || 0),
             unmatchedTotalCount: Number(result?.unmatchedTotalCount || 0),
             selectedStore: result?.selectedStore || null,
-          };
-
-          if (!signedOrdersBody) {
-            return nextData;
-          }
-
-          return {
-            ...nextData,
             tradeSummary: {
               totalCount: Number(result?.tradeSummary?.totalCount || 0),
               totalUsdtAmount: Number(result?.tradeSummary?.totalUsdtAmount || 0),
@@ -2160,28 +2158,16 @@ export default function BuyorderConsoleClient({
             orders: Array.isArray(result?.orders) ? result.orders : EMPTY_ORDERS,
             orderTotalCount: Number(result?.orderTotalCount || 0),
           };
+
+          return nextData;
         });
 
-        if (signedOrdersBody) {
-          setError("");
-          setOrdersQueryState("ready");
-        } else if (shouldWaitForSignedOrders) {
-          setError("");
-        } else if (signErrorMessage) {
-          setError(signErrorMessage);
-          setOrdersQueryState("error");
-        } else {
-          setError("");
-          setOrdersQueryState("idle");
-        }
+        setError("");
+        setOrdersQueryState("ready");
         lastDashboardFetchAtRef.current = Date.now();
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
-        if (shouldLoadOrders) {
-          setOrdersQueryState("error");
-        } else if (!shouldWaitForSignedOrders) {
-          setOrdersQueryState("idle");
-        }
+        setOrdersQueryState("error");
       } finally {
         inflightLoadRef.current = false;
         setLoading(false);
@@ -2194,7 +2180,7 @@ export default function BuyorderConsoleClient({
         }
       }
     },
-    [activeAccount, canReadSignedData, filters, isWalletRecovering, normalizedForcedStorecode],
+    [activeAccount, canReadSignedData, filters, normalizedForcedStorecode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
@@ -3002,8 +2988,8 @@ export default function BuyorderConsoleClient({
     requestRealtimeRefresh,
   ]);
 
-  const shouldRevealSignedOrderData = canReadSignedData || isWalletRecovering;
-  const orders = shouldRevealSignedOrderData ? (data?.orders ?? EMPTY_ORDERS) : EMPTY_ORDERS;
+  const hasPrivilegedOrderAccess = data?.ordersAccessLevel === "privileged";
+  const orders = data?.orders ?? EMPTY_ORDERS;
   const stores = useMemo(() => {
     if (isStoreScoped) {
       return data?.selectedStore ? [data.selectedStore as StoreItem] : EMPTY_STORES;
@@ -3086,8 +3072,7 @@ export default function BuyorderConsoleClient({
     ? "해당 가맹점 범위의 구매주문, 미신청입금, 판매자 계좌 흐름을 서명 기반으로 확인합니다."
     : "입금 이벤트, 주문 큐, 판매자 계좌 흐름을 하나의 운영 콘솔에서 실시간으로 추적합니다.";
 
-  const isSignedIn = canReadSignedData;
-  const tradeSummary = shouldRevealSignedOrderData ? (data?.tradeSummary || EMPTY_TRADE_SUMMARY) : EMPTY_TRADE_SUMMARY;
+  const tradeSummary = hasPrivilegedOrderAccess ? (data?.tradeSummary || EMPTY_TRADE_SUMMARY) : EMPTY_TRADE_SUMMARY;
   const animatedTradeSummaryTotalCount = useAnimatedNumber(tradeSummary.totalCount);
   const animatedTradeSummaryTotalUsdtAmount = useAnimatedNumber(tradeSummary.totalUsdtAmount);
   const animatedTradeSummaryTotalKrwAmount = useAnimatedNumber(tradeSummary.totalKrwAmount);
@@ -3096,7 +3081,7 @@ export default function BuyorderConsoleClient({
   const animatedTradeSummaryTotalSettlementAmountKrw = useAnimatedNumber(tradeSummary.totalSettlementAmountKRW);
   const animatedTradeSummaryTotalFeeAmount = useAnimatedNumber(tradeSummary.totalFeeAmount);
   const animatedTradeSummaryTotalFeeAmountKrw = useAnimatedNumber(tradeSummary.totalFeeAmountKRW);
-  const sellerBankTradeStats = shouldRevealSignedOrderData
+  const sellerBankTradeStats = hasPrivilegedOrderAccess
     ? (data?.sellerBankTradeStats || EMPTY_SELLER_BANK_TRADE_STATS)
     : EMPTY_SELLER_BANK_TRADE_STATS;
   const banktransferTodaySummary = data?.banktransferTodaySummary || EMPTY_BANKTRANSFER_TODAY_SUMMARY;
@@ -3131,15 +3116,15 @@ export default function BuyorderConsoleClient({
   }, [orders]);
   const shouldShowOrdersSpinner = orders.length === 0 && (loading || ordersQueryState === "loading");
   const shouldShowOrdersConnectPrompt =
-    orders.length === 0
-    && !isSignedIn
-    && !isWalletRecovering
-    && ordersQueryState === "idle"
-    && !loading;
+    false;
   const shouldShowOrdersErrorState = orders.length === 0 && ordersQueryState === "error" && !loading;
-  const totalOrderCount = shouldRevealSignedOrderData ? Math.max(0, Number(data?.orderTotalCount || 0)) : 0;
+  const totalOrderCount = Math.max(0, Number(data?.orderTotalCount || 0));
   const orderLimit = Math.max(1, Number(filters.limit) || 1);
-  const signedOrderDataLoading = ordersQueryState === "loading" && orders.length === 0 && totalOrderCount === 0;
+  const signedOrderDataLoading =
+    hasPrivilegedOrderAccess
+    && ordersQueryState === "loading"
+    && orders.length === 0
+    && totalOrderCount === 0;
   const shouldShowSignedSummaryPlaceholder =
     signedOrderDataLoading
     && tradeSummary.totalCount === 0
@@ -3202,6 +3187,10 @@ export default function BuyorderConsoleClient({
   const pendingSettlementSummary = signedOrderDataLoading
     ? "..."
     : `${NUMBER_FORMATTER.format(pendingSettlementCount)}건`;
+  const showMaskedOrdersNotice =
+    data?.ordersAccessLevel === "public"
+    && Boolean(data?.fetchedAt)
+    && !error;
   const liveQueueCards = isStoreScoped
     ? [
         {
@@ -3972,7 +3961,7 @@ export default function BuyorderConsoleClient({
 
           {!sellerBankStatsCollapsed ? (
             <div className="px-5 py-4">
-              {!isSignedIn && !isWalletRecovering ? (
+              {!hasPrivilegedOrderAccess && !isWalletRecovering && Boolean(data?.fetchedAt) ? (
                 <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
                   판매자 통장별 P2P 거래 통계는 {accessActorLabel} 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
                   위 영역에서 지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`의 계좌별 집계가
@@ -4198,13 +4187,12 @@ export default function BuyorderConsoleClient({
 
           {!buyOrdersCollapsed ? (
             <>
-              {((!isSignedIn && !isWalletRecovering) || error) ? (
+              {(showMaskedOrdersNotice || error) ? (
                 <div className="space-y-4 px-6 pt-4 pb-3">
-                  {!isSignedIn && !isWalletRecovering ? (
+                  {showMaskedOrdersNotice ? (
                     <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
-                      주문 목록은 {accessActorLabel} 지갑을 연결한 뒤 서명해야 불러올 수 있습니다. 위 영역에서
-                      지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`가 로컬 BFF를 통해
-                      호출됩니다.
+                      현재 주문 목록은 공개 마스킹 뷰입니다. 구매자/판매자 이름, 지갑주소, 계좌정보는 일부 마스킹되고
+                      민감한 계좌 통계와 처리 기능은 숨겨집니다. {ordersDisconnectedMessage}
                     </div>
                   ) : null}
 
@@ -4309,9 +4297,9 @@ export default function BuyorderConsoleClient({
                       ? buyerLabel
                       : "";
                     const buyerGradeMeta = getBuyerGradeMeta(order);
-                    const canCompleteOrder = isSignedIn && status === "paymentRequested";
+                    const canCompleteOrder = hasPrivilegedOrderAccess && status === "paymentRequested";
                     const isConfirmingThisOrder = Boolean(confirmingTradeId && rowMatchKey === confirmingTradeId);
-                    const canCancelOrder = isSignedIn && (status === "accepted" || status === "paymentRequested");
+                    const canCancelOrder = hasPrivilegedOrderAccess && (status === "accepted" || status === "paymentRequested");
                     const isCancellingThisOrder = Boolean(cancellingTradeId && rowMatchKey === cancellingTradeId);
                     const cancelledByLabel =
                       status === "cancelled" || status === "canceled"

@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   const signedOrdersBody = asPlainObject(body.signedOrdersBody);
+  const orderFilters = asPlainObject(body.orderFilters);
   const selectedStorecode = normalizeString(body.selectedStorecode);
   const unmatchedFilters = asPlainObject(body.unmatchedFilters);
   const unmatchedLimit = Math.min(parsePositiveInt(unmatchedFilters.limit, 40), 120);
@@ -57,6 +58,16 @@ export async function POST(request: NextRequest) {
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
   const requesterWalletAddress = normalizeString(signedOrdersBody.requesterWalletAddress);
   const requesterStorecode = normalizeString(signedOrdersBody.requesterStorecode) || "admin";
+  const unsignedOrdersBody = {
+    storecode: selectedStorecode,
+    limit: Math.min(parsePositiveInt(orderFilters.limit, 100), 200),
+    page: Math.max(parsePositiveInt(orderFilters.page, 1), 1),
+    fromDate: normalizeString(orderFilters.fromDate),
+    toDate: normalizeString(orderFilters.toDate),
+    searchTradeId: normalizeString(orderFilters.searchTradeId),
+    searchOrderStatusCancelled: Boolean(orderFilters.searchOrderStatusCancelled),
+    searchOrderStatusCompleted: Boolean(orderFilters.searchOrderStatusCompleted),
+  };
 
   const jobs: Array<Promise<{ ok: boolean; status: number; json: any }>> = [
     postRemoteJson("/api/order/getTotalNumberOfBuyOrders", {}),
@@ -97,9 +108,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (hasSignedOrdersBody) {
-    jobs.push(postRemoteJson("/api/order/getAllBuyOrders", signedOrdersBody));
-  }
+  jobs.push(
+    postRemoteJson(
+      "/api/order/getAllBuyOrders",
+      hasSignedOrdersBody ? signedOrdersBody : unsignedOrdersBody,
+    ),
+  );
 
   const results = await Promise.all(jobs);
 
@@ -109,17 +123,15 @@ export async function POST(request: NextRequest) {
   const unmatchedTransfersResponse = results[3];
   const banktransferSummaryResponse = results[4];
   const selectedStoreResponse = selectedStorecode ? results[5] : null;
-  const signedOrdersResponse = hasSignedOrdersBody
-    ? results[results.length - 1]
-    : null;
-  const signedOrdersResult = signedOrdersResponse?.json?.result || {};
+  const ordersResponse = results[results.length - 1];
+  const ordersResult = ordersResponse?.json?.result || {};
 
-  if (hasSignedOrdersBody && signedOrdersResponse && !signedOrdersResponse.ok) {
+  if (ordersResponse && !ordersResponse.ok) {
     return NextResponse.json(
       {
-        error: resolveRemoteError(signedOrdersResponse.json, "Failed to load buy orders"),
+        error: resolveRemoteError(ordersResponse.json, "Failed to load buy orders"),
       },
-      { status: signedOrdersResponse.status || 502 },
+      { status: ordersResponse.status || 502 },
     );
   }
 
@@ -135,19 +147,20 @@ export async function POST(request: NextRequest) {
         storePaymentCount: tradeSummaryResponse.json?.result?.totalSettlementCount || 0,
       },
       tradeSummary: {
-        totalCount: Number(signedOrdersResult.totalCount || tradeSummaryResponse.json?.result?.totalCount || 0),
-        totalUsdtAmount: Number(signedOrdersResult.totalUsdtAmount || 0),
-        totalKrwAmount: Number(signedOrdersResult.totalKrwAmount || 0),
-        totalSettlementCount: Number(signedOrdersResult.totalSettlementCount || tradeSummaryResponse.json?.result?.totalSettlementCount || 0),
-        totalSettlementAmount: Number(signedOrdersResult.totalSettlementAmount || 0),
-        totalSettlementAmountKRW: Number(signedOrdersResult.totalSettlementAmountKRW || 0),
-        totalFeeAmount: Number(signedOrdersResult.totalFeeAmount || 0),
-        totalFeeAmountKRW: Number(signedOrdersResult.totalFeeAmountKRW || 0),
-        totalAgentFeeAmount: Number(signedOrdersResult.totalAgentFeeAmount || 0),
-        totalAgentFeeAmountKRW: Number(signedOrdersResult.totalAgentFeeAmountKRW || 0),
+        totalCount: Number(ordersResult.totalCount || tradeSummaryResponse.json?.result?.totalCount || 0),
+        totalUsdtAmount: Number(ordersResult.totalUsdtAmount || 0),
+        totalKrwAmount: Number(ordersResult.totalKrwAmount || 0),
+        totalSettlementCount: Number(ordersResult.totalSettlementCount || tradeSummaryResponse.json?.result?.totalSettlementCount || 0),
+        totalSettlementAmount: Number(ordersResult.totalSettlementAmount || 0),
+        totalSettlementAmountKRW: Number(ordersResult.totalSettlementAmountKRW || 0),
+        totalFeeAmount: Number(ordersResult.totalFeeAmount || 0),
+        totalFeeAmountKRW: Number(ordersResult.totalFeeAmountKRW || 0),
+        totalAgentFeeAmount: Number(ordersResult.totalAgentFeeAmount || 0),
+        totalAgentFeeAmountKRW: Number(ordersResult.totalAgentFeeAmountKRW || 0),
       },
-      sellerBankTradeStats: Array.isArray(signedOrdersResult.totalBySellerBankAccountNumber)
-        ? signedOrdersResult.totalBySellerBankAccountNumber
+      ordersAccessLevel: String(ordersResult?.view || (hasSignedOrdersBody ? "privileged" : "public")),
+      sellerBankTradeStats: Array.isArray(ordersResult.totalBySellerBankAccountNumber)
+        ? ordersResult.totalBySellerBankAccountNumber
         : [],
       banktransferTodaySummary: {
         dateKst: String(banktransferSummaryResponse?.json?.summary?.dateKst || ""),
@@ -158,8 +171,8 @@ export async function POST(request: NextRequest) {
         totalCount: Number(banktransferSummaryResponse?.json?.summary?.totalCount || 0),
         updatedAt: String(banktransferSummaryResponse?.json?.summary?.updatedAt || ""),
       },
-      orders: signedOrdersResponse?.json?.result?.orders || [],
-      orderTotalCount: signedOrdersResponse?.json?.result?.totalCount || 0,
+      orders: ordersResponse?.json?.result?.orders || [],
+      orderTotalCount: ordersResponse?.json?.result?.totalCount || 0,
       processingBuyOrders: totalBuyOrdersResponse.json?.result?.orders || [],
       processingClearanceOrders: totalClearanceOrdersResponse.json?.result?.orders || [],
       unmatchedTransfers: unmatchedTransfersResponse.json?.result?.transfers || [],
