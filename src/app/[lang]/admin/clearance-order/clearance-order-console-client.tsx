@@ -9,7 +9,6 @@ import { createWallet, inAppWallet } from "thirdweb/wallets";
 
 import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
-import AdminStoreStrip from "@/components/admin/admin-store-strip";
 import {
   BANKTRANSFER_ABLY_CHANNEL,
   BANKTRANSFER_ABLY_EVENT_NAME,
@@ -281,6 +280,31 @@ const getStoreLogoSrc = (store: StoreListItem | StoreDetail | null | undefined) 
   return normalizeText(store?.storeLogo) || "/logo.png";
 };
 
+const getSortOrder = (store: StoreListItem) => {
+  const value = Number(store.clearanceSortOrder);
+  if (Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  return Number.MAX_SAFE_INTEGER;
+};
+
+const compareStoresForSidebar = (left: StoreListItem, right: StoreListItem) => {
+  const orderDiff = getSortOrder(left) - getSortOrder(right);
+  if (orderDiff !== 0) {
+    return orderDiff;
+  }
+
+  const favoriteDiff =
+    Number(Boolean(right.favoriteOnAndOff)) - Number(Boolean(left.favoriteOnAndOff));
+  if (favoriteDiff !== 0) {
+    return favoriteDiff;
+  }
+
+  return getStoreDisplayName(left).localeCompare(getStoreDisplayName(right), "ko-KR", {
+    sensitivity: "base",
+  });
+};
+
 const getUniqueBankOptions = (
   candidates: Array<BankInfo | null | undefined>,
 ) => {
@@ -490,6 +514,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [stores, setStores] = useState<StoreListItem[]>(EMPTY_STORES);
   const [storesLoading, setStoresLoading] = useState(true);
   const [storesError, setStoresError] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedStorecode, setSelectedStorecode] = useState("");
   const [storeContext, setStoreContext] = useState<StoreContextResult | null>(null);
   const [storeContextLoading, setStoreContextLoading] = useState(false);
@@ -517,6 +542,22 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     () => sellerBankBalances.filter((item) => Number(item.balance || 0) > 0),
     [sellerBankBalances],
   );
+  const filteredStores = useMemo(() => {
+    const normalizedKeyword = searchKeyword.trim().toLowerCase();
+    if (!normalizedKeyword) {
+      return [...stores].sort(compareStoresForSidebar);
+    }
+
+    return [...stores]
+      .sort(compareStoresForSidebar)
+      .filter((store) => {
+        const searchable = [
+          getStoreDisplayName(store),
+          normalizeText(store.storecode),
+        ].join(" ").toLowerCase();
+        return searchable.includes(normalizedKeyword);
+      });
+  }, [searchKeyword, stores]);
   const isTodayBuyerBankBalanceDate = buyerBankBalanceDate === createInputDate(0);
 
   const fetchStores = useCallback(async () => {
@@ -1096,45 +1137,116 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
           </div>
         </section>
 
-        <div className="space-y-5">
-          <AdminStoreStrip
-            stores={stores}
-            selectedStorecode={selectedStorecode}
-            onSelectStorecode={setSelectedStorecode}
-            activeAccount={activeAccount}
-            loading={storesLoading}
-            error={storesError}
-            onRefresh={() => {
-              void fetchStores();
-            }}
-            onStoreUpdate={(storecode, patch) => {
-              setStores((current) => current.map((store) => {
-                if (normalizeText(store.storecode) !== normalizeText(storecode)) {
-                  return store;
-                }
+        <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
+          <aside className="console-panel rounded-[30px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.98),rgba(240,247,255,0.94))] p-4 lg:sticky lg:top-4 lg:h-fit lg:self-start">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="console-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                  Stores
+                </div>
+                <h2 className="console-display mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                  가맹점 선택
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void fetchStores();
+                }}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+              >
+                새로고침
+              </button>
+            </div>
 
-                return {
-                  ...store,
-                  ...patch,
-                };
-              }));
-              setStoreContext((current) => {
-                if (!current?.store || normalizeText(current.store.storecode) !== normalizeText(storecode)) {
-                  return current;
-                }
+            <div className="mt-4">
+              <input
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
+                placeholder="storecode / 가맹점명 검색"
+                className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
+              />
+            </div>
 
-                return {
-                  ...current,
-                  store: {
-                    ...current.store,
-                    ...patch,
-                  },
-                };
-              });
-            }}
-            allowAllStores={false}
-            emptyMessage="검색 결과가 없습니다."
-          />
+            <div className="mt-4 max-h-[66vh] space-y-2 overflow-y-auto pr-1">
+              {storesLoading ? (
+                <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                  가맹점 목록을 불러오는 중입니다...
+                </div>
+              ) : null}
+
+              {!storesLoading && storesError ? (
+                <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-5 text-sm text-rose-700">
+                  {storesError}
+                </div>
+              ) : null}
+
+              {!storesLoading && !storesError && filteredStores.length === 0 ? (
+                <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                  검색 결과가 없습니다.
+                </div>
+              ) : null}
+
+              {filteredStores.map((store) => {
+                const storecode = normalizeText(store.storecode);
+                const selected = storecode === selectedStorecode;
+                const storeLabel = getStoreDisplayName(store);
+
+                return (
+                  <button
+                    key={storecode || storeLabel}
+                    type="button"
+                    onClick={() => setSelectedStorecode(storecode)}
+                    className={`w-full rounded-[22px] border px-3 py-3 text-left transition ${
+                      selected
+                        ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
+                        : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <StoreLogo
+                        src={getStoreLogoSrc(store)}
+                        alt={storeLabel}
+                        className={`h-12 w-12 shrink-0 rounded-2xl border ${
+                          selected ? "border-white/15 bg-white/10" : "border-sky-100 bg-sky-50/70"
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">{storeLabel}</div>
+                        <div className={`mt-1 truncate text-[11px] ${selected ? "text-slate-300" : "text-slate-500"}`}>
+                          {storecode}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                            store.viewOnAndOff === false
+                              ? selected
+                                ? "border-rose-200/40 bg-rose-400/10 text-rose-100"
+                                : "border-rose-200 bg-rose-50 text-rose-700"
+                              : selected
+                                ? "border-emerald-200/40 bg-emerald-400/10 text-emerald-100"
+                                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          }`}>
+                            {store.viewOnAndOff === false ? "비노출" : "노출중"}
+                          </span>
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                            store.liveOnAndOff === false
+                              ? selected
+                                ? "border-slate-300/30 bg-slate-200/10 text-slate-200"
+                                : "border-slate-200 bg-slate-50 text-slate-600"
+                              : selected
+                                ? "border-sky-200/40 bg-sky-400/10 text-sky-100"
+                                : "border-sky-200 bg-sky-50 text-sky-700"
+                          }`}>
+                            {store.liveOnAndOff === false ? "중지됨" : "운영중"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
           <section className="flex min-h-[72vh] min-w-0 flex-col gap-5">
             <section className="console-panel overflow-hidden rounded-[30px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(247,254,250,0.96),rgba(255,255,255,0.98))]">
@@ -1219,7 +1331,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                   가맹점을 선택하세요
                 </div>
                 <div className="mt-3 max-w-xl text-sm leading-7 text-slate-500">
-                  상단 목록에서 가맹점을 선택하면 해당 가맹점 기준 청산주문 생성, 출금 live,
+                  좌측 목록에서 가맹점을 선택하면 해당 가맹점 기준 청산주문 생성, 출금 live,
                   `Clearance stream`을 표시합니다.
                 </div>
               </div>
