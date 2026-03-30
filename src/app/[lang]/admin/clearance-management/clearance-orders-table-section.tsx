@@ -12,8 +12,6 @@ import {
   getBuyerBankSummary,
   getBuyerDisplayName,
   getClearanceOrderCreatorLabel,
-  getClearanceOrderCreatorMetaLabel,
-  getClearanceOrderCreationMeta,
   getDepositCompletedActorLabel,
   getSellerBankSummary,
   getStatusMeta,
@@ -160,7 +158,6 @@ export default function ClearanceOrdersTableSection({
                 const tradeId = String(order.tradeId || "").trim();
                 const statusMeta = getStatusMeta(order.status);
                 const withdrawalStatusMeta = getWithdrawalStatusMeta(order);
-                const creationMeta = getClearanceOrderCreationMeta(order);
                 const processingModeMeta = getWithdrawalProcessingModeMeta(order);
                 const buyerLabel = getBuyerDisplayName(order);
                 const buyerBankSummary = getBuyerBankSummary(order);
@@ -168,7 +165,6 @@ export default function ClearanceOrdersTableSection({
                 const createdAtLabel = formatDateTime(order.createdAt);
                 const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
                 const createdByLabel = getClearanceOrderCreatorLabel(order);
-                const createdByMetaLabel = getClearanceOrderCreatorMetaLabel(order);
                 const transactionHash = String(order.transactionHash || "").trim();
                 const depositCompletedActorLabel = getDepositCompletedActorLabel(order.buyer);
                 const isWithdrawalCompleted = order.buyer?.depositCompleted === true;
@@ -224,18 +220,10 @@ export default function ClearanceOrdersTableSection({
                             <span className="break-words">
                               {createdAtLabel === "-" ? "-" : `${createdAtLabel} · ${createdTimeAgoLabel}`}
                             </span>
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${creationMeta.className}`}>
-                              {creationMeta.label}
-                            </span>
                           </div>
                           {createdByLabel ? (
                             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                               <span>생성자 {createdByLabel}</span>
-                              {createdByMetaLabel ? (
-                                <span className="console-mono uppercase tracking-[0.12em] text-slate-400">
-                                  {createdByMetaLabel}
-                                </span>
-                              ) : null}
                             </div>
                           ) : null}
                         </div>

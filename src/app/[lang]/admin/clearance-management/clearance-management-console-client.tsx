@@ -90,6 +90,9 @@ const ClearanceActionModal = dynamic(
   { ssr: false },
 );
 
+const ORDER_SIGNED_WARMUP_RETRY_MS = 900;
+const ORDER_SIGNED_WARMUP_MAX_RETRIES = 4;
+
 export default function ClearanceManagementConsoleClient({
   lang: _lang,
   embedded = false,
@@ -122,6 +125,7 @@ export default function ClearanceManagementConsoleClient({
   const [refreshing, setRefreshing] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
+  const [ordersSignerWarmup, setOrdersSignerWarmup] = useState(false);
   const [error, setError] = useState("");
   const [withdrawalRealtimeItems, setWithdrawalRealtimeItems] = useState<WithdrawalRealtimeItem[]>([]);
   const [connectionState, setConnectionState] = useState<Ably.ConnectionState>("initialized");
@@ -139,6 +143,7 @@ export default function ClearanceManagementConsoleClient({
   const inflightOrdersLoadRef = useRef(false);
   const queuedSilentOrdersRefreshRef = useRef(false);
   const ordersRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ordersSignerWarmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBuyorderEventIdRef = useRef("");
   const lastWithdrawalEventIdRef = useRef("");
@@ -147,6 +152,8 @@ export default function ClearanceManagementConsoleClient({
   const ablyClientIdRef = useRef(`console-clearance-${Math.random().toString(36).slice(2, 10)}`);
   const desiredBaseLoadSignatureRef = useRef("");
   const desiredOrdersLoadSignatureRef = useRef("");
+  const lastOrdersSignerWarmupSignatureRef = useRef("");
+  const ordersSignerWarmupRetryCountRef = useRef(0);
 
   desiredBaseLoadSignatureRef.current = createBaseLoadSignature(
     activeAccount?.address,
@@ -472,7 +479,38 @@ export default function ClearanceManagementConsoleClient({
                 toDate: filters.toDate,
               },
             });
+            if (ordersSignerWarmupTimerRef.current) {
+              clearTimeout(ordersSignerWarmupTimerRef.current);
+              ordersSignerWarmupTimerRef.current = null;
+            }
+            lastOrdersSignerWarmupSignatureRef.current = loadSignature;
+            ordersSignerWarmupRetryCountRef.current = 0;
+            setOrdersSignerWarmup(false);
           } catch {
+            const nextRetryCount =
+              lastOrdersSignerWarmupSignatureRef.current === loadSignature
+                ? ordersSignerWarmupRetryCountRef.current + 1
+                : 1;
+
+            lastOrdersSignerWarmupSignatureRef.current = loadSignature;
+            ordersSignerWarmupRetryCountRef.current = nextRetryCount;
+
+            if (nextRetryCount <= ORDER_SIGNED_WARMUP_MAX_RETRIES) {
+              if (ordersSignerWarmupTimerRef.current) {
+                clearTimeout(ordersSignerWarmupTimerRef.current);
+              }
+
+              setOrdersSignerWarmup(true);
+              setError("");
+              ordersSignerWarmupTimerRef.current = setTimeout(() => {
+                ordersSignerWarmupTimerRef.current = null;
+                void loadOrdersDashboard({ silent: true });
+              }, ORDER_SIGNED_WARMUP_RETRY_MS);
+
+              return;
+            }
+
+            setOrdersSignerWarmup(false);
             signedOrdersBody = null;
           }
         }
@@ -508,6 +546,9 @@ export default function ClearanceManagementConsoleClient({
 
         const result = payload.result as ClearanceOrdersResult;
         const mergedOrdersError = normalizeText(result?.ordersError);
+        lastOrdersSignerWarmupSignatureRef.current = loadSignature;
+        ordersSignerWarmupRetryCountRef.current = 0;
+        setOrdersSignerWarmup(false);
 
         setData((current) => ({
           ...(current || EMPTY_CLEARANCE_DASHBOARD),
@@ -582,6 +623,9 @@ export default function ClearanceManagementConsoleClient({
     return () => {
       if (copyResetTimerRef.current) {
         clearTimeout(copyResetTimerRef.current);
+      }
+      if (ordersSignerWarmupTimerRef.current) {
+        clearTimeout(ordersSignerWarmupTimerRef.current);
       }
     };
   }, []);
@@ -719,6 +763,7 @@ export default function ClearanceManagementConsoleClient({
   const supportsPublicMaskedOrders = ordersQueryMode === "buyOrders";
   const ordersError = normalizeText(data?.ordersError);
   const orders = data?.orders || EMPTY_ORDERS;
+  const isOrdersAccessRecovering = isWalletRecovering || ordersSignerWarmup;
   const selectedStoreSummary = useMemo(() => {
     if (!filters.storecode) {
       return null;
@@ -1009,7 +1054,11 @@ export default function ClearanceManagementConsoleClient({
       };
     });
   }, [totalOrderPages]);
-  const showOrdersLoadingState = ordersLoading && totalOrderCount === 0 && orders.length === 0 && !ordersError;
+  const showOrdersLoadingState =
+    (ordersLoading || ordersSignerWarmup)
+    && totalOrderCount === 0
+    && orders.length === 0
+    && !ordersError;
   const usesCollectOrdersSummary = ordersQueryMode === "collectOrdersForSeller";
 
   useEffect(() => {
@@ -1089,7 +1138,7 @@ export default function ClearanceManagementConsoleClient({
               address={activeAccount?.address}
               accessLabel={walletAccessLabel}
               title={walletTitle}
-              disconnectedMessage={walletCardMessage}
+              disconnectedMessage={isOrdersAccessRecovering ? "지갑 서명 준비를 확인하는 중입니다." : walletCardMessage}
               errorMessage={connectionError}
             />
           </div>
@@ -1302,15 +1351,16 @@ export default function ClearanceManagementConsoleClient({
           error={error}
           ordersError={ordersError}
           orders={orders}
-          ordersLoading={ordersLoading}
+          ordersLoading={ordersLoading || ordersSignerWarmup}
           ordersRefreshing={ordersRefreshing}
-          isWalletRecovering={isWalletRecovering}
+          isWalletRecovering={isOrdersAccessRecovering}
           hasPrivilegedOrderAccess={hasPrivilegedOrderAccess}
           disconnectedMessage={disconnectedMessage}
           showMaskedNotice={
             supportsPublicMaskedOrders
             && Boolean(data?.fetchedAt)
             && !hasPrivilegedOrderAccess
+            && !ordersSignerWarmup
             && !ordersError
           }
           processingOrderId={processingOrderId}
