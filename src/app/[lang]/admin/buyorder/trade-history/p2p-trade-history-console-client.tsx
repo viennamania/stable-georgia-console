@@ -863,7 +863,7 @@ export default function P2PTradeHistoryConsoleClient({
               <div className="console-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
                 {item.label}
               </div>
-              <div className="console-display mt-3 text-[1.9rem] font-semibold tracking-[-0.06em] text-slate-950">
+              <div className="console-display mt-3 text-right text-[1.55rem] font-semibold leading-[1.12] tracking-[-0.05em] text-slate-950 sm:text-[1.7rem]">
                 {item.value}
               </div>
             </div>
