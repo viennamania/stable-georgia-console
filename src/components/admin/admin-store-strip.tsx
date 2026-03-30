@@ -17,6 +17,8 @@ export type AdminStoreStripItem = {
   storeLogo?: string;
   viewOnAndOff?: boolean;
   liveOnAndOff?: boolean;
+  favoriteOnAndOff?: boolean;
+  clearanceSortOrder?: number;
 };
 
 type AdminStoreStripProps = {
@@ -57,6 +59,31 @@ const getStoreDisplayName = (store: AdminStoreStripItem | null | undefined) => {
 
 const getStoreLogoSrc = (store: AdminStoreStripItem | null | undefined) => {
   return normalizeText(store?.storeLogo) || "/logo.png";
+};
+
+const getSortOrder = (store: AdminStoreStripItem) => {
+  const value = Number(store.clearanceSortOrder);
+  if (Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  return Number.MAX_SAFE_INTEGER;
+};
+
+const compareStoresForStrip = (left: AdminStoreStripItem, right: AdminStoreStripItem) => {
+  const orderDiff = getSortOrder(left) - getSortOrder(right);
+  if (orderDiff !== 0) {
+    return orderDiff;
+  }
+
+  const favoriteDiff =
+    Number(Boolean(right.favoriteOnAndOff)) - Number(Boolean(left.favoriteOnAndOff));
+  if (favoriteDiff !== 0) {
+    return favoriteDiff;
+  }
+
+  return getStoreDisplayName(left).localeCompare(getStoreDisplayName(right), "ko-KR", {
+    sensitivity: "base",
+  });
 };
 
 const StoreLogo = ({
@@ -106,23 +133,32 @@ export default function AdminStoreStrip({
 
   useEffect(() => {
     setPortalTarget(document.body);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setIsExpanded(false);
+    }
   }, []);
 
   const normalizedSelectedStorecode = normalizeText(selectedStorecode);
   const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
+  const visibleStores = useMemo(
+    () => stores
+      .filter((store) => store.viewOnAndOff !== false)
+      .sort(compareStoresForStrip),
+    [stores],
+  );
   const filteredStores = useMemo(() => {
     if (!normalizedSearchKeyword) {
-      return stores;
+      return visibleStores;
     }
 
-    return stores.filter((store) => {
+    return visibleStores.filter((store) => {
       const searchable = [
         normalizeText(store.storecode),
         getStoreDisplayName(store),
       ].join(" ").toLowerCase();
       return searchable.includes(normalizedSearchKeyword);
     });
-  }, [normalizedSearchKeyword, stores]);
+  }, [normalizedSearchKeyword, visibleStores]);
 
   const selectedStore = useMemo(() => {
     if (!normalizedSelectedStorecode || normalizedSelectedStorecode === normalizeText(allStoresValue)) {
@@ -132,13 +168,10 @@ export default function AdminStoreStrip({
     return stores.find((store) => normalizeText(store.storecode) === normalizedSelectedStorecode) || null;
   }, [allStoresValue, normalizedSelectedStorecode, stores]);
 
-  const visibleStoreCount = useMemo(
-    () => stores.filter((store) => store.viewOnAndOff !== false).length,
-    [stores],
-  );
+  const visibleStoreCount = visibleStores.length;
   const liveStoreCount = useMemo(
-    () => stores.filter((store) => store.liveOnAndOff !== false).length,
-    [stores],
+    () => visibleStores.filter((store) => store.liveOnAndOff !== false).length,
+    [visibleStores],
   );
 
   const toggleStoreLive = useCallback(async (store: AdminStoreStripItem) => {
@@ -207,6 +240,7 @@ export default function AdminStoreStrip({
       <div className="mx-auto w-full max-w-[1880px] px-4 sm:px-5 lg:px-8">
         <div className="pointer-events-auto lg:ml-[272px]">
           <aside className="console-panel w-full overflow-hidden rounded-[30px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.98),rgba(240,247,255,0.94))] shadow-[0_24px_60px_-42px_rgba(14,165,233,0.45)] backdrop-blur">
+            <div className="max-h-[calc(100vh-11.75rem)] overflow-y-auto overscroll-y-contain lg:max-h-none lg:overflow-visible">
             <div className="border-b border-sky-100/80 px-4 py-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-2">
@@ -217,9 +251,6 @@ export default function AdminStoreStrip({
                     {title}
                   </h2>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600">
-                      전체 {NUMBER_FORMATTER.format(stores.length)}개
-                    </span>
                     <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">
                       노출중 {NUMBER_FORMATTER.format(visibleStoreCount)}개
                     </span>
@@ -330,7 +361,7 @@ export default function AdminStoreStrip({
                     <div className="flex min-w-full gap-3 pb-1">
                       {allowAllStores ? (
                         <article
-                          className={`w-[250px] shrink-0 rounded-[24px] border p-4 transition ${
+                          className={`w-[220px] shrink-0 rounded-[24px] border p-4 transition sm:w-[250px] ${
                             normalizedSelectedStorecode === normalizeText(allStoresValue)
                               ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
                               : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
@@ -370,7 +401,7 @@ export default function AdminStoreStrip({
                         return (
                           <article
                             key={storecode || storeLabel}
-                            className={`w-[280px] shrink-0 rounded-[24px] border p-4 transition ${
+                            className={`w-[232px] shrink-0 rounded-[24px] border p-4 transition sm:w-[280px] ${
                               selected
                                 ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
                                 : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
@@ -455,6 +486,7 @@ export default function AdminStoreStrip({
                 ) : null}
               </div>
             ) : null}
+            </div>
           </aside>
         </div>
       </div>

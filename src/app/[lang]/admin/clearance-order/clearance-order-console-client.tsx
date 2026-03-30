@@ -14,6 +14,7 @@ import {
   BANKTRANSFER_ABLY_EVENT_NAME,
   type BankTransferDashboardEvent,
 } from "@/lib/realtime/banktransfer";
+import { STORE_SETTINGS_MUTATION_SIGNING_PREFIX } from "@/lib/security/store-settings-admin";
 import { thirdwebClient } from "@/lib/thirdweb-client";
 
 const ClearanceOrderEmbeddedStream = dynamic(
@@ -516,6 +517,8 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   const [storesError, setStoresError] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedStorecode, setSelectedStorecode] = useState("");
+  const [updatingOrderStorecode, setUpdatingOrderStorecode] = useState("");
+  const [orderSaveError, setOrderSaveError] = useState("");
   const [storeContext, setStoreContext] = useState<StoreContextResult | null>(null);
   const [storeContextLoading, setStoreContextLoading] = useState(false);
   const [storeContextError, setStoreContextError] = useState("");
@@ -558,6 +561,13 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
         return searchable.includes(normalizedKeyword);
       });
   }, [searchKeyword, stores]);
+  const storePositionMap = useMemo(() => {
+    const map = new Map<string, number>();
+    [...stores].sort(compareStoresForSidebar).forEach((store, index) => {
+      map.set(normalizeText(store.storecode), index);
+    });
+    return map;
+  }, [stores]);
   const isTodayBuyerBankBalanceDate = buyerBankBalanceDate === createInputDate(0);
 
   const fetchStores = useCallback(async () => {
@@ -889,6 +899,92 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     };
   }, [activeAccount, applyRealtimeSellerBankBalance, isTodayBuyerBankBalanceDate]);
 
+  const moveStoreOrder = useCallback(async (storecode: string, offset: -1 | 1) => {
+    if (updatingOrderStorecode || searchKeyword.trim()) {
+      return;
+    }
+
+    if (!activeAccount?.address) {
+      setOrderSaveError("관리자 지갑을 연결해야 가맹점 순서를 저장할 수 있습니다.");
+      return;
+    }
+
+    const currentOrder = [...stores].sort(compareStoresForSidebar);
+    const currentIndex = currentOrder.findIndex((store) => normalizeText(store.storecode) === storecode);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    const targetIndex = currentIndex + offset;
+    if (targetIndex < 0 || targetIndex >= currentOrder.length) {
+      return;
+    }
+
+    const reordered = [...currentOrder];
+    [reordered[currentIndex], reordered[targetIndex]] = [
+      reordered[targetIndex],
+      reordered[currentIndex],
+    ];
+
+    const reorderedWithOrder = reordered.map((store, index) => ({
+      ...store,
+      clearanceSortOrder: index + 1,
+    }));
+
+    const previousStores = stores;
+    const nextOrderMap = new Map(
+      reorderedWithOrder.map((store) => [normalizeText(store.storecode), store.clearanceSortOrder]),
+    );
+
+    setOrderSaveError("");
+    setUpdatingOrderStorecode(storecode);
+    setStores((prev) => prev.map((store) => ({
+      ...store,
+      clearanceSortOrder: nextOrderMap.get(normalizeText(store.storecode)) ?? store.clearanceSortOrder,
+    })));
+
+    try {
+      const signedBody = await createAdminSignedBody({
+        account: activeAccount,
+        route: "/api/store/updateClearanceSortOrders",
+        signingPrefix: STORE_SETTINGS_MUTATION_SIGNING_PREFIX,
+        requesterStorecode: "admin",
+        requesterWalletAddress: activeAccount.address,
+        actionFields: {
+          orders: reorderedWithOrder.map((store) => ({
+            storecode: normalizeText(store.storecode),
+            clearanceSortOrder: Number(store.clearanceSortOrder || 0),
+          })),
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/signed-store-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route: "/api/store/updateClearanceSortOrders",
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "가맹점 순서 저장에 실패했습니다.");
+      }
+
+      setStores(reorderedWithOrder);
+    } catch (error) {
+      setStores(previousStores);
+      setOrderSaveError(
+        error instanceof Error ? error.message : "가맹점 순서 저장에 실패했습니다.",
+      );
+    } finally {
+      setUpdatingOrderStorecode("");
+    }
+  }, [activeAccount, searchKeyword, stores, updatingOrderStorecode]);
+
   const selectedStore = storeContext?.store || null;
   const hasPrivilegedStoreRead = storeContext?.hasPrivilegedStoreRead === true;
   const storeSensitiveReadMessage = normalizeText(storeContext?.storeReadMessage)
@@ -1168,6 +1264,18 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
               />
             </div>
 
+            {searchKeyword.trim() ? (
+              <div className="mt-3 text-xs text-amber-600">
+                검색 중에는 순서 변경이 비활성화됩니다.
+              </div>
+            ) : null}
+
+            {orderSaveError ? (
+              <div className="mt-3 rounded-[18px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                {orderSaveError}
+              </div>
+            ) : null}
+
             <div className="mt-4 max-h-[66vh] space-y-2 overflow-y-auto pr-1">
               {storesLoading ? (
                 <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
@@ -1191,19 +1299,29 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                 const storecode = normalizeText(store.storecode);
                 const selected = storecode === selectedStorecode;
                 const storeLabel = getStoreDisplayName(store);
+                const storeIndex = storePositionMap.get(storecode) ?? -1;
+                const canMoveUp =
+                  !searchKeyword.trim() && storeIndex > 0 && !updatingOrderStorecode;
+                const canMoveDown =
+                  !searchKeyword.trim()
+                  && storeIndex >= 0
+                  && storeIndex < stores.length - 1
+                  && !updatingOrderStorecode;
 
                 return (
-                  <button
+                  <div
                     key={storecode || storeLabel}
-                    type="button"
-                    onClick={() => setSelectedStorecode(storecode)}
-                    className={`w-full rounded-[22px] border px-3 py-3 text-left transition ${
+                    className={`flex items-center gap-2 rounded-[22px] border px-3 py-3 transition ${
                       selected
                         ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
                         : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
                     }`}
                   >
-                    <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStorecode(storecode)}
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                    >
                       <StoreLogo
                         src={getStoreLogoSrc(store)}
                         alt={storeLabel}
@@ -1241,8 +1359,43 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                           </span>
                         </div>
                       </div>
+                    </button>
+
+                    <div className="flex shrink-0 flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void moveStoreOrder(storecode, -1);
+                        }}
+                        disabled={!canMoveUp}
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-semibold transition ${
+                          selected
+                            ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                            : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+                        } ${canMoveUp ? "cursor-pointer" : "cursor-not-allowed opacity-40"}`}
+                        aria-label={`${storeLabel} 위로 이동`}
+                        title="위로 이동"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void moveStoreOrder(storecode, 1);
+                        }}
+                        disabled={!canMoveDown}
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-semibold transition ${
+                          selected
+                            ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                            : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+                        } ${canMoveDown ? "cursor-pointer" : "cursor-not-allowed opacity-40"}`}
+                        aria-label={`${storeLabel} 아래로 이동`}
+                        title="아래로 이동"
+                      >
+                        ↓
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
