@@ -128,6 +128,7 @@ export default function AdminStoreStrip({
   const [isDesktopExpanded, setIsDesktopExpanded] = useState(true);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [mobileTopOffset, setMobileTopOffset] = useState<number | null>(null);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [actionError, setActionError] = useState("");
   const [pendingLiveStorecode, setPendingLiveStorecode] = useState("");
@@ -151,6 +152,42 @@ export default function AdminStoreStrip({
       mediaQuery.removeEventListener("change", syncViewport);
     };
   }, []);
+
+  useEffect(() => {
+    if (!portalTarget) {
+      return undefined;
+    }
+
+    const header = document.querySelector<HTMLElement>("[data-admin-mobile-header='true']");
+    if (!header) {
+      setMobileTopOffset(null);
+      return undefined;
+    }
+
+    const syncHeaderOffset = () => {
+      const rect = header.getBoundingClientRect();
+      const nextOffset = Math.max(0, Math.round(rect.bottom + 8));
+      setMobileTopOffset(nextOffset);
+    };
+
+    syncHeaderOffset();
+
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => {
+        syncHeaderOffset();
+      })
+      : null;
+
+    observer?.observe(header);
+    window.addEventListener("resize", syncHeaderOffset);
+    window.addEventListener("scroll", syncHeaderOffset, { passive: true });
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", syncHeaderOffset);
+      window.removeEventListener("scroll", syncHeaderOffset);
+    };
+  }, [portalTarget]);
 
   const normalizedSelectedStorecode = normalizeText(selectedStorecode);
   const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
@@ -254,6 +291,12 @@ export default function AdminStoreStrip({
   const mobileSummaryDescription = selectedStore
     ? (normalizeText(selectedStore.storecode) || "선택된 가맹점")
     : `가맹점 ${NUMBER_FORMATTER.format(visibleStoreCount)}개 · 운영중 ${NUMBER_FORMATTER.format(liveStoreCount)}개`;
+  const mobileOverlayStyle = isMobileViewport && mobileTopOffset !== null
+    ? { top: `${mobileTopOffset}px` }
+    : undefined;
+  const mobileSheetStyle = isMobileViewport && mobileTopOffset !== null
+    ? { top: `${mobileTopOffset}px` }
+    : undefined;
 
   if (!portalTarget) {
     return null;
@@ -261,7 +304,10 @@ export default function AdminStoreStrip({
 
   return createPortal(
     <>
-      <div className={`pointer-events-none fixed inset-x-0 z-40 ${stickyTopClassName}`}>
+      <div
+        className={`pointer-events-none fixed inset-x-0 z-40 ${stickyTopClassName}`}
+        style={mobileOverlayStyle}
+      >
         <div className="mx-auto w-full max-w-[1880px] px-4 sm:px-5 lg:px-8">
           <div className="pointer-events-auto lg:ml-[272px]">
             <div className="lg:hidden">
@@ -317,48 +363,25 @@ export default function AdminStoreStrip({
             <div className="hidden lg:block">
               <aside className="console-panel w-full overflow-hidden rounded-[22px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.98),rgba(240,247,255,0.94))] shadow-[0_16px_40px_-34px_rgba(14,165,233,0.34)] backdrop-blur">
                 <div className="max-h-[calc(100vh-13.5rem)] overflow-y-auto overscroll-y-contain lg:max-h-none lg:overflow-visible">
-                  <div className="border-b border-sky-100/80 px-3 py-2.5 sm:px-3.5 sm:py-3">
+                  <div className="border-b border-sky-100/80 px-3 py-2 sm:px-3.5 sm:py-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="space-y-1">
-                        <h2 className="console-display text-[1.08rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[1.15rem]">
+                      <div className="min-w-0 space-y-0.5">
+                        <h2 className="console-display text-[1rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[1.08rem]">
                           {title}
                         </h2>
-                        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600">
-                            가맹점 {NUMBER_FORMATTER.format(visibleStoreCount)}개
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+                          <span>
+                            가맹점 {NUMBER_FORMATTER.format(visibleStoreCount)}개 · 운영중 {NUMBER_FORMATTER.format(liveStoreCount)}개
                           </span>
-                          <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-sky-700">
-                            운영중 {NUMBER_FORMATTER.format(liveStoreCount)}개
-                          </span>
+                          {selectedStore ? (
+                            <span className="truncate rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">
+                              {getStoreDisplayName(selectedStore)}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        {selectedStore ? (
-                          <div className="hidden min-w-[190px] items-center gap-2 rounded-[18px] border border-slate-200/80 bg-white/85 px-2.5 py-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] lg:flex">
-                            <StoreLogo
-                              src={getStoreLogoSrc(selectedStore)}
-                              alt={getStoreDisplayName(selectedStore)}
-                              className="h-8 w-8 shrink-0 rounded-2xl border border-sky-100 bg-sky-50/70"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-[12px] font-semibold text-slate-950">
-                                {getStoreDisplayName(selectedStore)}
-                              </div>
-                              <div className="mt-0.5 truncate text-[10px] text-slate-500">
-                                {normalizeText(selectedStore.storecode) || "-"}
-                              </div>
-                            </div>
-                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                              selectedStore.liveOnAndOff === false
-                                ? "border-slate-200 bg-slate-50 text-slate-600"
-                                : "border-sky-200 bg-sky-50 text-sky-700"
-                            }`}>
-                              {selectedStore.liveOnAndOff === false ? "중지됨" : "운영중"}
-                            </span>
-                          </div>
-                        ) : null}
-
                         <button
                           type="button"
                           onClick={() => setIsDesktopExpanded((prev) => !prev)}
@@ -379,7 +402,7 @@ export default function AdminStoreStrip({
                     </div>
 
                     {isDesktopExpanded ? (
-                      <div className="mt-2">
+                      <div className="mt-1.5">
                         <input
                           value={searchKeyword}
                           onChange={(event) => setSearchKeyword(event.target.value)}
@@ -397,7 +420,7 @@ export default function AdminStoreStrip({
                   </div>
 
                   {isDesktopExpanded ? (
-                    <div className="px-3 py-2.5 sm:px-3.5 sm:py-3">
+                    <div className="px-3 py-2 sm:px-3.5 sm:py-2.5">
                       {loading ? (
                         <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
                           가맹점 목록을 불러오는 중입니다...
@@ -412,10 +435,10 @@ export default function AdminStoreStrip({
 
                       {!loading && !combinedError && filteredStores.length > 0 ? (
                         <div className="overflow-x-auto overscroll-x-contain">
-                          <div className="flex min-w-full gap-2 pb-1">
+                          <div className="flex min-w-full gap-1.5 pb-1">
                             {allowAllStores ? (
                               <article
-                                className={`w-[162px] shrink-0 rounded-[18px] border p-2.5 transition sm:w-[184px] ${
+                                className={`w-[148px] shrink-0 rounded-[16px] border p-2 transition sm:w-[168px] ${
                                   normalizedSelectedStorecode === normalizeText(allStoresValue)
                                     ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
                                     : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
@@ -426,7 +449,7 @@ export default function AdminStoreStrip({
                                   onClick={() => onSelectStorecode(allStoresValue)}
                                   className="flex w-full items-center gap-2 text-left"
                                 >
-                                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border text-[9px] font-semibold uppercase tracking-[0.14em] ${
+                                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-2xl border text-[9px] font-semibold uppercase tracking-[0.14em] ${
                                     normalizedSelectedStorecode === normalizeText(allStoresValue)
                                       ? "border-white/15 bg-white/10 text-white"
                                       : "border-slate-200 bg-slate-100 text-slate-500"
@@ -435,13 +458,6 @@ export default function AdminStoreStrip({
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <div className="truncate text-[12px] font-semibold">{allStoresLabel}</div>
-                                    <div className={`mt-0.5 truncate text-[10px] ${
-                                      normalizedSelectedStorecode === normalizeText(allStoresValue)
-                                        ? "text-slate-300"
-                                        : "text-slate-500"
-                                    }`}>
-                                      all stores
-                                    </div>
                                   </div>
                                 </button>
                               </article>
@@ -455,7 +471,7 @@ export default function AdminStoreStrip({
                               return (
                                 <article
                                   key={storecode || storeLabel}
-                                  className={`w-[168px] shrink-0 rounded-[18px] border p-2.5 transition sm:w-[192px] ${
+                                  className={`w-[156px] shrink-0 rounded-[16px] border p-2 transition sm:w-[178px] ${
                                     selected
                                       ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
                                       : "border-slate-200/90 bg-white/90 text-slate-900 hover:border-sky-200 hover:bg-[linear-gradient(180deg,rgba(248,252,255,0.98),rgba(240,249,255,0.98))]"
@@ -469,20 +485,14 @@ export default function AdminStoreStrip({
                                     <StoreLogo
                                       src={getStoreLogoSrc(store)}
                                       alt={storeLabel}
-                                      className={`h-8 w-8 shrink-0 rounded-2xl border ${
+                                      className={`h-7 w-7 shrink-0 rounded-2xl border ${
                                         selected ? "border-white/15 bg-white/10" : "border-sky-100 bg-sky-50/70"
                                       }`}
                                     />
                                     <div className="min-w-0 flex-1">
                                       <div className="truncate text-[12px] font-semibold">{storeLabel}</div>
-                                      <div className={`mt-0.5 truncate text-[10px] ${selected ? "text-slate-300" : "text-slate-500"}`}>
-                                        {storecode}
-                                      </div>
                                     </div>
-                                  </button>
-
-                                  <div className="mt-2 flex items-center justify-between gap-2">
-                                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                                    <span className={`inline-flex shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${
                                       store.liveOnAndOff === false
                                         ? selected
                                           ? "border-slate-300/30 bg-slate-200/10 text-slate-200"
@@ -491,18 +501,21 @@ export default function AdminStoreStrip({
                                           ? "border-sky-200/40 bg-sky-400/10 text-sky-100"
                                           : "border-sky-200 bg-sky-50 text-sky-700"
                                     }`}>
-                                      {store.liveOnAndOff === false ? "중지됨" : "운영중"}
+                                      {store.liveOnAndOff === false ? "중지" : "운영"}
                                     </span>
-                                  </div>
+                                  </button>
 
-                                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                                  <div className="mt-1.5 flex items-center justify-between gap-2 pl-9">
+                                    <div className={`min-w-0 flex-1 truncate text-[10px] ${selected ? "text-slate-300" : "text-slate-500"}`}>
+                                      {storecode}
+                                    </div>
                                     <button
                                       type="button"
                                       onClick={() => {
                                         void toggleStoreLive(store);
                                       }}
                                       disabled={!activeAccount || pendingLiveStorecode === storecode}
-                                      className={`inline-flex h-7 items-center justify-center rounded-full px-2 text-[10px] font-semibold transition ${
+                                      className={`inline-flex h-6 shrink-0 items-center justify-center rounded-full px-2 text-[9px] font-semibold transition ${
                                         store.liveOnAndOff === false
                                           ? "border border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
                                           : "border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100"
@@ -516,7 +529,7 @@ export default function AdminStoreStrip({
                                     </button>
 
                                     {renderStoreActions ? (
-                                      <div className="flex items-center gap-1">
+                                      <div className="flex shrink-0 items-center gap-1">
                                         {renderStoreActions(store)}
                                       </div>
                                     ) : null}
@@ -544,7 +557,10 @@ export default function AdminStoreStrip({
             onClick={() => setIsMobileSheetOpen(false)}
             className="absolute inset-0"
           />
-          <div className="absolute inset-x-3 bottom-3 top-[11.5rem] overflow-hidden rounded-[24px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.995),rgba(240,247,255,0.985))] shadow-[0_28px_60px_-36px_rgba(15,23,42,0.38)] backdrop-blur">
+          <div
+            className="absolute inset-x-3 bottom-3 top-[11.5rem] overflow-hidden rounded-[24px] border border-sky-100/80 bg-[linear-gradient(180deg,rgba(249,252,255,0.995),rgba(240,247,255,0.985))] shadow-[0_28px_60px_-36px_rgba(15,23,42,0.38)] backdrop-blur"
+            style={mobileSheetStyle}
+          >
             <div className="flex h-full flex-col">
               <div className="border-b border-sky-100/80 px-3 py-3">
                 <div className="flex items-start justify-between gap-2">

@@ -122,7 +122,10 @@ export default function AdminShell({
         </aside>
 
         <div className="min-w-0 flex-1">
-          <div className="sticky top-0 z-30 border-b border-slate-200 bg-[#edf3f8]/95 backdrop-blur lg:hidden">
+          <div
+            data-admin-mobile-header="true"
+            className="sticky top-0 z-30 border-b border-slate-200 bg-[#edf3f8]/95 backdrop-blur lg:hidden"
+          >
             <div className="px-4 py-4">
               <div className="rounded-[28px] bg-slate-950 px-4 py-4 text-white shadow-[0_20px_45px_-28px_rgba(15,23,42,0.8)]">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
