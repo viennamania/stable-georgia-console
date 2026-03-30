@@ -15,6 +15,11 @@ export type ClearanceActor = {
 };
 
 export type ClearanceOrderSourceMeta = {
+  walletAddress?: string | null;
+  nickname?: string | null;
+  role?: string | null;
+  storecode?: string | null;
+  requestedAt?: string | null;
   route?: string | null;
   source?: string | null;
   transactionHashDummyReason?: string | null;
@@ -626,6 +631,49 @@ export const getClearanceOrderCreationMeta = (order: ClearanceOrder) => {
     label: "관리자 생성",
     className: "border border-sky-300 bg-sky-50 text-sky-700",
   };
+};
+
+export const getClearanceOrderCreatorLabel = (order: ClearanceOrder) => {
+  const actor = order?.createdBy;
+  const nickname = normalizeText(actor?.nickname);
+  if (nickname) {
+    return nickname;
+  }
+
+  const walletAddress = normalizeText(actor?.walletAddress);
+  if (walletAddress) {
+    return shortAddress(walletAddress);
+  }
+
+  if (isWithdrawalWebhookGeneratedClearanceOrder(order)) {
+    return "시스템";
+  }
+
+  return "";
+};
+
+export const getClearanceOrderCreatorMetaLabel = (order: ClearanceOrder) => {
+  const actor = order?.createdBy;
+  const role = normalizeText(actor?.role).toLowerCase();
+  const storecode = normalizeText(actor?.storecode);
+
+  if (isWithdrawalWebhookGeneratedClearanceOrder(order)) {
+    return "자동 생성";
+  }
+
+  if (role === "superadmin") {
+    return "superadmin";
+  }
+
+  if (role === "admin") {
+    return storecode ? `${storecode} admin` : "admin";
+  }
+
+  if (role) {
+    return storecode ? `${storecode} ${role}` : role;
+  }
+
+  return storecode || "";
 };
 
 export const getDepositCompletedActorLabel = (buyer?: ClearanceOrder["buyer"] | null) => {

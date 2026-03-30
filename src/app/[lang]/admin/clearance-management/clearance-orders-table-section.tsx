@@ -11,6 +11,8 @@ import {
   getBscscanTxUrl,
   getBuyerBankSummary,
   getBuyerDisplayName,
+  getClearanceOrderCreatorLabel,
+  getClearanceOrderCreatorMetaLabel,
   getClearanceOrderCreationMeta,
   getDepositCompletedActorLabel,
   getSellerBankSummary,
@@ -126,7 +128,8 @@ export default function ClearanceOrdersTableSection({
       ) : null}
 
       <div className="px-2 pb-2">
-        <table className="w-full table-fixed border-separate border-spacing-0">
+        <div className="overflow-x-auto overscroll-x-contain">
+          <table className="min-w-[1080px] w-full table-fixed border-separate border-spacing-0">
           <thead>
             <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
               <th className="w-[18%] border-b border-slate-200 px-3 py-2.5">Trade</th>
@@ -164,6 +167,8 @@ export default function ClearanceOrdersTableSection({
                 const sellerBankSummary = getSellerBankSummary(order);
                 const createdAtLabel = formatDateTime(order.createdAt);
                 const createdTimeAgoLabel = formatTimeAgo(order.createdAt);
+                const createdByLabel = getClearanceOrderCreatorLabel(order);
+                const createdByMetaLabel = getClearanceOrderCreatorMetaLabel(order);
                 const transactionHash = String(order.transactionHash || "").trim();
                 const depositCompletedActorLabel = getDepositCompletedActorLabel(order.buyer);
                 const isWithdrawalCompleted = order.buyer?.depositCompleted === true;
@@ -223,6 +228,16 @@ export default function ClearanceOrdersTableSection({
                               {creationMeta.label}
                             </span>
                           </div>
+                          {createdByLabel ? (
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                              <span>생성자 {createdByLabel}</span>
+                              {createdByMetaLabel ? (
+                                <span className="console-mono uppercase tracking-[0.12em] text-slate-400">
+                                  {createdByMetaLabel}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </td>
@@ -367,7 +382,8 @@ export default function ClearanceOrdersTableSection({
               })
             )}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       {totalOrderCount > 0 ? (
