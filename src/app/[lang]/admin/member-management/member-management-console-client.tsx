@@ -473,7 +473,7 @@ function MetricCard({
         {label}
       </div>
       <div className="mt-4 flex items-end justify-between gap-3">
-        <div className={`console-display text-[1.9rem] font-semibold tracking-[-0.06em] ${toneClassName}`}>
+        <div className={`console-display ml-auto text-right text-[1.9rem] font-semibold tracking-[-0.06em] ${toneClassName}`}>
           {value}
         </div>
         <div className="console-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">
@@ -481,7 +481,7 @@ function MetricCard({
         </div>
       </div>
       {helper ? (
-        <div className="mt-2 text-xs text-slate-500">{helper}</div>
+        <div className="mt-2 text-right text-xs text-slate-500">{helper}</div>
       ) : null}
     </article>
   );
@@ -1267,7 +1267,9 @@ export default function MemberManagementConsoleClient({
                   회원 검색과 추가
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  회원 아이디, 예금주명, 가맹점, 등급으로 필터링하고 필요한 경우 바로 신규 회원을 등록할 수 있습니다.
+                  {isAllStoresMode
+                    ? "회원 아이디, 예금주명, 가맹점, 등급으로 필터링하고 필요한 경우 바로 신규 회원을 등록할 수 있습니다."
+                    : "회원 아이디, 예금주명, 등급으로 필터링하고 필요한 경우 바로 신규 회원을 등록할 수 있습니다."}
                 </p>
               </div>
 
@@ -1290,18 +1292,20 @@ export default function MemberManagementConsoleClient({
               </button>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <input
-                value={draftFilters.searchStore}
-                onChange={(event) => {
-                  setDraftFilters((current) => ({
-                    ...current,
-                    searchStore: event.target.value,
-                  }));
-                }}
-                placeholder="가맹점명 / storecode 검색"
-                className={fieldClassName}
-              />
+            <div className={`mt-5 grid gap-3 md:grid-cols-2 ${isAllStoresMode ? "xl:grid-cols-4" : "xl:grid-cols-2"}`}>
+              {isAllStoresMode ? (
+                <input
+                  value={draftFilters.searchStore}
+                  onChange={(event) => {
+                    setDraftFilters((current) => ({
+                      ...current,
+                      searchStore: event.target.value,
+                    }));
+                  }}
+                  placeholder="가맹점명 / storecode 검색"
+                  className={fieldClassName}
+                />
+              ) : null}
               <input
                 value={draftFilters.search}
                 onChange={(event) => {
