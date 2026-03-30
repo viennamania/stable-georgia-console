@@ -1541,8 +1541,8 @@ export default function MemberManagementConsoleClient({
                   <th className="px-6 py-4">등록일</th>
                   <th className="px-6 py-4">가맹점</th>
                   <th className="px-6 py-4">회원</th>
-                  <th className="px-6 py-4">등급</th>
-                  <th className="w-[136px] px-4 py-4">추가자</th>
+                  <th className="w-[168px] px-6 py-4">등급</th>
+                  <th className="w-[112px] px-4 py-4">추가자</th>
                   <th className="px-6 py-4">회원 통장</th>
                   <th className="px-6 py-4 text-right">구매 요약</th>
                   <th className="px-6 py-4">지갑</th>
@@ -1611,7 +1611,7 @@ export default function MemberManagementConsoleClient({
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="w-[168px] px-6 py-4">
                           <div className="space-y-2">
                             <MemberGradeBadge userType={member.userType} />
                             <button
@@ -1624,7 +1624,7 @@ export default function MemberManagementConsoleClient({
                             </button>
                           </div>
                         </td>
-                        <td className="w-[136px] max-w-[136px] px-4 py-4">
+                        <td className="w-[112px] max-w-[112px] px-4 py-4">
                           <div className="min-w-0 space-y-1">
                             <div className="truncate text-sm font-semibold text-slate-900">
                               {getCreatorDisplayName(member.createdBy)}
