@@ -235,7 +235,7 @@ function MetricCard({
         {label}
       </div>
       <div className="mt-4 flex items-end justify-between gap-3">
-        <div className={`console-display text-[2rem] font-semibold tracking-[-0.06em] ${summaryCardToneClassName[tone]}`}>
+        <div className={`console-display ml-auto text-right text-[2rem] font-semibold tracking-[-0.06em] ${summaryCardToneClassName[tone]}`}>
           {value}
         </div>
         <div className="console-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">
@@ -243,7 +243,7 @@ function MetricCard({
         </div>
       </div>
       {helper ? (
-        <div className="mt-2 text-xs text-slate-500">{helper}</div>
+        <div className="mt-2 text-right text-xs text-slate-500">{helper}</div>
       ) : null}
     </div>
   );
