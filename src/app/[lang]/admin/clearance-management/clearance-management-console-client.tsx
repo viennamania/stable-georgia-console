@@ -93,6 +93,30 @@ const ClearanceActionModal = dynamic(
 
 const ORDER_SIGNED_WARMUP_RETRY_MS = 900;
 const ORDER_SIGNED_WARMUP_MAX_RETRIES = 4;
+const ORDER_SIGNED_WARMUP_RECOVERY_RETRY_MS = 1800;
+
+const isSignatureRejectedError = (error: unknown) => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  const normalized = message.trim().toLowerCase();
+
+  if (!normalized) {
+    return false;
+  }
+
+  return [
+    "user rejected",
+    "rejected the request",
+    "denied",
+    "declined",
+    "cancelled",
+    "canceled",
+  ].some((pattern) => normalized.includes(pattern));
+};
 
 export default function ClearanceManagementConsoleClient({
   lang: _lang,
@@ -435,6 +459,21 @@ export default function ClearanceManagementConsoleClient({
         let signedOrdersBody: Record<string, unknown> | null = null;
         const signingAccount = canReadSignedData ? activeAccount : null;
 
+        if (activeAccount && !canReadSignedData && supportsPublicMaskedOrders) {
+          if (ordersSignerWarmupTimerRef.current) {
+            clearTimeout(ordersSignerWarmupTimerRef.current);
+          }
+
+          setOrdersSignerWarmup(true);
+          setError("");
+          ordersSignerWarmupTimerRef.current = setTimeout(() => {
+            ordersSignerWarmupTimerRef.current = null;
+            void loadOrdersDashboard({ silent: true });
+          }, ORDER_SIGNED_WARMUP_RETRY_MS);
+
+          return;
+        }
+
         if (!signingAccount && !supportsPublicMaskedOrders) {
           if (desiredOrdersLoadSignatureRef.current !== loadSignature) {
             queuedSilentOrdersRefreshRef.current = true;
@@ -487,7 +526,20 @@ export default function ClearanceManagementConsoleClient({
             lastOrdersSignerWarmupSignatureRef.current = loadSignature;
             ordersSignerWarmupRetryCountRef.current = 0;
             setOrdersSignerWarmup(false);
-          } catch {
+          } catch (signingError) {
+            if (isSignatureRejectedError(signingError)) {
+              if (ordersSignerWarmupTimerRef.current) {
+                clearTimeout(ordersSignerWarmupTimerRef.current);
+                ordersSignerWarmupTimerRef.current = null;
+              }
+
+              lastOrdersSignerWarmupSignatureRef.current = loadSignature;
+              ordersSignerWarmupRetryCountRef.current = 0;
+              setOrdersSignerWarmup(false);
+              setError(`${accessActorLabel} 지갑 서명이 취소되었습니다.`);
+              return;
+            }
+
             const nextRetryCount =
               lastOrdersSignerWarmupSignatureRef.current === loadSignature
                 ? ordersSignerWarmupRetryCountRef.current + 1
@@ -495,24 +547,20 @@ export default function ClearanceManagementConsoleClient({
 
             lastOrdersSignerWarmupSignatureRef.current = loadSignature;
             ordersSignerWarmupRetryCountRef.current = nextRetryCount;
-
-            if (nextRetryCount <= ORDER_SIGNED_WARMUP_MAX_RETRIES) {
-              if (ordersSignerWarmupTimerRef.current) {
-                clearTimeout(ordersSignerWarmupTimerRef.current);
-              }
-
-              setOrdersSignerWarmup(true);
-              setError("");
-              ordersSignerWarmupTimerRef.current = setTimeout(() => {
-                ordersSignerWarmupTimerRef.current = null;
-                void loadOrdersDashboard({ silent: true });
-              }, ORDER_SIGNED_WARMUP_RETRY_MS);
-
-              return;
+            if (ordersSignerWarmupTimerRef.current) {
+              clearTimeout(ordersSignerWarmupTimerRef.current);
             }
 
-            setOrdersSignerWarmup(false);
-            signedOrdersBody = null;
+            setOrdersSignerWarmup(true);
+            setError("");
+            ordersSignerWarmupTimerRef.current = setTimeout(() => {
+              ordersSignerWarmupTimerRef.current = null;
+              void loadOrdersDashboard({ silent: true });
+            }, nextRetryCount <= ORDER_SIGNED_WARMUP_MAX_RETRIES
+              ? ORDER_SIGNED_WARMUP_RETRY_MS
+              : ORDER_SIGNED_WARMUP_RECOVERY_RETRY_MS);
+
+            return;
           }
         }
 
@@ -546,6 +594,25 @@ export default function ClearanceManagementConsoleClient({
         }
 
         const result = payload.result as ClearanceOrdersResult;
+        const shouldRecoverPrivilegedOrders =
+          Boolean(signingAccount)
+          && Boolean(result?.ordersAuthRecoverySuggested);
+
+        if (shouldRecoverPrivilegedOrders) {
+          if (ordersSignerWarmupTimerRef.current) {
+            clearTimeout(ordersSignerWarmupTimerRef.current);
+          }
+
+          setOrdersSignerWarmup(true);
+          setError("");
+          ordersSignerWarmupTimerRef.current = setTimeout(() => {
+            ordersSignerWarmupTimerRef.current = null;
+            void loadOrdersDashboard({ silent: true });
+          }, ORDER_SIGNED_WARMUP_RECOVERY_RETRY_MS);
+
+          return;
+        }
+
         const mergedOrdersError = normalizeText(result?.ordersError);
         lastOrdersSignerWarmupSignatureRef.current = loadSignature;
         ordersSignerWarmupRetryCountRef.current = 0;
@@ -555,6 +622,10 @@ export default function ClearanceManagementConsoleClient({
           ...(current || EMPTY_CLEARANCE_DASHBOARD),
           ordersAccessLevel: normalizeText(result?.ordersAccessLevel) || "public",
           ordersError: mergedOrdersError,
+          ordersAuthIntent: Boolean(result?.ordersAuthIntent),
+          ordersAuthStatus: Number(result?.ordersAuthStatus || 0),
+          ordersAuthError: normalizeText(result?.ordersAuthError),
+          ordersAuthRecoverySuggested: Boolean(result?.ordersAuthRecoverySuggested),
           orders: Array.isArray(result?.orders) ? result.orders : EMPTY_ORDERS,
           totalCount: Number(result?.totalCount || 0),
           totalClearanceCount: Number(result?.totalClearanceCount || 0),
@@ -578,7 +649,7 @@ export default function ClearanceManagementConsoleClient({
         }
       }
     },
-    [activeAccount, canReadSignedData, effectiveStorecode, filters, ordersQueryMode],
+    [accessActorLabel, activeAccount, canReadSignedData, effectiveStorecode, filters, ordersQueryMode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {

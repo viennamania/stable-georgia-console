@@ -126,6 +126,10 @@ export async function POST(request: NextRequest) {
       ordersAccessLevel: String(
         signedOrdersResult?.view || (hasSignedOrdersBody ? "privileged" : "public"),
       ),
+      ordersAuthIntent: Boolean(signedOrdersResult?.authIntent),
+      ordersAuthStatus: Number(signedOrdersResult?.authStatus || 0),
+      ordersAuthError: normalizeString(signedOrdersResult?.authError),
+      ordersAuthRecoverySuggested: Boolean(signedOrdersResult?.authRecoverySuggested),
       orders: signedOrdersResult.orders || [],
       ...mappedSummary,
     },

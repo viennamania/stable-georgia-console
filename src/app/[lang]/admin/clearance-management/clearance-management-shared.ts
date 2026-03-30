@@ -96,6 +96,10 @@ export type ClearanceBaseResult = {
 export type ClearanceOrdersResult = {
   ordersAccessLevel?: string;
   ordersError?: string;
+  ordersAuthIntent?: boolean;
+  ordersAuthStatus?: number;
+  ordersAuthError?: string;
+  ordersAuthRecoverySuggested?: boolean;
   orders: ClearanceOrder[];
   totalCount: number;
   totalClearanceCount: number;
@@ -157,6 +161,10 @@ export const EMPTY_CLEARANCE_DASHBOARD: ClearanceDashboardResult = {
   withdrawalNextCursor: null,
   ordersAccessLevel: "public",
   ordersError: "",
+  ordersAuthIntent: false,
+  ordersAuthStatus: 0,
+  ordersAuthError: "",
+  ordersAuthRecoverySuggested: false,
   orders: EMPTY_ORDERS,
   totalCount: 0,
   totalClearanceCount: 0,
