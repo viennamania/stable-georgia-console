@@ -219,6 +219,7 @@ const EMPTY_STORES: StoreItem[] = [];
 const EMPTY_UNMATCHED_TRANSFERS: UnmatchedTransfer[] = [];
 const EMPTY_SELLER_BANK_TRADE_STATS: SellerBankTradeStat[] = [];
 const EMPTY_BANK_TRANSFER_LIVE_LOGS: BankTransferLiveLogItem[] = [];
+const PRIORITIZE_PENDING_ORDERS_STORAGE_KEY = "stable-georgia-console:buyorder:prioritize-pending-orders";
 
 type DashboardResult = {
   fetchedAt: string;
@@ -1950,6 +1951,41 @@ export default function BuyorderConsoleClient({
   const lastUnmatchedRealtimeEventIdRef = useRef("");
   const lastBankTransferRealtimeEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-buyorder-${Math.random().toString(36).slice(2, 10)}`);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const storedValue = window.localStorage.getItem(PRIORITIZE_PENDING_ORDERS_STORAGE_KEY);
+      if (storedValue === "1") {
+        setPrioritizePendingOrders(true);
+        return;
+      }
+      if (storedValue === "0") {
+        setPrioritizePendingOrders(false);
+      }
+    } catch {
+      // Ignore storage read failures.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        PRIORITIZE_PENDING_ORDERS_STORAGE_KEY,
+        prioritizePendingOrders ? "1" : "0",
+      );
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [prioritizePendingOrders]);
+
   const selectedDepositTotal = useMemo(() => {
     return depositOptions.reduce((sum, item) => {
       const itemId = String(item._id || "");
