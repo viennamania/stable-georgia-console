@@ -545,14 +545,19 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     () => sellerBankBalances.filter((item) => Number(item.balance || 0) > 0),
     [sellerBankBalances],
   );
+  const visibleStores = useMemo(
+    () => [...stores]
+      .filter((store) => store.viewOnAndOff !== false)
+      .sort(compareStoresForSidebar),
+    [stores],
+  );
   const filteredStores = useMemo(() => {
     const normalizedKeyword = searchKeyword.trim().toLowerCase();
     if (!normalizedKeyword) {
-      return [...stores].sort(compareStoresForSidebar);
+      return visibleStores;
     }
 
-    return [...stores]
-      .sort(compareStoresForSidebar)
+    return visibleStores
       .filter((store) => {
         const searchable = [
           getStoreDisplayName(store),
@@ -560,14 +565,14 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
         ].join(" ").toLowerCase();
         return searchable.includes(normalizedKeyword);
       });
-  }, [searchKeyword, stores]);
+  }, [searchKeyword, visibleStores]);
   const storePositionMap = useMemo(() => {
     const map = new Map<string, number>();
-    [...stores].sort(compareStoresForSidebar).forEach((store, index) => {
+    visibleStores.forEach((store, index) => {
       map.set(normalizeText(store.storecode), index);
     });
     return map;
-  }, [stores]);
+  }, [visibleStores]);
   const isTodayBuyerBankBalanceDate = buyerBankBalanceDate === createInputDate(0);
 
   const fetchStores = useCallback(async () => {
@@ -616,19 +621,19 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
       return;
     }
 
-    const hasQueryStore = stores.some((store) => normalizeText(store.storecode) === selectedStorecodeFromQuery);
+    const hasQueryStore = visibleStores.some((store) => normalizeText(store.storecode) === selectedStorecodeFromQuery);
     if (hasQueryStore) {
       setSelectedStorecode(selectedStorecodeFromQuery);
       return;
     }
 
     setSelectedStorecode((prev) => {
-      if (prev && stores.some((store) => normalizeText(store.storecode) === prev)) {
+      if (prev && visibleStores.some((store) => normalizeText(store.storecode) === prev)) {
         return prev;
       }
       return "";
     });
-  }, [selectedStorecodeFromQuery, stores]);
+  }, [selectedStorecodeFromQuery, stores.length, visibleStores]);
 
   useEffect(() => {
     if (!selectedStorecode) {
@@ -909,7 +914,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
       return;
     }
 
-    const currentOrder = [...stores].sort(compareStoresForSidebar);
+    const currentOrder = [...visibleStores];
     const currentIndex = currentOrder.findIndex((store) => normalizeText(store.storecode) === storecode);
     if (currentIndex < 0) {
       return;
@@ -983,7 +988,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
     } finally {
       setUpdatingOrderStorecode("");
     }
-  }, [activeAccount, searchKeyword, stores, updatingOrderStorecode]);
+  }, [activeAccount, searchKeyword, stores, updatingOrderStorecode, visibleStores]);
 
   const selectedStore = storeContext?.store || null;
   const hasPrivilegedStoreRead = storeContext?.hasPrivilegedStoreRead === true;
