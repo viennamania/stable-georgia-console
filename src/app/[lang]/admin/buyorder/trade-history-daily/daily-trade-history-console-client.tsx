@@ -595,7 +595,7 @@ export default function DailyTradeHistoryConsoleClient({
                   type="date"
                   value={filters.fromDate}
                   onChange={(event) => updateDateRange(event.target.value, filters.toDate)}
-                  className="h-11 w-full rounded-2xl border border-white/12 bg-white/8 px-4 text-sm text-white outline-none transition focus:border-sky-300/50 focus:bg-white/12"
+                  className="h-11 w-full rounded-2xl border border-white/20 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-sky-300 focus:bg-sky-50"
                 />
               </label>
 
@@ -605,7 +605,7 @@ export default function DailyTradeHistoryConsoleClient({
                   type="date"
                   value={filters.toDate}
                   onChange={(event) => updateDateRange(filters.fromDate, event.target.value)}
-                  className="h-11 w-full rounded-2xl border border-white/12 bg-white/8 px-4 text-sm text-white outline-none transition focus:border-sky-300/50 focus:bg-white/12"
+                  className="h-11 w-full rounded-2xl border border-white/20 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-sky-300 focus:bg-sky-50"
                 />
               </label>
 
@@ -620,7 +620,7 @@ export default function DailyTradeHistoryConsoleClient({
                       page: 1,
                     }))
                   }
-                  className="h-11 w-full rounded-2xl border border-white/12 bg-white/8 px-4 text-sm text-white outline-none transition focus:border-sky-300/50 focus:bg-white/12"
+                  className="h-11 w-full rounded-2xl border border-white/20 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-sky-300 focus:bg-sky-50"
                 >
                   <option value={20}>20</option>
                   <option value={30}>30</option>
@@ -714,25 +714,24 @@ export default function DailyTradeHistoryConsoleClient({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-[1280px] w-full table-auto border-collapse">
+          <div className="overflow-x-auto lg:overflow-visible">
+            <table className="min-w-[1180px] w-full table-auto border-collapse lg:min-w-0 lg:table-fixed">
               <thead className="bg-slate-950/95 text-left text-white">
                 <tr>
-                  <th className="px-4 py-3 text-sm font-semibold">날짜</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">P2P 거래수</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">P2P 거래량 / 금액</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">결제수 / 미결제수</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">결제량 / 금액</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">AG 수수료</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">PG 수수료</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">청산수</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-right">청산량 / 금액</th>
+                  <th className="px-4 py-3 text-sm font-semibold lg:w-[14%]">날짜</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right lg:w-[8%]">P2P 거래수</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right lg:w-[13%]">P2P 거래량 / 금액</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right lg:w-[11%]">결제수 / 미결제수</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right lg:w-[13%]">결제량 / 금액</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right lg:w-[14%]">수수료</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right lg:w-[8%]">청산수</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-right lg:w-[11%]">청산량 / 금액</th>
                 </tr>
               </thead>
               <tbody>
                 {!loading && data.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
                       조회된 일별 통계가 없습니다.
                     </td>
                   </tr>
@@ -743,6 +742,8 @@ export default function DailyTradeHistoryConsoleClient({
                     0,
                     Number(row.totalCount || 0) - Number(row.totalSettlementCount || 0),
                   );
+                  const totalFeeUsdt = Number(row.totalAgentFeeAmount || 0) + Number(row.totalFeeAmount || 0);
+                  const totalFeeKrw = Number(row.totalAgentFeeAmountKRW || 0) + Number(row.totalFeeAmountKRW || 0);
 
                   return (
                     <tr
@@ -750,7 +751,7 @@ export default function DailyTradeHistoryConsoleClient({
                       className={index % 2 === 0 ? "bg-white" : "bg-slate-50/60"}
                     >
                       <td className="px-4 py-4 align-top">
-                        <div className="min-w-[160px]">
+                        <div className="min-w-[160px] lg:min-w-0">
                           <div className="text-base font-semibold text-slate-950">{formatDateLabel(row.date)}</div>
                           <div className="mt-1 text-xs text-slate-500">{normalizeText(row.date) || "-"}</div>
                         </div>
@@ -759,13 +760,13 @@ export default function DailyTradeHistoryConsoleClient({
                         {Number(row.totalCount || 0).toLocaleString()}건
                       </td>
                       <td className="px-4 py-4 align-top text-right">
-                        <div className="min-w-[170px] space-y-1">
+                        <div className="min-w-[170px] space-y-1 lg:min-w-0">
                           <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalUsdtAmount)}</div>
                           <div className="text-sm text-slate-500">{formatKrw(row.totalKrwAmount)}</div>
                         </div>
                       </td>
                       <td className="px-4 py-4 align-top text-right">
-                        <div className="min-w-[150px] space-y-1">
+                        <div className="min-w-[150px] space-y-1 lg:min-w-0">
                           <div className="text-sm font-semibold text-slate-950">
                             {Number(row.totalSettlementCount || 0).toLocaleString()}건
                           </div>
@@ -773,28 +774,22 @@ export default function DailyTradeHistoryConsoleClient({
                         </div>
                       </td>
                       <td className="px-4 py-4 align-top text-right">
-                        <div className="min-w-[170px] space-y-1">
+                        <div className="min-w-[170px] space-y-1 lg:min-w-0">
                           <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalSettlementAmount)}</div>
                           <div className="text-sm text-slate-500">{formatKrw(row.totalSettlementAmountKRW)}</div>
                         </div>
                       </td>
                       <td className="px-4 py-4 align-top text-right">
-                        <div className="min-w-[170px] space-y-1">
-                          <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalAgentFeeAmount)}</div>
-                          <div className="text-sm text-slate-500">{formatKrw(row.totalAgentFeeAmountKRW)}</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 align-top text-right">
-                        <div className="min-w-[170px] space-y-1">
-                          <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalFeeAmount)}</div>
-                          <div className="text-sm text-slate-500">{formatKrw(row.totalFeeAmountKRW)}</div>
+                        <div className="min-w-[170px] space-y-1 lg:min-w-0">
+                          <div className="text-sm font-semibold text-slate-950">{formatUsdt(totalFeeUsdt)}</div>
+                          <div className="text-sm text-slate-500">{formatKrw(totalFeeKrw)}</div>
                         </div>
                       </td>
                       <td className="px-4 py-4 align-top text-right text-sm font-semibold text-slate-950">
                         {Number(row.totalClearanceCount || 0).toLocaleString()}건
                       </td>
                       <td className="px-4 py-4 align-top text-right">
-                        <div className="min-w-[170px] space-y-1">
+                        <div className="min-w-[170px] space-y-1 lg:min-w-0">
                           <div className="text-sm font-semibold text-slate-950">{formatUsdt(row.totalClearanceUsdtAmount)}</div>
                           <div className="text-sm text-slate-500">{formatKrw(row.totalClearanceKrwAmount)}</div>
                         </div>
