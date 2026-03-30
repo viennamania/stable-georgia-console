@@ -1,17 +1,28 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Account } from "thirdweb/wallets";
 
+import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 import ClearanceOrdersTableSection from "@/app/[lang]/admin/clearance-management/clearance-orders-table-section";
 import {
+  BUY_ORDER_DEPOSIT_COMPLETED_SIGNING_PREFIX,
+  CANCEL_CLEARANCE_ORDER_SIGNING_PREFIX,
   buildPaginationItems,
   createInputDate,
   normalizeText,
   NUMBER_FORMATTER,
+  type ClearanceActionModalState,
+  type ClearanceActionMode,
   type ClearanceOrder,
 } from "@/app/[lang]/admin/clearance-management/clearance-management-shared";
+
+const ClearanceActionModal = dynamic(
+  () => import("@/app/[lang]/admin/clearance-management/clearance-action-modal"),
+  { ssr: false },
+);
 
 type ClearanceOrderEmbeddedStreamProps = {
   activeAccount: Account | null | undefined;
@@ -47,6 +58,10 @@ export default function ClearanceOrderEmbeddedStream({
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [copiedTradeId, setCopiedTradeId] = useState("");
   const [ordersAccessLevel, setOrdersAccessLevel] = useState("public");
+  const [actionModalState, setActionModalState] = useState<ClearanceActionModalState | null>(null);
+  const [actionModalSubmitting, setActionModalSubmitting] = useState(false);
+  const [actionModalError, setActionModalError] = useState("");
+  const [processingOrderId, setProcessingOrderId] = useState("");
   const [totalCount, setTotalCount] = useState(0);
   const [totalClearanceCount, setTotalClearanceCount] = useState(0);
   const [totalClearanceAmount, setTotalClearanceAmount] = useState(0);
@@ -68,6 +83,8 @@ export default function ClearanceOrderEmbeddedStream({
 
   const canReadSignedData = Boolean(activeAccount?.address);
   const disconnectedMessage = "관리자 지갑을 연결하면 민감정보가 풀린 청산주문 상세 조회가 열립니다.";
+  const hasPrivilegedOrderAccess = ordersAccessLevel === "privileged";
+  const accessActorLabel = "관리자";
 
   const loadOrders = useCallback(async (options?: { silent?: boolean }) => {
     const requestId = ++requestIdRef.current;
@@ -215,6 +232,180 @@ export default function ClearanceOrderEmbeddedStream({
     }
   }, []);
 
+  const openActionModal = useCallback((mode: ClearanceActionMode, order: ClearanceOrder) => {
+    if (!hasPrivilegedOrderAccess) {
+      setError("관리자 지갑을 연결하고 서명해야 청산 완료/취소를 처리할 수 있습니다.");
+      return;
+    }
+
+    const orderId = String(order._id || "").trim();
+    if (!orderId) {
+      setError("주문 식별 정보가 부족합니다.");
+      return;
+    }
+
+    if (!activeAccount?.address) {
+      setError("관리자 지갑을 연결해야 출금 처리를 진행할 수 있습니다.");
+      return;
+    }
+
+    setError("");
+    setActionModalError("");
+    setActionModalState({ mode, order });
+  }, [activeAccount?.address, hasPrivilegedOrderAccess]);
+
+  const closeActionModal = useCallback(() => {
+    if (actionModalSubmitting) {
+      return;
+    }
+
+    setActionModalState(null);
+    setActionModalError("");
+  }, [actionModalSubmitting]);
+
+  const canSubmitActionModal = useMemo(() => {
+    if (!actionModalState) {
+      return false;
+    }
+
+    const status = normalizeText(actionModalState.order.status);
+    if (status === "cancelled") {
+      return false;
+    }
+
+    return actionModalState.order.buyer?.depositCompleted !== true;
+  }, [actionModalState]);
+
+  const handleClearanceAction = useCallback(async () => {
+    if (!activeAccount || !actionModalState) {
+      setActionModalError("처리 대상 주문이 없습니다.");
+      return;
+    }
+
+    if (!canSubmitActionModal) {
+      setActionModalError("주문 상태가 변경되어 더 이상 처리할 수 없습니다.");
+      return;
+    }
+
+    const targetOrder = actionModalState.order;
+    const orderId = String(targetOrder._id || "").trim();
+    const actionStorecode = normalizeText(targetOrder.storecode || targetOrder.store?.storecode || storecode);
+
+    if (!orderId || !actionStorecode) {
+      setActionModalError("주문 식별 정보가 부족합니다.");
+      return;
+    }
+
+    const route =
+      actionModalState.mode === "complete"
+        ? "/api/order/buyOrderDepositCompleted"
+        : "/api/order/cancelClearanceOrderByAdmin";
+    const signingPrefix =
+      actionModalState.mode === "complete"
+        ? BUY_ORDER_DEPOSIT_COMPLETED_SIGNING_PREFIX
+        : CANCEL_CLEARANCE_ORDER_SIGNING_PREFIX;
+    const actionFields =
+      actionModalState.mode === "complete"
+        ? {
+            orderId,
+            storecode: actionStorecode,
+          }
+        : {
+            orderId,
+            storecode: actionStorecode,
+            cancelReason: "cancelled_by_admin_clearance_order",
+          };
+
+    setActionModalSubmitting(true);
+    setActionModalError("");
+    setProcessingOrderId(orderId);
+
+    try {
+      const signedBody = await createAdminSignedBody({
+        account: activeAccount,
+        route,
+        signingPrefix,
+        requesterStorecode: "admin",
+        requesterWalletAddress: activeAccount.address,
+        actionFields,
+      });
+
+      const response = await fetch("/api/bff/admin/signed-order-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route,
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "청산 처리에 실패했습니다.");
+      }
+
+      if (actionModalState.mode === "complete") {
+        const nextBuyer = payload?.result?.buyer;
+        setOrders((current) => current.map((order) => {
+          if (String(order._id || "").trim() !== orderId) {
+            return order;
+          }
+
+          return {
+            ...order,
+            buyer: nextBuyer
+              ? {
+                  ...(order.buyer || {}),
+                  ...nextBuyer,
+                }
+              : {
+                  ...(order.buyer || {}),
+                  depositCompleted: true,
+                  depositCompletedAt: new Date().toISOString(),
+                  depositCompletedBy: {
+                    walletAddress: String(activeAccount.address || "").trim().toLowerCase(),
+                  },
+                },
+          };
+        }));
+      } else {
+        const nextOrder = payload?.result?.order;
+        setOrders((current) => current.map((order) => {
+          if (String(order._id || "").trim() !== orderId) {
+            return order;
+          }
+
+          return {
+            ...order,
+            ...(nextOrder || {}),
+            status: String(nextOrder?.status || "cancelled").trim() || "cancelled",
+            cancelledAt:
+              normalizeText(nextOrder?.cancelledAt) || order.cancelledAt || new Date().toISOString(),
+          };
+        }));
+      }
+
+      closeActionModal();
+      void loadOrders({ silent: true });
+    } catch (actionError) {
+      setActionModalError(
+        actionError instanceof Error ? actionError.message : "청산 처리에 실패했습니다.",
+      );
+    } finally {
+      setActionModalSubmitting(false);
+      setProcessingOrderId("");
+    }
+  }, [
+    actionModalState,
+    activeAccount,
+    canSubmitActionModal,
+    closeActionModal,
+    loadOrders,
+    storecode,
+  ]);
+
   return (
     <section className="space-y-4">
       <div className="console-panel rounded-[30px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.95),rgba(255,255,255,0.98))] p-5">
@@ -298,13 +489,13 @@ export default function ClearanceOrderEmbeddedStream({
         ordersLoading={ordersLoading}
         ordersRefreshing={ordersRefreshing}
         isWalletRecovering={false}
-        hasPrivilegedOrderAccess={ordersAccessLevel === "privileged"}
+        hasPrivilegedOrderAccess={hasPrivilegedOrderAccess}
         disconnectedMessage={disconnectedMessage}
-        showMaskedNotice={ordersAccessLevel !== "privileged"}
-        processingOrderId=""
-        actionModalSubmitting={false}
-        actionModalMode={null}
-        allowOrderActions={false}
+        showMaskedNotice={!hasPrivilegedOrderAccess}
+        processingOrderId={processingOrderId}
+        actionModalSubmitting={actionModalSubmitting}
+        actionModalMode={actionModalState?.mode || null}
+        allowOrderActions={hasPrivilegedOrderAccess}
         copiedTradeId={copiedTradeId}
         totalOrderCount={totalCount}
         currentOrderRangeStart={currentOrderRangeStart}
@@ -316,9 +507,21 @@ export default function ClearanceOrderEmbeddedStream({
         canGoToNextOrderPage={page < totalOrderPages}
         isOrderPaginationBusy={ordersLoading || ordersRefreshing}
         onCopyTradeId={copyTradeId}
-        onOpenActionModal={() => {}}
+        onOpenActionModal={openActionModal}
         onUpdateOrderPage={setPage}
       />
+
+      {actionModalState ? (
+        <ClearanceActionModal
+          accessActorLabel={accessActorLabel}
+          actionModalState={actionModalState}
+          actionModalSubmitting={actionModalSubmitting}
+          actionModalError={actionModalError}
+          canSubmitActionModal={canSubmitActionModal}
+          onClose={closeActionModal}
+          onSubmit={handleClearanceAction}
+        />
+      ) : null}
     </section>
   );
 }
