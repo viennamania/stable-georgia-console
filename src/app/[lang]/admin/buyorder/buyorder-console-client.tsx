@@ -225,6 +225,10 @@ type DashboardResult = {
   fetchedAt: string;
   remoteBackendBaseUrl: string;
   ordersAccessLevel: string;
+  ordersAuthIntent?: boolean;
+  ordersAuthStatus?: number;
+  ordersAuthError?: string;
+  ordersAuthRecoverySuggested?: boolean;
   metrics: {
     totalBuyOrders: number;
     totalClearanceOrders: number;
@@ -305,6 +309,10 @@ const EMPTY_DASHBOARD_RESULT: DashboardResult = {
   fetchedAt: "",
   remoteBackendBaseUrl: "",
   ordersAccessLevel: "public",
+  ordersAuthIntent: false,
+  ordersAuthStatus: 0,
+  ordersAuthError: "",
+  ordersAuthRecoverySuggested: false,
   metrics: EMPTY_DASHBOARD_METRICS,
   tradeSummary: EMPTY_TRADE_SUMMARY,
   sellerBankTradeStats: EMPTY_SELLER_BANK_TRADE_STATS,
@@ -402,11 +410,37 @@ const LIVE_CONNECTED_REFRESH_GRACE_MS = 8000;
 const SELLER_BANK_CARD_UPDATE_HIGHLIGHT_MS = 2200;
 const UNMATCHED_CARD_PRESENCE_MS = 560;
 const BANK_TRANSFER_LIVE_LOG_LIMIT = 80;
+const ORDER_SIGNED_WARMUP_RETRY_MS = 900;
+const ORDER_SIGNED_WARMUP_MAX_RETRIES = 4;
+const ORDER_SIGNED_WARMUP_RECOVERY_RETRY_MS = 1800;
 
 const createInputDate = (daysOffset = 0) => {
   const kstDate = new Date(Date.now() + KST_OFFSET_MS);
   kstDate.setUTCDate(kstDate.getUTCDate() + daysOffset);
   return kstDate.toISOString().slice(0, 10);
+};
+
+const isSignatureRejectedError = (error: unknown) => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  const normalized = message.trim().toLowerCase();
+
+  if (!normalized) {
+    return false;
+  }
+
+  return [
+    "user rejected",
+    "rejected the request",
+    "denied",
+    "declined",
+    "cancelled",
+    "canceled",
+  ].some((pattern) => normalized.includes(pattern));
 };
 
 const createDefaultFilters = (storecode = ""): FilterState => ({
@@ -1918,6 +1952,7 @@ export default function BuyorderConsoleClient({
   const [storeDirectoryError, setStoreDirectoryError] = useState("");
   const [loading, setLoading] = useState(true);
   const [ordersQueryState, setOrdersQueryState] = useState<OrdersQueryState>("idle");
+  const [ordersSignerWarmup, setOrdersSignerWarmup] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [connectionState, setConnectionState] = useState<Ably.ConnectionState>("initialized");
@@ -1943,6 +1978,7 @@ export default function BuyorderConsoleClient({
   const lastDashboardFetchAtRef = useRef(0);
   const queuedSilentRefreshRef = useRef(false);
   const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ordersSignerWarmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const highlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newOrderHighlightTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const unmatchedHighlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1951,6 +1987,8 @@ export default function BuyorderConsoleClient({
   const lastUnmatchedRealtimeEventIdRef = useRef("");
   const lastBankTransferRealtimeEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-buyorder-${Math.random().toString(36).slice(2, 10)}`);
+  const lastOrdersSignerWarmupSignatureRef = useRef("");
+  const ordersSignerWarmupRetryCountRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2074,6 +2112,19 @@ export default function BuyorderConsoleClient({
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
       const selectedStorecode = normalizedForcedStorecode || filters.storecode;
+      const loadSignature = [
+        String(activeAccount?.address || "").trim().toLowerCase(),
+        selectedStorecode,
+        String(filters.limit),
+        String(filters.page),
+        filters.fromDate,
+        filters.toDate,
+        filters.searchTradeId,
+        filters.searchBuyer,
+        filters.searchMyOrders ? "1" : "0",
+        filters.searchOrderStatusCancelled ? "1" : "0",
+        filters.searchOrderStatusCompleted ? "1" : "0",
+      ].join("|");
 
       if (inflightLoadRef.current) {
         if (silent) {
@@ -2094,6 +2145,22 @@ export default function BuyorderConsoleClient({
       try {
         let signedOrdersBody: Record<string, unknown> | null = null;
 
+        if (activeAccount && !canReadSignedData) {
+          if (ordersSignerWarmupTimerRef.current) {
+            clearTimeout(ordersSignerWarmupTimerRef.current);
+          }
+
+          setOrdersSignerWarmup(true);
+          setError("");
+          setOrdersQueryState("loading");
+          ordersSignerWarmupTimerRef.current = setTimeout(() => {
+            ordersSignerWarmupTimerRef.current = null;
+            void loadDashboard({ silent: true });
+          }, ORDER_SIGNED_WARMUP_RETRY_MS);
+
+          return;
+        }
+
         if (canReadSignedData && activeAccount) {
           try {
             signedOrdersBody = await createCenterStoreAdminSignedBody({
@@ -2113,8 +2180,51 @@ export default function BuyorderConsoleClient({
                 searchOrderStatusCompleted: filters.searchOrderStatusCompleted,
               },
             });
-          } catch {
-            signedOrdersBody = null;
+            if (ordersSignerWarmupTimerRef.current) {
+              clearTimeout(ordersSignerWarmupTimerRef.current);
+              ordersSignerWarmupTimerRef.current = null;
+            }
+            lastOrdersSignerWarmupSignatureRef.current = loadSignature;
+            ordersSignerWarmupRetryCountRef.current = 0;
+            setOrdersSignerWarmup(false);
+          } catch (signingError) {
+            if (isSignatureRejectedError(signingError)) {
+              if (ordersSignerWarmupTimerRef.current) {
+                clearTimeout(ordersSignerWarmupTimerRef.current);
+                ordersSignerWarmupTimerRef.current = null;
+              }
+
+              lastOrdersSignerWarmupSignatureRef.current = loadSignature;
+              ordersSignerWarmupRetryCountRef.current = 0;
+              setOrdersSignerWarmup(false);
+              setError(`${accessActorLabel} 지갑 서명이 취소되었습니다.`);
+              setOrdersQueryState("error");
+              return;
+            }
+
+            const nextRetryCount =
+              lastOrdersSignerWarmupSignatureRef.current === loadSignature
+                ? ordersSignerWarmupRetryCountRef.current + 1
+                : 1;
+
+            lastOrdersSignerWarmupSignatureRef.current = loadSignature;
+            ordersSignerWarmupRetryCountRef.current = nextRetryCount;
+
+            if (ordersSignerWarmupTimerRef.current) {
+              clearTimeout(ordersSignerWarmupTimerRef.current);
+            }
+
+            setOrdersSignerWarmup(true);
+            setError("");
+            setOrdersQueryState("loading");
+            ordersSignerWarmupTimerRef.current = setTimeout(() => {
+              ordersSignerWarmupTimerRef.current = null;
+              void loadDashboard({ silent: true });
+            }, nextRetryCount <= ORDER_SIGNED_WARMUP_MAX_RETRIES
+              ? ORDER_SIGNED_WARMUP_RETRY_MS
+              : ORDER_SIGNED_WARMUP_RECOVERY_RETRY_MS);
+
+            return;
           }
         }
 
@@ -2154,6 +2264,26 @@ export default function BuyorderConsoleClient({
         }
 
         const result = payload.result as DashboardResult;
+        const shouldRecoverPrivilegedOrders =
+          Boolean(activeAccount)
+          && Boolean(result?.ordersAuthRecoverySuggested);
+
+        if (shouldRecoverPrivilegedOrders) {
+          if (ordersSignerWarmupTimerRef.current) {
+            clearTimeout(ordersSignerWarmupTimerRef.current);
+          }
+
+          setOrdersSignerWarmup(true);
+          setError("");
+          setOrdersQueryState("loading");
+          ordersSignerWarmupTimerRef.current = setTimeout(() => {
+            ordersSignerWarmupTimerRef.current = null;
+            void loadDashboard({ silent: true });
+          }, ORDER_SIGNED_WARMUP_RECOVERY_RETRY_MS);
+
+          return;
+        }
+
         setData((current) => {
           const baseResult = current || EMPTY_DASHBOARD_RESULT;
           const nextData: DashboardResult = {
@@ -2161,6 +2291,10 @@ export default function BuyorderConsoleClient({
             fetchedAt: String(result?.fetchedAt || ""),
             remoteBackendBaseUrl: String(result?.remoteBackendBaseUrl || ""),
             ordersAccessLevel: String(result?.ordersAccessLevel || "public"),
+            ordersAuthIntent: Boolean(result?.ordersAuthIntent),
+            ordersAuthStatus: Number(result?.ordersAuthStatus || 0),
+            ordersAuthError: String(result?.ordersAuthError || ""),
+            ordersAuthRecoverySuggested: Boolean(result?.ordersAuthRecoverySuggested),
             metrics: {
               totalBuyOrders: Number(result?.metrics?.totalBuyOrders || 0),
               totalClearanceOrders: Number(result?.metrics?.totalClearanceOrders || 0),
@@ -2209,10 +2343,14 @@ export default function BuyorderConsoleClient({
           return nextData;
         });
 
+        lastOrdersSignerWarmupSignatureRef.current = loadSignature;
+        ordersSignerWarmupRetryCountRef.current = 0;
+        setOrdersSignerWarmup(false);
         setError("");
         setOrdersQueryState("ready");
         lastDashboardFetchAtRef.current = Date.now();
       } catch (loadError) {
+        setOrdersSignerWarmup(false);
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
         setOrdersQueryState("error");
       } finally {
@@ -2227,7 +2365,7 @@ export default function BuyorderConsoleClient({
         }
       }
     },
-    [activeAccount, canReadSignedData, filters, normalizedForcedStorecode],
+    [accessActorLabel, activeAccount, canReadSignedData, filters, normalizedForcedStorecode],
   );
 
   const requestRealtimeRefresh = useCallback(() => {
@@ -2895,6 +3033,9 @@ export default function BuyorderConsoleClient({
       if (copyResetTimerRef.current) {
         clearTimeout(copyResetTimerRef.current);
       }
+      if (ordersSignerWarmupTimerRef.current) {
+        clearTimeout(ordersSignerWarmupTimerRef.current);
+      }
     };
   }, []);
 
@@ -3036,6 +3177,7 @@ export default function BuyorderConsoleClient({
   ]);
 
   const hasPrivilegedOrderAccess = data?.ordersAccessLevel === "privileged";
+  const isSignedOrderAccessRecovering = isWalletRecovering || ordersSignerWarmup;
   const orders = data?.orders ?? EMPTY_ORDERS;
   const displayOrders = useMemo(() => {
     if (!prioritizePendingOrders || orders.length <= 1) {
@@ -3147,7 +3289,7 @@ export default function BuyorderConsoleClient({
   const totalOrderCount = Math.max(0, Number(data?.orderTotalCount || 0));
   const orderLimit = Math.max(1, Number(filters.limit) || 1);
   const signedOrderDataLoading =
-    hasPrivilegedOrderAccess
+    (hasPrivilegedOrderAccess || ordersSignerWarmup)
     && ordersQueryState === "loading"
     && orders.length === 0
     && totalOrderCount === 0;
@@ -3217,6 +3359,7 @@ export default function BuyorderConsoleClient({
   const showMaskedOrdersNotice =
     data?.ordersAccessLevel === "public"
     && Boolean(data?.fetchedAt)
+    && !ordersSignerWarmup
     && !error;
   const liveQueueCards = isStoreScoped
     ? [
@@ -3415,7 +3558,7 @@ export default function BuyorderConsoleClient({
               address={activeAccount?.address}
               accessLabel={walletAccessLabel}
               title={walletTitle}
-              disconnectedMessage={walletCardMessage}
+              disconnectedMessage={isSignedOrderAccessRecovering ? "지갑 서명 준비를 확인하는 중입니다." : walletCardMessage}
             />
           </div>
         </section>
@@ -3892,7 +4035,7 @@ export default function BuyorderConsoleClient({
 
           {!sellerBankStatsCollapsed ? (
             <div className="px-5 py-4">
-              {!hasPrivilegedOrderAccess && !isWalletRecovering && Boolean(data?.fetchedAt) ? (
+              {!hasPrivilegedOrderAccess && !isSignedOrderAccessRecovering && Boolean(data?.fetchedAt) ? (
                 <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600">
                   판매자 통장별 P2P 거래 통계는 {accessActorLabel} 지갑을 연결한 뒤 서명해야 불러올 수 있습니다.
                   위 영역에서 지갑을 연결하면 현재 필터 기준으로 `getAllBuyOrders`의 계좌별 집계가
@@ -4755,7 +4898,7 @@ export default function BuyorderConsoleClient({
         ) : null}
 
         {!hideBankTransferLivePanel && bankTransferLivePanelOpen ? (
-          <div className="fixed inset-0 z-40">
+          <div className="fixed inset-0 z-[60]">
             <button
               type="button"
               aria-label="통장입출금 live 패널 닫기"
@@ -4915,7 +5058,7 @@ export default function BuyorderConsoleClient({
         ) : null}
 
         {orderStatusPreviewPanelState ? (
-          <div className="fixed inset-0 z-40">
+          <div className="fixed inset-0 z-[60]">
             <button
               type="button"
               aria-label="주문 미리보기 패널 닫기"

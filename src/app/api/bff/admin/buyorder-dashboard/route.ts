@@ -161,6 +161,10 @@ export async function POST(request: NextRequest) {
         totalAgentFeeAmountKRW: Number(ordersResult.totalAgentFeeAmountKRW || 0),
       },
       ordersAccessLevel: String(ordersResult?.view || (hasSignedOrdersBody ? "privileged" : "public")),
+      ordersAuthIntent: Boolean(ordersResult?.authIntent),
+      ordersAuthStatus: Number(ordersResult?.authStatus || 0),
+      ordersAuthError: normalizeString(ordersResult?.authError),
+      ordersAuthRecoverySuggested: Boolean(ordersResult?.authRecoverySuggested),
       sellerBankTradeStats: Array.isArray(ordersResult.totalBySellerBankAccountNumber)
         ? ordersResult.totalBySellerBankAccountNumber
         : [],
