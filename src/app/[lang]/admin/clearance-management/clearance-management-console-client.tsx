@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 
 import AdminWalletCard from "@/components/admin/admin-wallet-card";
+import AdminStoreStrip from "@/components/admin/admin-store-strip";
 import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 import {
@@ -1145,6 +1146,59 @@ export default function ClearanceManagementConsoleClient({
         </section>
         ) : null}
 
+        {!embedded && !hideStoreFilter ? (
+          <AdminStoreStrip
+            stores={stores}
+            selectedStorecode={filters.storecode}
+            onSelectStorecode={(storecode) => {
+              setFilters((prev) => ({
+                ...prev,
+                storecode,
+                page: 1,
+              }));
+            }}
+            activeAccount={activeAccount}
+            loading={!data && !storesError}
+            error={storesError}
+            onRefresh={() => {
+              void loadDashboard();
+            }}
+            onStoreUpdate={(storecode, patch) => {
+              setData((current) => {
+                if (!current) {
+                  return current;
+                }
+
+                return {
+                  ...current,
+                  stores: current.stores.map((store) => {
+                    if (normalizeText(store.storecode) !== normalizeText(storecode)) {
+                      return store;
+                    }
+
+                    return {
+                      ...store,
+                      ...patch,
+                    };
+                  }),
+                  selectedStore:
+                    current.selectedStore
+                    && normalizeText(current.selectedStore.storecode) === normalizeText(storecode)
+                      ? {
+                          ...current.selectedStore,
+                          ...patch,
+                        }
+                      : current.selectedStore,
+                };
+              });
+            }}
+            allowAllStores
+            allStoresValue=""
+            allStoresLabel="전체 가맹점"
+            emptyMessage="검색 결과가 없습니다."
+          />
+        ) : null}
+
         <section className="console-panel rounded-[30px] p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="space-y-1">
@@ -1164,37 +1218,6 @@ export default function ClearanceManagementConsoleClient({
               </div>
             ) : null}
             <div className={`grid gap-3 ${filterGridClassName}`}>
-              {!hideStoreFilter ? (
-              <label className="space-y-2 text-sm">
-                <span className="font-medium text-slate-200">가맹점</span>
-                <select
-                  value={filters.storecode}
-                  onChange={(event) => {
-                    setFilters((prev) => ({
-                      ...prev,
-                      storecode: event.target.value,
-                      page: 1,
-                    }));
-                  }}
-                  className="h-12 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                >
-                  <option value="">전체 가맹점</option>
-                  {stores.map((store) => {
-                    const storecode = String(store.storecode || "").trim();
-                    if (!storecode) {
-                      return null;
-                    }
-
-                    return (
-                      <option key={storecode} value={storecode}>
-                        {getStoreDisplayName(store) || storecode}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-              ) : null}
-
               <label className="space-y-2 text-sm">
                 <span className="font-medium text-slate-200">날짜</span>
                 <input

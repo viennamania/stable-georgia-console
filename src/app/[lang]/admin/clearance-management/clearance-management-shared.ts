@@ -30,6 +30,8 @@ export type StoreItem = {
   storeName?: string;
   companyName?: string;
   storeLogo?: string;
+  viewOnAndOff?: boolean;
+  liveOnAndOff?: boolean;
   bankInfo?: BankInfo;
   bankInfoAAA?: BankInfo;
   bankInfoBBB?: BankInfo;

@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 
 import MemberManagementConsoleClient from "./member-management-console-client";
 import AdminWalletCard from "@/components/admin/admin-wallet-card";
+import AdminStoreStrip from "@/components/admin/admin-store-strip";
 
 type AdminMemberManagementPageClientProps = {
   lang: string;
@@ -16,6 +17,8 @@ type StoreOption = {
   serviceName?: string;
   companyName?: string;
   storeLogo?: string;
+  viewOnAndOff?: boolean;
+  liveOnAndOff?: boolean;
 };
 
 const ALL_STORES_SCOPE = "__all__";
@@ -27,40 +30,6 @@ const normalizeString = (value: unknown) => {
   return value.trim();
 };
 
-const getStoreDisplayName = (store: StoreOption | null | undefined) => {
-  return normalizeString(store?.storeName)
-    || normalizeString(store?.serviceName)
-    || normalizeString(store?.companyName)
-    || normalizeString(store?.storecode)
-    || "가맹점";
-};
-
-const getStoreLogoSrc = (store: StoreOption | null | undefined) => {
-  return normalizeString(store?.storeLogo) || "/logo.png";
-};
-
-const StoreLogo = ({
-  src,
-  alt,
-  className,
-}: {
-  src: string;
-  alt: string;
-  className?: string;
-}) => (
-  <div
-    role="img"
-    aria-label={alt}
-    className={className}
-    style={{
-      backgroundImage: `url(${src})`,
-      backgroundPosition: "center",
-      backgroundRepeat: "no-repeat",
-      backgroundSize: "cover",
-    }}
-  />
-);
-
 export default function AdminMemberManagementPageClient({
   lang,
 }: AdminMemberManagementPageClientProps) {
@@ -68,7 +37,6 @@ export default function AdminMemberManagementPageClient({
   const walletConnectionStatus = useActiveWalletConnectionStatus();
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStorecode, setSelectedStorecode] = useState("");
-  const [storeSearch, setStoreSearch] = useState("");
   const [loadingStores, setLoadingStores] = useState(true);
   const [error, setError] = useState("");
   const inflightLoadRef = useRef(false);
@@ -121,25 +89,6 @@ export default function AdminMemberManagementPageClient({
     void loadStores();
   }, [loadStores]);
 
-  const filteredStores = useMemo(() => {
-    const normalizedSearch = normalizeString(storeSearch).toLowerCase();
-    if (!normalizedSearch) {
-      return stores;
-    }
-
-    return stores.filter((store) => {
-      const searchable = [
-        normalizeString(store.storecode),
-        getStoreDisplayName(store),
-      ].join(" ").toLowerCase();
-      return searchable.includes(normalizedSearch);
-    });
-  }, [storeSearch, stores]);
-
-  const selectedScopeLabel = selectedStorecode === ALL_STORES_SCOPE
-    ? "전체 가맹점"
-    : selectedStorecode;
-
   return (
     <div className="min-h-screen px-4 py-4 sm:px-5 lg:px-8">
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 pb-10">
@@ -168,103 +117,6 @@ export default function AdminMemberManagementPageClient({
                 </div>
               </div>
 
-              <div className="console-panel rounded-[30px] bg-white/95 p-5 text-slate-950">
-                <div className="flex flex-wrap items-end gap-3">
-                  <div className="min-w-[260px] flex-1">
-                    <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                      Store selector
-                    </div>
-                    <input
-                      value={storeSearch}
-                      onChange={(event) => setStoreSearch(event.target.value)}
-                      placeholder="storecode / 가맹점명 검색"
-                      className="mt-3 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-200"
-                      disabled={loadingStores}
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void loadStores();
-                    }}
-                    className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                  >
-                    새로고침
-                  </button>
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedStorecode(ALL_STORES_SCOPE)}
-                    className={`rounded-[24px] border px-4 py-4 text-left transition ${
-                      selectedStorecode === ALL_STORES_SCOPE
-                        ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
-                        : "border-slate-200 bg-slate-50 hover:border-sky-200 hover:bg-sky-50"
-                    }`}
-                  >
-                    <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-current/70">
-                      All stores
-                    </div>
-                    <div className="mt-2 text-lg font-semibold tracking-[-0.04em]">
-                      전체 가맹점
-                    </div>
-                    <div className="mt-1 text-sm text-current/75">
-                      전체 회원을 한 번에 조회하고 가맹점 조건까지 함께 검색합니다.
-                    </div>
-                  </button>
-
-                  {filteredStores.map((store) => {
-                    const storecode = normalizeString(store.storecode);
-                    const selected = selectedStorecode === storecode;
-                    const storeName = getStoreDisplayName(store);
-
-                    return (
-                      <button
-                        key={storecode}
-                        type="button"
-                        onClick={() => setSelectedStorecode(storecode)}
-                        className={`rounded-[24px] border px-4 py-4 text-left transition ${
-                          selected
-                            ? "border-transparent bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_54%,#0f766e_100%)] text-white shadow-[0_22px_42px_-24px_rgba(37,99,235,0.52)]"
-                            : "border-slate-200 bg-white hover:border-sky-200 hover:bg-sky-50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <StoreLogo
-                            src={getStoreLogoSrc(store)}
-                            alt={storeName}
-                            className={`h-12 w-12 shrink-0 rounded-2xl border ${
-                              selected ? "border-white/15 bg-white/10" : "border-slate-200 bg-slate-50"
-                            }`}
-                          />
-                          <div className="min-w-0">
-                            <div className="truncate text-base font-semibold tracking-[-0.03em]">
-                              {storeName}
-                            </div>
-                            <div className={`mt-1 text-xs ${selected ? "text-slate-200" : "text-slate-500"}`}>
-                              {storecode}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-4 text-sm text-slate-500">
-                  {selectedStorecode
-                    ? `${selectedScopeLabel} 범위 회원관리 화면을 아래에 표시합니다.`
-                    : "전체 가맹점 또는 특정 가맹점을 선택하면 회원관리 화면이 아래에 열립니다."}
-                </div>
-
-                {error ? (
-                  <div className="mt-4 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                    {error}
-                  </div>
-                ) : null}
-              </div>
             </div>
 
             <AdminWalletCard
@@ -280,6 +132,34 @@ export default function AdminMemberManagementPageClient({
             />
           </div>
         </section>
+
+        <AdminStoreStrip
+          stores={stores}
+          selectedStorecode={selectedStorecode}
+          onSelectStorecode={setSelectedStorecode}
+          activeAccount={activeAccount}
+          loading={loadingStores}
+          error={error}
+          onRefresh={() => {
+            void loadStores();
+          }}
+          onStoreUpdate={(storecode, patch) => {
+            setStores((current) => current.map((store) => {
+              if (normalizeString(store.storecode) !== normalizeString(storecode)) {
+                return store;
+              }
+
+              return {
+                ...store,
+                ...patch,
+              };
+            }));
+          }}
+          allowAllStores
+          allStoresValue={ALL_STORES_SCOPE}
+          allStoresLabel="전체 가맹점"
+          emptyMessage="검색 결과가 없습니다."
+        />
 
         {selectedStorecode ? (
           <MemberManagementConsoleClient
@@ -297,7 +177,7 @@ export default function AdminMemberManagementPageClient({
               가맹점을 선택하세요
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-500">
-              좌측 패널의 admin 콘솔 범위에서 회원관리 기능을 보려면 먼저 대상 가맹점을 선택해야 합니다.
+              상단 가맹점 목록에서 전체 또는 특정 가맹점을 선택하면 회원관리 화면이 열립니다.
             </p>
           </section>
         )}

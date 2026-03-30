@@ -4,6 +4,7 @@ import * as Ably from "ably";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
+import AdminStoreStrip from "@/components/admin/admin-store-strip";
 import AdminWalletCard from "@/components/admin/admin-wallet-card";
 import {
   BUYORDER_STATUS_ABLY_CHANNEL,
@@ -125,6 +126,8 @@ type StoreItem = {
   storeName?: string;
   companyName?: string;
   storeLogo?: string;
+  viewOnAndOff?: boolean;
+  liveOnAndOff?: boolean;
 };
 
 type UnmatchedTransfer = {
@@ -1828,11 +1831,6 @@ const getStoreDisplayName = (store: StoreItem | Record<string, unknown> | null |
   ).trim();
 };
 
-const getStoreOptionLogoSrc = (store: StoreItem | Record<string, unknown> | null | undefined) => {
-  const logo = String((store as StoreItem | undefined)?.storeLogo || "").trim();
-  return logo || "/logo.png";
-};
-
 const buildPaymentReversePreviewUrl = ({
   lang,
   clientId,
@@ -1884,8 +1882,6 @@ export default function BuyorderConsoleClient({
     : ordersDisconnectedMessage;
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters(normalizedForcedStorecode));
   const [draftFilters, setDraftFilters] = useState<FilterState>(() => createDefaultFilters(normalizedForcedStorecode));
-  const [storeSearchQuery, setStoreSearchQuery] = useState("");
-  const [storeSearchOpen, setStoreSearchOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [depositModalLoading, setDepositModalLoading] = useState(false);
   const [depositModalSubmitting, setDepositModalSubmitting] = useState(false);
@@ -1938,7 +1934,6 @@ export default function BuyorderConsoleClient({
   const lastUnmatchedRealtimeEventIdRef = useRef("");
   const lastBankTransferRealtimeEventIdRef = useRef("");
   const ablyClientIdRef = useRef(`console-buyorder-${Math.random().toString(36).slice(2, 10)}`);
-  const storeSearchRef = useRef<HTMLDivElement | null>(null);
   const selectedDepositTotal = useMemo(() => {
     return depositOptions.reduce((sum, item) => {
       const itemId = String(item._id || "");
@@ -3011,35 +3006,6 @@ export default function BuyorderConsoleClient({
 
     return bankTransferLiveLogs.filter((item) => item.storecode === selectedStorecode);
   }, [bankTransferLiveLogs, filters.storecode]);
-  const filteredStoreOptions = useMemo(() => {
-    const normalizedQuery = storeSearchQuery.trim().toLowerCase();
-    const results = stores.filter((item) => {
-      if (!normalizedQuery) {
-        return true;
-      }
-
-      const candidates = [
-        String(item.storecode || "").trim().toLowerCase(),
-        String(item.storeName || "").trim().toLowerCase(),
-        String(item.companyName || "").trim().toLowerCase(),
-      ];
-
-      return candidates.some((value) => value.includes(normalizedQuery));
-    });
-
-    results.sort((left, right) => {
-      const leftSelected = String(left.storecode || "").trim() === draftFilters.storecode;
-      const rightSelected = String(right.storecode || "").trim() === draftFilters.storecode;
-
-      if (leftSelected === rightSelected) {
-        return getStoreDisplayName(left).localeCompare(getStoreDisplayName(right), "ko");
-      }
-
-      return leftSelected ? -1 : 1;
-    });
-
-    return results;
-  }, [draftFilters.storecode, storeSearchQuery, stores]);
   const selectedStoreSummary = useMemo(() => {
     if (!filters.storecode) {
       return null;
@@ -3051,17 +3017,6 @@ export default function BuyorderConsoleClient({
       || null
     );
   }, [data?.selectedStore, filters.storecode, stores]);
-  const selectedDraftStoreSummary = useMemo(() => {
-    if (!draftFilters.storecode) {
-      return null;
-    }
-
-    return (
-      stores.find((item) => String(item.storecode || "").trim() === draftFilters.storecode)
-      || (filters.storecode === draftFilters.storecode ? selectedStoreSummary : null)
-      || null
-    );
-  }, [draftFilters.storecode, filters.storecode, selectedStoreSummary, stores]);
   const storeCoverageLabel = filters.storecode
     ? getStoreDisplayName(selectedStoreSummary) || filters.storecode
     : "전체 가맹점";
@@ -3253,21 +3208,6 @@ export default function BuyorderConsoleClient({
   }, [totalOrderPages]);
 
   useEffect(() => {
-    if (!storeSearchOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!storeSearchRef.current?.contains(event.target as Node)) {
-        setStoreSearchOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [storeSearchOpen]);
-
-  useEffect(() => {
     setFilters((prev) => (areFiltersEqual(prev, draftFilters) ? prev : draftFilters));
   }, [draftFilters]);
 
@@ -3276,8 +3216,6 @@ export default function BuyorderConsoleClient({
       return;
     }
 
-    setStoreSearchOpen(false);
-    setStoreSearchQuery("");
     setDraftFilters((prev) => {
       if (prev.storecode === normalizedForcedStorecode) {
         return prev;
@@ -3390,6 +3328,62 @@ export default function BuyorderConsoleClient({
           </div>
         </section>
 
+        {!shouldHideStoreFilter ? (
+          <AdminStoreStrip
+            stores={stores}
+            selectedStorecode={draftFilters.storecode}
+            onSelectStorecode={(storecode) => {
+              setDraftFilters((prev) => ({
+                ...prev,
+                storecode,
+                page: 1,
+              }));
+            }}
+            activeAccount={activeAccount}
+            loading={storeDirectoryLoading}
+            error={storeDirectoryError}
+            onRefresh={() => {
+              void loadStoreDirectory();
+            }}
+            onStoreUpdate={(storecode, patch) => {
+              setStoreDirectory((current) => ({
+                ...current,
+                stores: current.stores.map((store) => {
+                  if (normalizeString(store.storecode) !== normalizeString(storecode)) {
+                    return store;
+                  }
+
+                  return {
+                    ...store,
+                    ...patch,
+                  };
+                }),
+              }));
+              setData((current) => {
+                if (!current) {
+                  return current;
+                }
+
+                return {
+                  ...current,
+                  selectedStore:
+                    current.selectedStore
+                    && normalizeString(current.selectedStore.storecode) === normalizeString(storecode)
+                      ? {
+                          ...current.selectedStore,
+                          ...patch,
+                        }
+                      : current.selectedStore,
+                };
+              });
+            }}
+            allowAllStores
+            allStoresValue=""
+            allStoresLabel="전체 가맹점"
+            emptyMessage="검색 조건에 맞는 가맹점이 없습니다."
+          />
+        ) : null}
+
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_360px]">
           <div className="console-panel rounded-[30px] p-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -3410,162 +3404,6 @@ export default function BuyorderConsoleClient({
                 </div>
               ) : null}
               <div className="grid gap-3 xl:grid-cols-12">
-                {!shouldHideStoreFilter ? (
-                <div className="space-y-2 text-sm xl:col-span-4">
-                  <span className="font-medium text-slate-200">가맹점 선택</span>
-                  <div ref={storeSearchRef} className="relative">
-                    <input
-                      value={storeSearchQuery}
-                      onFocus={() => setStoreSearchOpen(true)}
-                      onChange={(event) => {
-                        setStoreSearchOpen(true);
-                        setStoreSearchQuery(event.target.value);
-                      }}
-                      placeholder="storecode / 가맹점명 검색"
-                      className={fieldClassName}
-                    />
-                    {!storeSearchOpen && !storeSearchQuery && selectedDraftStoreSummary ? (
-                      <div className="pointer-events-none absolute inset-x-4 inset-y-0 flex items-center gap-3">
-                        <img
-                          src={getStoreOptionLogoSrc(selectedDraftStoreSummary)}
-                          alt={getStoreDisplayName(selectedDraftStoreSummary) || draftFilters.storecode}
-                          className="h-7 w-7 rounded-full border border-slate-200 bg-white object-cover"
-                        />
-                        <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
-                          {getStoreDisplayName(selectedDraftStoreSummary) || draftFilters.storecode}
-                        </div>
-                        <div className="console-mono truncate text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                          {draftFilters.storecode}
-                        </div>
-                      </div>
-                    ) : null}
-                    {storeSearchOpen ? (
-                      <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
-                        <div className="max-h-80 overflow-y-auto p-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDraftFilters((prev) => ({
-                                ...prev,
-                                storecode: "",
-                                page: 1,
-                              }));
-                              setStoreSearchQuery("");
-                              setStoreSearchOpen(false);
-                            }}
-                            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
-                              draftFilters.storecode
-                                ? "text-slate-700 hover:bg-slate-50"
-                                : "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
-                            }`}
-                          >
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                              All
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-semibold text-slate-900">전체</div>
-                              <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                                all stores
-                              </div>
-                            </div>
-                            {!draftFilters.storecode ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
-                                <svg
-                                  aria-hidden="true"
-                                  viewBox="0 0 16 16"
-                                  className="h-3 w-3"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
-                                </svg>
-                                Selected
-                              </span>
-                            ) : null}
-                          </button>
-
-                          {filteredStoreOptions.length ? (
-                            filteredStoreOptions.map((item) => {
-                              const storecode = String(item.storecode || "").trim();
-                              const displayName = getStoreDisplayName(item);
-                              const logoSrc = getStoreOptionLogoSrc(item);
-                              const isSelected = storecode === draftFilters.storecode;
-
-                              return (
-                                <button
-                                  key={storecode || displayName}
-                                  type="button"
-                                  onClick={() => {
-                                    setDraftFilters((prev) => ({
-                                      ...prev,
-                                      storecode,
-                                      page: 1,
-                                    }));
-                                    setStoreSearchQuery("");
-                                    setStoreSearchOpen(false);
-                                  }}
-                                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
-                                    isSelected
-                                      ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200"
-                                      : "text-slate-700 hover:bg-slate-50"
-                                  }`}
-                                >
-                                  <img
-                                    src={logoSrc}
-                                    alt={displayName || storecode || "Store"}
-                                    className="h-10 w-10 rounded-2xl border border-slate-200 bg-white object-cover"
-                                  />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="truncate text-sm font-semibold text-slate-900">
-                                      {displayName || storecode || "Unnamed store"}
-                                    </div>
-                                    <div className="console-mono truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                                      {storecode || "storecode unavailable"}
-                                    </div>
-                                  </div>
-                                  {isSelected ? (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
-                                      <svg
-                                        aria-hidden="true"
-                                        viewBox="0 0 16 16"
-                                        className="h-3 w-3"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      >
-                                        <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
-                                      </svg>
-                                      Selected
-                                    </span>
-                                  ) : null}
-                                </button>
-                              );
-                            })
-                          ) : storeDirectoryLoading ? (
-                            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                              가맹점 목록을 불러오는 중입니다.
-                            </div>
-                          ) : storeDirectoryError ? (
-                            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-center text-sm text-rose-700">
-                              {storeDirectoryError}
-                            </div>
-                          ) : (
-                            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                              검색 조건에 맞는 가맹점이 없습니다.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                ) : null}
-
                 <label className="space-y-2 text-sm xl:col-span-3">
                   <span className="font-medium text-slate-200">Trade ID</span>
                   <input
