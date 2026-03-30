@@ -69,6 +69,7 @@ type SellerBankBalanceSummary = {
 type StoreContextResult = {
   store: StoreDetail | null;
   storeError?: string;
+  hasPrivilegedStoreRead?: boolean;
   storeReadMessage?: string;
   rate?: number;
 };
@@ -691,6 +692,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
       setStoreContext({
         store: result.store || null,
         storeError: normalizeText(result.storeError),
+        hasPrivilegedStoreRead: result.hasPrivilegedStoreRead === true,
         storeReadMessage: normalizeText(result.storeReadMessage),
         rate: Number(result.rate || 0),
       });
@@ -960,8 +962,17 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
   }, [activeAccount, searchKeyword, stores, updatingOrderStorecode]);
 
   const selectedStore = storeContext?.store || null;
-  const buyerBankOptions = useMemo(() => getBuyerBankOptions(selectedStore), [selectedStore]);
-  const sellerBankOptions = useMemo(() => getSellerBankOptions(selectedStore), [selectedStore]);
+  const hasPrivilegedStoreRead = storeContext?.hasPrivilegedStoreRead === true;
+  const storeSensitiveReadMessage = normalizeText(storeContext?.storeReadMessage)
+    || "관리자 지갑 연결 후 구매자 계좌와 판매자 결제계좌 정보를 확인할 수 있습니다.";
+  const buyerBankOptions = useMemo(
+    () => (hasPrivilegedStoreRead ? getBuyerBankOptions(selectedStore) : []),
+    [hasPrivilegedStoreRead, selectedStore],
+  );
+  const sellerBankOptions = useMemo(
+    () => (hasPrivilegedStoreRead ? getSellerBankOptions(selectedStore) : []),
+    [hasPrivilegedStoreRead, selectedStore],
+  );
   const clearanceWalletAddress = normalizeText(
     selectedStore?.privateSaleWalletAddress || selectedStore?.sellerWalletAddress,
   );
@@ -1495,7 +1506,9 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                       <div className="mt-3 grid gap-2.5 lg:grid-cols-2">
                         {buyerBankOptions.length === 0 ? (
                           <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                            선택 가능한 구매자 계좌 정보가 없습니다.
+                            {hasPrivilegedStoreRead
+                              ? "선택 가능한 구매자 계좌 정보가 없습니다."
+                              : storeSensitiveReadMessage}
                           </div>
                         ) : (
                           buyerBankOptions.map((item) => (
@@ -1523,7 +1536,9 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                       <div className="mt-3 grid gap-2.5 lg:grid-cols-2">
                         {sellerBankOptions.length === 0 ? (
                           <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                            선택 가능한 판매자 결제계좌가 없습니다.
+                            {hasPrivilegedStoreRead
+                              ? "선택 가능한 판매자 결제계좌가 없습니다."
+                              : storeSensitiveReadMessage}
                           </div>
                         ) : (
                           sellerBankOptions.map((item) => (

@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       storeReadMessage = "가맹점 민감정보를 불러오지 못했습니다. 관리자 지갑 권한을 확인해 주세요.";
     }
   } else {
-    storeReadMessage = "관리자 지갑 연결 후 구매자 계좌 정보를 확인할 수 있습니다.";
+    storeReadMessage = "관리자 지갑 연결 후 구매자 계좌와 판매자 결제계좌 정보를 확인할 수 있습니다.";
   }
 
   if (!storeResponse || !storeResponse.ok) {

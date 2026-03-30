@@ -21,6 +21,7 @@ type ClearanceOrderEmbeddedStreamProps = {
 
 type ClearanceOrdersResponse = {
   ordersError?: string;
+  ordersAccessLevel?: string;
   orders?: ClearanceOrder[];
   totalCount?: number;
   totalClearanceCount?: number;
@@ -45,6 +46,7 @@ export default function ClearanceOrderEmbeddedStream({
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [copiedTradeId, setCopiedTradeId] = useState("");
+  const [ordersAccessLevel, setOrdersAccessLevel] = useState("public");
   const [totalCount, setTotalCount] = useState(0);
   const [totalClearanceCount, setTotalClearanceCount] = useState(0);
   const [totalClearanceAmount, setTotalClearanceAmount] = useState(0);
@@ -65,7 +67,7 @@ export default function ClearanceOrderEmbeddedStream({
   }, []);
 
   const canReadSignedData = Boolean(activeAccount?.address);
-  const disconnectedMessage = "관리자 지갑을 연결하면 해당 가맹점 청산주문을 조회할 수 있습니다.";
+  const disconnectedMessage = "관리자 지갑을 연결하면 민감정보가 풀린 청산주문 상세 조회가 열립니다.";
 
   const loadOrders = useCallback(async (options?: { silent?: boolean }) => {
     const requestId = ++requestIdRef.current;
@@ -73,6 +75,7 @@ export default function ClearanceOrderEmbeddedStream({
 
     if (!storecode) {
       setOrders([]);
+      setOrdersAccessLevel("public");
       setTotalCount(0);
       setTotalClearanceCount(0);
       setTotalClearanceAmount(0);
@@ -92,35 +95,30 @@ export default function ClearanceOrderEmbeddedStream({
     setError("");
 
     try {
-      if (!activeAccount) {
-        if (requestId !== requestIdRef.current) {
-          return;
-        }
-        setOrders([]);
-        setTotalCount(0);
-        setTotalClearanceCount(0);
-        setTotalClearanceAmount(0);
-        setTotalClearanceAmountKRW(0);
-        setOrdersError("");
-        return;
-      }
+      let signedOrdersBody: Record<string, unknown> | null = null;
 
-      const signedOrdersBody = await createCenterStoreAdminSignedBody({
-        account: activeAccount,
-        route: "/api/order/getAllCollectOrdersForSeller",
-        storecode,
-        requesterWalletAddress: activeAccount.address,
-        body: {
-          storecode,
-          limit: DEFAULT_LIMIT,
-          page,
-          walletAddress: activeAccount.address,
-          searchMyOrders: false,
-          privateSale: true,
-          fromDate,
-          toDate,
-        },
-      });
+      if (activeAccount) {
+        try {
+          signedOrdersBody = await createCenterStoreAdminSignedBody({
+            account: activeAccount,
+            route: "/api/order/getAdminClearanceOrders",
+            storecode: "admin",
+            requesterWalletAddress: activeAccount.address,
+            body: {
+              storecode,
+              limit: DEFAULT_LIMIT,
+              page,
+              walletAddress: activeAccount.address,
+              searchMyOrders: false,
+              privateSale: true,
+              fromDate,
+              toDate,
+            },
+          });
+        } catch {
+          signedOrdersBody = null;
+        }
+      }
 
       const response = await fetch("/api/bff/admin/clearance-orders", {
         method: "POST",
@@ -130,7 +128,14 @@ export default function ClearanceOrderEmbeddedStream({
         cache: "no-store",
         body: JSON.stringify({
           signedOrdersBody,
-          ordersQueryMode: "collectOrdersForSeller",
+          orderFilters: {
+            storecode,
+            limit: DEFAULT_LIMIT,
+            page,
+            fromDate,
+            toDate,
+          },
+          ordersQueryMode: "buyOrders",
         }),
       });
 
@@ -146,6 +151,7 @@ export default function ClearanceOrderEmbeddedStream({
       const result = (payload?.result || {}) as ClearanceOrdersResponse;
       setOrders(Array.isArray(result.orders) ? result.orders : []);
       setOrdersError(normalizeText(result.ordersError));
+      setOrdersAccessLevel(normalizeText(result.ordersAccessLevel) || "public");
       setTotalCount(Number(result.totalCount || 0));
       setTotalClearanceCount(Number(result.totalClearanceCount || 0));
       setTotalClearanceAmount(Number(result.totalClearanceAmount || 0));
@@ -292,9 +298,9 @@ export default function ClearanceOrderEmbeddedStream({
         ordersLoading={ordersLoading}
         ordersRefreshing={ordersRefreshing}
         isWalletRecovering={false}
-        hasPrivilegedOrderAccess={canReadSignedData}
+        hasPrivilegedOrderAccess={ordersAccessLevel === "privileged"}
         disconnectedMessage={disconnectedMessage}
-        showMaskedNotice={false}
+        showMaskedNotice={ordersAccessLevel !== "privileged"}
         processingOrderId=""
         actionModalSubmitting={false}
         actionModalMode={null}
