@@ -23,4 +23,5 @@ export const STORE_ROUTE_UPDATE_AGENTCODE = "/api/store/updateAgentcode";
 export const STORE_ROUTE_UPDATE_PAYMENT_URL = "/api/store/updateStorePaymentUrl";
 export const STORE_ROUTE_UPDATE_MAX_PAYMENT_AMOUNT = "/api/store/updateMaxPaymentAmountKRW";
 export const STORE_ROUTE_UPDATE_ACCESS_TOKEN = "/api/store/updateStoreAccessToken";
+export const STORE_ROUTE_TOGGLE_LIVE = "/api/store/toggleLive";
 export const STORE_ROUTE_TOGGLE_VIEW = "/api/store/toggleView";

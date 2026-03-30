@@ -9,6 +9,7 @@ import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 import {
   STORE_ROUTE_SET_STORE,
+  STORE_ROUTE_TOGGLE_LIVE,
   STORE_ROUTE_TOGGLE_VIEW,
   STORE_SETTINGS_MUTATION_SIGNING_PREFIX,
 } from "@/lib/security/store-settings-admin";
@@ -328,6 +329,7 @@ export default function StoreManagementConsoleClient({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addStoreForm, setAddStoreForm] = useState<AddStoreFormState>(EMPTY_ADD_STORE_FORM);
   const [creatingStore, setCreatingStore] = useState(false);
+  const [pendingLiveStorecode, setPendingLiveStorecode] = useState("");
   const [pendingVisibilityStorecode, setPendingVisibilityStorecode] = useState("");
   const inflightLoadRef = useRef(false);
   const queuedSilentRefreshRef = useRef(false);
@@ -630,6 +632,22 @@ export default function StoreManagementConsoleClient({
     });
   }, []);
 
+  const patchStoreLiveState = useCallback((storecode: string, liveOnAndOff: boolean) => {
+    const normalizedStorecode = normalizeString(storecode);
+    setData((current) => ({
+      ...current,
+      stores: current.stores.map((store) => {
+        if (normalizeString(store.storecode) !== normalizedStorecode) {
+          return store;
+        }
+        return {
+          ...store,
+          liveOnAndOff,
+        };
+      }),
+    }));
+  }, []);
+
   const toggleStoreVisibility = useCallback(async (store: StoreRow) => {
     if (!activeAccount) {
       setFeedback({
@@ -694,6 +712,71 @@ export default function StoreManagementConsoleClient({
       setPendingVisibilityStorecode("");
     }
   }, [activeAccount, patchStoreVisibility]);
+
+  const toggleStoreLive = useCallback(async (store: StoreRow) => {
+    if (!activeAccount) {
+      setFeedback({
+        tone: "error",
+        message: "관리자 지갑 연결이 필요합니다.",
+      });
+      return;
+    }
+
+    const storecode = normalizeString(store.storecode);
+    if (!storecode) {
+      setFeedback({
+        tone: "error",
+        message: "가맹점 코드가 없어 라이브 상태를 변경할 수 없습니다.",
+      });
+      return;
+    }
+
+    const nextValue = store.liveOnAndOff === false;
+    setPendingLiveStorecode(storecode);
+
+    try {
+      const signedBody = await createAdminSignedBody({
+        account: activeAccount,
+        route: STORE_ROUTE_TOGGLE_LIVE,
+        signingPrefix: STORE_SETTINGS_MUTATION_SIGNING_PREFIX,
+        requesterStorecode: "admin",
+        requesterWalletAddress: activeAccount.address,
+        actionFields: {
+          storecode,
+          liveOnAndOff: nextValue,
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/signed-store-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route: STORE_ROUTE_TOGGLE_LIVE,
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "가맹점 라이브 상태 변경에 실패했습니다.");
+      }
+
+      patchStoreLiveState(storecode, nextValue);
+      setFeedback({
+        tone: "success",
+        message: `${normalizeString(store.storeName) || storecode} 가맹점을 ${nextValue ? "운영중" : "중지됨"} 상태로 변경했습니다.`,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: error instanceof Error ? error.message : "가맹점 라이브 상태 변경에 실패했습니다.",
+      });
+    } finally {
+      setPendingLiveStorecode("");
+    }
+  }, [activeAccount, patchStoreLiveState]);
 
   return (
     <div className="min-h-screen px-4 py-4 sm:px-5 lg:px-8">
@@ -1063,6 +1146,31 @@ export default function StoreManagementConsoleClient({
                           <div className="text-xs text-slate-500">
                             admin {shortAddress(store.adminWalletAddress)}
                           </div>
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                            store.liveOnAndOff === false
+                              ? "border-slate-200 bg-slate-50 text-slate-600"
+                              : "border-sky-200 bg-sky-50 text-sky-700"
+                          }`}>
+                            {store.liveOnAndOff === false ? "중지됨" : "운영중"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void toggleStoreLive(store);
+                            }}
+                            disabled={!canReadSignedData || pendingLiveStorecode === normalizeString(store.storecode)}
+                            className={`inline-flex h-8 items-center justify-center rounded-full px-3 text-[11px] font-semibold transition ${
+                              store.liveOnAndOff === false
+                                ? "border border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
+                                : "border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100"
+                            } disabled:cursor-not-allowed disabled:opacity-50`}
+                          >
+                            {pendingLiveStorecode === normalizeString(store.storecode)
+                              ? "처리중..."
+                              : store.liveOnAndOff === false
+                                ? "운영 시작"
+                                : "중지하기"}
+                          </button>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -1193,6 +1301,12 @@ export default function StoreManagementConsoleClient({
                       </div>
                     </div>
                     <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3">
+                      <div className="text-xs font-medium text-slate-500">라이브 상태</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {store.liveOnAndOff === false ? "중지됨" : "운영중"}
+                      </div>
+                    </div>
+                    <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3">
                       <div className="text-xs font-medium text-slate-500">결제지갑</div>
                       <div className="mt-1 text-sm font-semibold text-slate-900">
                         {shortAddress(store.settlementWalletAddress)}
@@ -1228,6 +1342,24 @@ export default function StoreManagementConsoleClient({
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void toggleStoreLive(store);
+                      }}
+                      disabled={!canReadSignedData || pendingLiveStorecode === normalizeString(store.storecode)}
+                      className={`inline-flex h-10 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition ${
+                        store.liveOnAndOff === false
+                          ? "border border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
+                          : "border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      {pendingLiveStorecode === normalizeString(store.storecode)
+                        ? "처리중..."
+                        : store.liveOnAndOff === false
+                          ? "운영 시작"
+                          : "중지하기"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {

@@ -22,6 +22,7 @@ const ALLOWED_ROUTES = new Set([
   "/api/store/updateStorePaymentUrl",
   "/api/store/updateMaxPaymentAmountKRW",
   "/api/store/updateStoreAccessToken",
+  "/api/store/toggleLive",
   "/api/store/toggleView",
 ]);
 
