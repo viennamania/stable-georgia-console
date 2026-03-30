@@ -5,6 +5,7 @@ import {
   formatAdminActionDateTime,
   formatDateTime,
   formatKrwValue,
+  formatRateValue,
   formatTimeAgo,
   formatUsdtValue,
   getBscscanTxUrl,
@@ -128,10 +129,10 @@ export default function ClearanceOrdersTableSection({
         <table className="w-full table-fixed border-separate border-spacing-0">
           <thead>
             <tr className="console-mono text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-              <th className="w-[21%] border-b border-slate-200 px-3 py-2.5">Trade / Created</th>
-              <th className="w-[10%] border-b border-slate-200 px-3 py-2.5">Status</th>
-              <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">Buyer</th>
-              <th className="w-[16%] border-b border-slate-200 px-3 py-2.5">Seller / 입금계좌</th>
+              <th className="w-[21%] border-b border-slate-200 px-3 py-2.5">Trade</th>
+              <th className="w-[10%] border-b border-slate-200 px-3 py-2.5">상태</th>
+              <th className="w-[15%] border-b border-slate-200 px-3 py-2.5">구매자 / 출금계좌</th>
+              <th className="w-[16%] border-b border-slate-200 px-3 py-2.5">판매자 / 입금계좌</th>
               <th className="w-[12%] border-b border-slate-200 px-3 py-2.5 text-right">Amount</th>
               <th className="w-[14%] border-b border-slate-200 px-3 py-2.5">출금상태</th>
               <th className="w-[12%] border-b border-slate-200 px-3 py-2.5">USDT 전송</th>
@@ -192,11 +193,8 @@ export default function ClearanceOrdersTableSection({
                                 {order.storecode || "-"}
                               </div>
                             </div>
-                            <div className="min-w-[6rem] shrink-0">
-                              <div className="console-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
-                                Created
-                              </div>
-                              <span className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${creationMeta.className}`}>
+                            <div className="min-w-[6rem] shrink-0 text-right">
+                              <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${creationMeta.className}`}>
                                 {creationMeta.label}
                               </span>
                             </div>
@@ -265,6 +263,9 @@ export default function ClearanceOrdersTableSection({
                       </div>
                       <div className="mt-0.5 text-[11px] font-semibold text-emerald-600">
                         {formatUsdtValue(order.usdtAmount)} USDT
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        환율 {formatRateValue(order.rate)}
                       </div>
                     </td>
                     <td className="border-b border-slate-100 px-3 py-3 align-top">

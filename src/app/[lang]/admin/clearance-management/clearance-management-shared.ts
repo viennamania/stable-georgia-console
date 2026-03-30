@@ -184,6 +184,11 @@ const USDT_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 3,
 });
 
+const RATE_FORMATTER = new Intl.NumberFormat("ko-KR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 export const WITHDRAWAL_HIGHLIGHT_MS = 4500;
 export const WITHDRAWAL_CLOCK_TICK_MS = 5000;
@@ -454,6 +459,15 @@ export const formatKrwValue = (value?: number | string | null) => {
 
 export const formatUsdtValue = (value?: number | string | null) => {
   return USDT_FORMATTER.format(Number(value || 0));
+};
+
+export const formatRateValue = (value?: number | string | null) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return "-";
+  }
+
+  return RATE_FORMATTER.format(numeric);
 };
 
 export const shortAddress = (value?: string | null) => {
