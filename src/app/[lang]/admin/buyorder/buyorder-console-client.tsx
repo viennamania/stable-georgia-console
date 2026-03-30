@@ -3823,27 +3823,12 @@ export default function BuyorderConsoleClient({
         <section className="console-panel overflow-hidden rounded-[28px]">
           <div className="border-b border-slate-200/80 px-5 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2.5">
-              <div>
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className={COMPACT_SECTION_TITLE_CLASS_NAME}>
                   판매자 통장별 P2P 거래 통계
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                <button
-                  type="button"
-                  onClick={() => setPrioritizePendingOrders((prev) => !prev)}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
-                    prioritizePendingOrders
-                      ? "border-sky-200 bg-sky-50 text-sky-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                  aria-pressed={prioritizePendingOrders}
-                >
-                  처리안한 주문 먼저보기
-                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold">
-                    {prioritizePendingOrders ? "ON" : "OFF"}
-                  </span>
-                </button>
                 {loading ? (
                   <span className={SECTION_LOADING_BADGE_CLASS_NAME}>
                     <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
@@ -4058,10 +4043,25 @@ export default function BuyorderConsoleClient({
         <section className="console-panel overflow-hidden rounded-[30px]">
           <div className="border-b border-slate-200/80 px-5 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2.5">
-              <div>
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className={COMPACT_SECTION_TITLE_CLASS_NAME}>
                   구매주문
                 </h2>
+                <button
+                  type="button"
+                  onClick={() => setPrioritizePendingOrders((prev) => !prev)}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
+                    prioritizePendingOrders
+                      ? "border-sky-200 bg-sky-50 text-sky-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                  aria-pressed={prioritizePendingOrders}
+                >
+                  처리안한 주문 먼저보기
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold">
+                    {prioritizePendingOrders ? "ON" : "OFF"}
+                  </span>
+                </button>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                 {loading ? (

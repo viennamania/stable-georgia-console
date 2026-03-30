@@ -177,7 +177,7 @@ const createDefaultFilters = (storecode = ""): FilterState => ({
   storecode,
   limit: 30,
   page: 1,
-  fromDate: createInputDate(-6),
+  fromDate: createInputDate(0),
   toDate: createInputDate(0),
   searchKeyword: "",
   userType: "all",

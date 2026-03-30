@@ -102,6 +102,17 @@ type GradeModalState = {
   index: number;
 } | null;
 
+type BankModalState = {
+  member: MemberRow;
+  index: number;
+} | null;
+
+type BankModalFormState = {
+  depositBankName: string;
+  depositBankAccountNumber: string;
+  depositName: string;
+};
+
 const BANK_OPTIONS = [
   "카카오뱅크",
   "케이뱅크",
@@ -173,6 +184,12 @@ const EMPTY_ADD_MEMBER_FORM: AddMemberFormState = {
   userBankName: "",
   userBankAccountNumber: "",
   userType: "",
+};
+
+const EMPTY_BANK_MODAL_FORM: BankModalFormState = {
+  depositBankName: "",
+  depositBankAccountNumber: "",
+  depositName: "",
 };
 
 const normalizeString = (value: unknown) => {
@@ -497,9 +514,12 @@ export default function MemberManagementConsoleClient({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addMemberForm, setAddMemberForm] = useState<AddMemberFormState>(EMPTY_ADD_MEMBER_FORM);
   const [gradeModalState, setGradeModalState] = useState<GradeModalState>(null);
+  const [bankModalState, setBankModalState] = useState<BankModalState>(null);
+  const [bankModalForm, setBankModalForm] = useState<BankModalFormState>(EMPTY_BANK_MODAL_FORM);
   const [nextUserType, setNextUserType] = useState("normal");
   const [submitting, setSubmitting] = useState(false);
   const [updatingUserType, setUpdatingUserType] = useState(false);
+  const [updatingBankInfo, setUpdatingBankInfo] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, string>>({});
@@ -772,6 +792,24 @@ export default function MemberManagementConsoleClient({
     setNextUserType("normal");
   }, [updatingUserType]);
 
+  const openBankModal = useCallback((member: MemberRow, index: number) => {
+    setBankModalState({ member, index });
+    setBankModalForm({
+      depositBankName: normalizeString(member.buyer?.depositBankName),
+      depositBankAccountNumber: digitsOnly(normalizeString(member.buyer?.depositBankAccountNumber)),
+      depositName: normalizeString(member.buyer?.depositName),
+    });
+    setActionError("");
+  }, []);
+
+  const closeBankModal = useCallback(() => {
+    if (updatingBankInfo) {
+      return;
+    }
+    setBankModalState(null);
+    setBankModalForm(EMPTY_BANK_MODAL_FORM);
+  }, [updatingBankInfo]);
+
   const updatePaymentDraft = useCallback((key: string, value: string) => {
     const normalizedValue = digitsOnly(value);
     setPaymentDrafts((current) => {
@@ -933,6 +971,101 @@ export default function MemberManagementConsoleClient({
       setUpdatingUserType(false);
     }
   }, [activeAccount, gradeModalState, nextUserType, normalizedForcedStorecode]);
+
+  const submitBankInfoUpdate = useCallback(async () => {
+    if (!bankModalState?.member) {
+      return;
+    }
+
+    const targetStorecode = normalizeString(bankModalState.member.storecode) || normalizedForcedStorecode;
+    const targetWalletAddress = normalizeString(bankModalState.member.walletAddress);
+    const depositBankName = normalizeString(bankModalForm.depositBankName);
+    const depositBankAccountNumber = digitsOnly(bankModalForm.depositBankAccountNumber);
+    const depositName = normalizeString(bankModalForm.depositName);
+
+    if (!targetStorecode || !targetWalletAddress) {
+      setActionError("회원 storecode 또는 지갑주소가 없어 통장 정보를 변경할 수 없습니다.");
+      setActionMessage("");
+      return;
+    }
+
+    if (!activeAccount) {
+      setActionError("가맹점 관리자 지갑 연결이 필요합니다.");
+      setActionMessage("");
+      return;
+    }
+
+    if (!depositBankName || !depositBankAccountNumber || !depositName) {
+      setActionError("은행명, 계좌번호, 예금주명을 모두 입력해주세요.");
+      setActionMessage("");
+      return;
+    }
+
+    setUpdatingBankInfo(true);
+
+    try {
+      const signedBody = await createCenterStoreAdminSignedBody({
+        account: activeAccount,
+        route: "/api/user/updateUserBankInfo",
+        storecode: targetStorecode,
+        body: {
+          storecode: targetStorecode,
+          walletAddress: targetWalletAddress,
+          depositBankName,
+          depositBankAccountNumber,
+          depositName,
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/member-signed-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route: "/api/user/updateUserBankInfo",
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.result) {
+        throw new Error(payload?.error || "회원 통장 변경에 실패했습니다.");
+      }
+
+      const targetKey = getMemberPaymentDraftKey(bankModalState.member, bankModalState.index);
+      setData((current) => ({
+        ...current,
+        members: current.members.map((member, index) => {
+          if (getMemberPaymentDraftKey(member, index) !== targetKey) {
+            return member;
+          }
+
+          return {
+            ...member,
+            buyer: {
+              ...member.buyer,
+              depositBankName,
+              depositBankAccountNumber,
+              depositName,
+            },
+          };
+        }),
+      }));
+
+      setActionMessage(
+        `${normalizeString(bankModalState.member.nickname) || "회원"} 통장 정보를 변경했습니다.`,
+      );
+      setActionError("");
+      setBankModalState(null);
+      setBankModalForm(EMPTY_BANK_MODAL_FORM);
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "회원 통장 변경에 실패했습니다.");
+      setActionMessage("");
+    } finally {
+      setUpdatingBankInfo(false);
+    }
+  }, [activeAccount, bankModalForm, bankModalState, normalizedForcedStorecode]);
 
   const updateAddMemberField = <Key extends keyof AddMemberFormState>(
     key: Key,
@@ -1409,7 +1542,7 @@ export default function MemberManagementConsoleClient({
                   <th className="px-6 py-4">가맹점</th>
                   <th className="px-6 py-4">회원</th>
                   <th className="px-6 py-4">등급</th>
-                  <th className="px-6 py-4">추가자</th>
+                  <th className="w-[136px] px-4 py-4">추가자</th>
                   <th className="px-6 py-4">회원 통장</th>
                   <th className="px-6 py-4 text-right">구매 요약</th>
                   <th className="px-6 py-4">지갑</th>
@@ -1491,21 +1624,21 @@ export default function MemberManagementConsoleClient({
                             </button>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="space-y-1">
-                            <div className="text-sm font-semibold text-slate-900">
+                        <td className="w-[136px] max-w-[136px] px-4 py-4">
+                          <div className="min-w-0 space-y-1">
+                            <div className="truncate text-sm font-semibold text-slate-900">
                               {getCreatorDisplayName(member.createdBy)}
                             </div>
-                            <div className="text-xs text-slate-500">
+                            <div className="truncate text-xs text-slate-500">
                               {getCreatorRoleLabel(member.createdBy)}
                             </div>
-                            <div className="text-xs text-slate-400">
+                            <div className="truncate text-[11px] text-slate-400">
                               {shortAddress(member.createdBy?.walletAddress)}
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="space-y-1">
+                          <div className="space-y-2">
                             <div className="text-sm text-slate-700">
                               {normalizeString(member.buyer?.depositBankName) || "-"}
                             </div>
@@ -1515,6 +1648,14 @@ export default function MemberManagementConsoleClient({
                             <div className="text-sm text-slate-700">
                               {normalizeString(member.buyer?.depositName) || "-"}
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => openBankModal(member, index)}
+                              disabled={!canReadSignedData}
+                              className="inline-flex h-8 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                            >
+                              통장 변경
+                            </button>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -1700,6 +1841,14 @@ export default function MemberManagementConsoleClient({
                         <div className="text-sm text-slate-700">
                           {normalizeString(member.buyer?.depositName) || "-"}
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => openBankModal(member, index)}
+                          disabled={!canReadSignedData}
+                          className="mt-3 inline-flex h-8 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                        >
+                          통장 변경
+                        </button>
                       </div>
                     </div>
 
@@ -1894,6 +2043,139 @@ export default function MemberManagementConsoleClient({
                 className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 {updatingUserType ? "변경 중..." : "등급 저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {bankModalState ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="console-panel w-full max-w-xl rounded-[32px] bg-white p-6 shadow-[0_42px_90px_-56px_rgba(15,23,42,0.7)]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                  Member bank
+                </div>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                  회원 통장 변경
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {normalizeString(bankModalState.member.nickname) || "회원"}의 입금 계좌 정보를 변경합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeBankModal}
+                disabled={updatingBankInfo}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs font-medium text-slate-500">회원</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">
+                    {normalizeString(bankModalState.member.nickname) || "-"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500">가맹점</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">
+                    {normalizeString(bankModalState.member.storecode) || normalizedForcedStorecode}
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <div className="text-xs font-medium text-slate-500">지갑주소</div>
+                  <div className="mt-1 break-all text-sm text-slate-700">
+                    {normalizeString(bankModalState.member.walletAddress) || "-"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="space-y-2 text-sm sm:col-span-2">
+                <span className="font-medium text-slate-700">은행명</span>
+                <select
+                  value={bankModalForm.depositBankName}
+                  onChange={(event) =>
+                    setBankModalForm((current) => ({
+                      ...current,
+                      depositBankName: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-200"
+                >
+                  <option value="">은행 선택</option>
+                  {BANK_OPTIONS.map((bankName) => (
+                    <option key={bankName} value={bankName}>
+                      {bankName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-700">계좌번호</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={bankModalForm.depositBankAccountNumber}
+                  onChange={(event) =>
+                    setBankModalForm((current) => ({
+                      ...current,
+                      depositBankAccountNumber: digitsOnly(event.target.value),
+                    }))
+                  }
+                  placeholder="계좌번호 입력"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-200"
+                />
+              </label>
+
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-700">예금주명</span>
+                <input
+                  type="text"
+                  value={bankModalForm.depositName}
+                  onChange={(event) =>
+                    setBankModalForm((current) => ({
+                      ...current,
+                      depositName: event.target.value,
+                    }))
+                  }
+                  placeholder="예금주명 입력"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-200"
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeBankModal}
+                disabled={updatingBankInfo}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void submitBankInfoUpdate();
+                }}
+                disabled={
+                  updatingBankInfo
+                  || !normalizeString(bankModalForm.depositBankName)
+                  || !digitsOnly(bankModalForm.depositBankAccountNumber)
+                  || !normalizeString(bankModalForm.depositName)
+                }
+                className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {updatingBankInfo ? "변경 중..." : "통장 저장"}
               </button>
             </div>
           </div>
