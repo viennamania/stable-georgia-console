@@ -129,7 +129,6 @@ export default function AdminStoreStrip({
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [mobileTopOffset, setMobileTopOffset] = useState<number | null>(null);
-  const [searchKeyword, setSearchKeyword] = useState("");
   const [actionError, setActionError] = useState("");
   const [pendingLiveStorecode, setPendingLiveStorecode] = useState("");
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
@@ -190,26 +189,13 @@ export default function AdminStoreStrip({
   }, [portalTarget]);
 
   const normalizedSelectedStorecode = normalizeText(selectedStorecode);
-  const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
   const visibleStores = useMemo(
     () => stores
       .filter((store) => store.viewOnAndOff !== false)
       .sort(compareStoresForStrip),
     [stores],
   );
-  const filteredStores = useMemo(() => {
-    if (!normalizedSearchKeyword) {
-      return visibleStores;
-    }
-
-    return visibleStores.filter((store) => {
-      const searchable = [
-        normalizeText(store.storecode),
-        getStoreDisplayName(store),
-      ].join(" ").toLowerCase();
-      return searchable.includes(normalizedSearchKeyword);
-    });
-  }, [normalizedSearchKeyword, visibleStores]);
+  const filteredStores = visibleStores;
 
   const selectedStore = useMemo(() => {
     if (!normalizedSelectedStorecode || normalizedSelectedStorecode === normalizeText(allStoresValue)) {
@@ -366,19 +352,21 @@ export default function AdminStoreStrip({
                   <div className="border-b border-sky-100/80 px-3 py-2 sm:px-3.5 sm:py-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0 space-y-0.5">
-                        <h2 className="console-display text-[1rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[1.08rem]">
-                          {title}
-                        </h2>
-                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
-                          <span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="console-display text-[1rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[1.08rem]">
+                            {title}
+                          </h2>
+                          <span className="text-[10px] text-slate-500">
                             가맹점 {NUMBER_FORMATTER.format(visibleStoreCount)}개 · 운영중 {NUMBER_FORMATTER.format(liveStoreCount)}개
                           </span>
-                          {selectedStore ? (
+                        </div>
+                        {selectedStore ? (
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
                             <span className="truncate rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">
                               {getStoreDisplayName(selectedStore)}
                             </span>
-                          ) : null}
-                        </div>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -400,17 +388,6 @@ export default function AdminStoreStrip({
                         ) : null}
                       </div>
                     </div>
-
-                    {isDesktopExpanded ? (
-                      <div className="mt-1.5">
-                        <input
-                          value={searchKeyword}
-                          onChange={(event) => setSearchKeyword(event.target.value)}
-                          placeholder="storecode / 가맹점명 검색"
-                          className="h-9 w-full rounded-[16px] border border-slate-200 bg-white px-3 text-[13px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                        />
-                      </div>
-                    ) : null}
 
                     {combinedError ? (
                       <div className="mt-3 rounded-[18px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
@@ -564,10 +541,12 @@ export default function AdminStoreStrip({
             <div className="flex h-full flex-col">
               <div className="border-b border-sky-100/80 px-3 py-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-[13px] font-semibold text-slate-950">{title}</div>
-                    <div className="mt-1 text-[11px] text-slate-500">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-[13px] font-semibold text-slate-950">{title}</div>
+                      <div className="text-[10px] text-slate-500">
                       가맹점 {NUMBER_FORMATTER.format(visibleStoreCount)}개 · 운영중 {NUMBER_FORMATTER.format(liveStoreCount)}개
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -588,15 +567,6 @@ export default function AdminStoreStrip({
                       닫기
                     </button>
                   </div>
-                </div>
-
-                <div className="mt-3">
-                  <input
-                    value={searchKeyword}
-                    onChange={(event) => setSearchKeyword(event.target.value)}
-                    placeholder="storecode / 가맹점명 검색"
-                    className="h-10 w-full rounded-[16px] border border-slate-200 bg-white px-3 text-[13px] text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                  />
                 </div>
 
                 {combinedError ? (

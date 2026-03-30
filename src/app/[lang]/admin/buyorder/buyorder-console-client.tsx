@@ -1356,6 +1356,20 @@ const getDepositProcessingMeta = (order: BuyOrder) => {
   };
 };
 
+const getPendingDepositPriority = (order: BuyOrder) => {
+  const status = String(order.status || "").trim();
+
+  if (status === "paymentRequested") {
+    return 0;
+  }
+
+  if (status === "accepted") {
+    return 1;
+  }
+
+  return 2;
+};
+
 const hasSettlementCompleted = (order: BuyOrder) => {
   const rawOrder = order as Record<string, unknown>;
 
@@ -1922,6 +1936,7 @@ export default function BuyorderConsoleClient({
   const [sellerBankStatsCollapsed, setSellerBankStatsCollapsed] = useState(false);
   const [unmatchedLiveCollapsed, setUnmatchedLiveCollapsed] = useState(false);
   const [buyOrdersCollapsed, setBuyOrdersCollapsed] = useState(false);
+  const [prioritizePendingOrders, setPrioritizePendingOrders] = useState(false);
   const inflightLoadRef = useRef(false);
   const inflightStoreDirectoryRef = useRef(false);
   const lastDashboardFetchAtRef = useRef(0);
@@ -2986,6 +3001,25 @@ export default function BuyorderConsoleClient({
 
   const hasPrivilegedOrderAccess = data?.ordersAccessLevel === "privileged";
   const orders = data?.orders ?? EMPTY_ORDERS;
+  const displayOrders = useMemo(() => {
+    if (!prioritizePendingOrders || orders.length <= 1) {
+      return orders;
+    }
+
+    return orders
+      .map((order, index) => ({ order, index }))
+      .sort((left, right) => {
+        const priorityDiff =
+          getPendingDepositPriority(left.order) - getPendingDepositPriority(right.order);
+
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+
+        return left.index - right.index;
+      })
+      .map(({ order }) => order);
+  }, [orders, prioritizePendingOrders]);
   const stores = useMemo(() => {
     if (isStoreScoped) {
       return data?.selectedStore ? [data.selectedStore as StoreItem] : EMPTY_STORES;
@@ -3795,6 +3829,21 @@ export default function BuyorderConsoleClient({
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <button
+                  type="button"
+                  onClick={() => setPrioritizePendingOrders((prev) => !prev)}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
+                    prioritizePendingOrders
+                      ? "border-sky-200 bg-sky-50 text-sky-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                  aria-pressed={prioritizePendingOrders}
+                >
+                  처리안한 주문 먼저보기
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold">
+                    {prioritizePendingOrders ? "ON" : "OFF"}
+                  </span>
+                </button>
                 {loading ? (
                   <span className={SECTION_LOADING_BADGE_CLASS_NAME}>
                     <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" aria-hidden="true" />
@@ -4095,7 +4144,7 @@ export default function BuyorderConsoleClient({
                 </tr>
               </thead>
               <tbody>
-                {orders.length === 0 ? (
+                {displayOrders.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
                       {shouldShowOrdersSpinner ? (
@@ -4111,7 +4160,7 @@ export default function BuyorderConsoleClient({
                     </td>
                   </tr>
                 ) : (
-                  orders.map((order, index) => {
+                  displayOrders.map((order, index) => {
                     const status = String(order.status || "").trim();
                     const statusMeta = statusMetaMap[status] || {
                       label: status || "-",
