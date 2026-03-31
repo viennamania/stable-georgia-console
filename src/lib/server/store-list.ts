@@ -46,6 +46,9 @@ const fetchAllStoresByRoute = async (
     }
 
     if (!response.ok) {
+      if (mergedStores.length > 0) {
+        break;
+      }
       return response;
     }
 
