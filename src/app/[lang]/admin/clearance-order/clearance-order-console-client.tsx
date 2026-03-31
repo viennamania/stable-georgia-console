@@ -1615,23 +1615,39 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                             <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-sky-700">
                               Buyer account
                             </div>
-                            <div className="mt-1.5 text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
-                              {formatBankLabel(buyerBankInfo)}
-                            </div>
-                            <div className="console-mono mt-1 truncate text-[11px] font-semibold tracking-[-0.04em] text-slate-600">
-                              {formatBankAccount(buyerBankInfo)}
-                            </div>
+                            {hasPrivilegedStoreRead ? (
+                              <>
+                                <div className="mt-1.5 text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
+                                  {formatBankLabel(buyerBankInfo)}
+                                </div>
+                                <div className="console-mono mt-1 truncate text-[11px] font-semibold tracking-[-0.04em] text-slate-600">
+                                  {formatBankAccount(buyerBankInfo)}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="mt-2 text-[12px] font-medium leading-5 text-slate-500">
+                                관리자 지갑 연결 후 확인 가능
+                              </div>
+                            )}
                           </div>
                           <div className="rounded-[20px] border border-emerald-100 bg-[linear-gradient(180deg,rgba(236,253,245,0.9),rgba(255,255,255,0.98))] px-3.5 py-3">
                             <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-emerald-700">
                               Seller account
                             </div>
-                            <div className="mt-1.5 text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
-                              {formatBankLabel(sellerBankInfo)}
-                            </div>
-                            <div className="console-mono mt-1 truncate text-[11px] font-semibold tracking-[-0.04em] text-slate-600">
-                              {formatBankAccount(sellerBankInfo)}
-                            </div>
+                            {hasPrivilegedStoreRead ? (
+                              <>
+                                <div className="mt-1.5 text-[13px] font-semibold tracking-[-0.03em] text-slate-950">
+                                  {formatBankLabel(sellerBankInfo)}
+                                </div>
+                                <div className="console-mono mt-1 truncate text-[11px] font-semibold tracking-[-0.04em] text-slate-600">
+                                  {formatBankAccount(sellerBankInfo)}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="mt-2 text-[12px] font-medium leading-5 text-slate-500">
+                                관리자 지갑 연결 후 확인 가능
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

@@ -2,6 +2,8 @@ export const STORE_SETTINGS_MUTATION_SIGNING_PREFIX =
   "stable-georgia:store-settings-mutation:v1";
 export const STORE_SETTINGS_READ_SIGNING_PREFIX =
   "stable-georgia:store-settings-read:v1";
+export const STORE_MEMO_READ_SIGNING_PREFIX =
+  "stable-georgia:store-memo-read:v1";
 
 export const STORE_ADMIN_WALLET_HISTORY_READ_SIGNING_PREFIX =
   "stable-georgia:store-admin-wallet-history-read:v1";
@@ -25,3 +27,5 @@ export const STORE_ROUTE_UPDATE_MAX_PAYMENT_AMOUNT = "/api/store/updateMaxPaymen
 export const STORE_ROUTE_UPDATE_ACCESS_TOKEN = "/api/store/updateStoreAccessToken";
 export const STORE_ROUTE_TOGGLE_LIVE = "/api/store/toggleLive";
 export const STORE_ROUTE_TOGGLE_VIEW = "/api/store/toggleView";
+export const STORE_ROUTE_GET_STORE_MEMO_SIGNED = "/api/store/getStoreMemoSigned";
+export const STORE_ROUTE_SET_STORE_MEMO = "/api/store/setStoreMemo";

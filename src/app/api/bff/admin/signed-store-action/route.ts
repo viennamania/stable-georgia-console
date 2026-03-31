@@ -24,6 +24,7 @@ const ALLOWED_ROUTES = new Set([
   "/api/store/updateStoreAccessToken",
   "/api/store/toggleLive",
   "/api/store/toggleView",
+  "/api/store/setStoreMemo",
 ]);
 
 const normalizeString = (value: unknown) => {

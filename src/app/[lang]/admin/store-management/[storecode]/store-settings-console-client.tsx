@@ -1446,21 +1446,28 @@ export default function StoreSettingsConsoleClient({
             <div className="space-y-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/${lang}/admin/store-management`)}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:bg-white/12"
-                  >
-                    <span aria-hidden="true">←</span>
-                    Back to store ledger
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/${lang}/admin/store-management`)}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:bg-white/12"
+                    >
+                      <span aria-hidden="true">←</span>
+                      Back to store ledger
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/${lang}/admin/store-management/${storecode}/memo`)}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:bg-white/12"
+                    >
+                      <span aria-hidden="true">✎</span>
+                      Memo
+                    </button>
+                  </div>
                   <div>
                     <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] text-white sm:text-[3.1rem]">
                       {normalizeString(store?.storeName) || storecode}
                     </h1>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200/82 sm:text-[15px]">
-                      가맹점 브랜드 정보, 출금 계좌, 관리자 지갑, 결제 키, 노출 상태를 콘솔에서 직접 제어합니다.
-                    </p>
                   </div>
                 </div>
 

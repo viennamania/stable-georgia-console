@@ -827,14 +827,6 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
         <section className="console-hero overflow-hidden rounded-[34px] px-6 py-6 text-white shadow-[0_42px_110px_-68px_rgba(15,23,42,0.85)] sm:px-8">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
             <div className="space-y-5">
-              <button
-                type="button"
-                onClick={() => window.history.back()}
-                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/12"
-              >
-                이전 화면
-              </button>
-
               <div>
                 <div className="console-mono inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-sky-100">
                   Client settings console
