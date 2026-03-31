@@ -3236,9 +3236,6 @@ export default function BuyorderConsoleClient({
   const heroTitle = isStoreScoped
     ? storeCoverageLabel
     : "Stable Georgia";
-  const heroDescription = isStoreScoped
-    ? "해당 가맹점 범위의 구매주문, 미신청입금, 판매자 계좌 흐름을 서명 기반으로 확인합니다."
-    : "입금 이벤트, 주문 큐, 판매자 계좌 흐름을 하나의 운영 콘솔에서 실시간으로 추적합니다.";
 
   const tradeSummary = data?.tradeSummary || EMPTY_TRADE_SUMMARY;
   const animatedTradeSummaryTotalCount = useAnimatedNumber(tradeSummary.totalCount);
@@ -3474,13 +3471,10 @@ export default function BuyorderConsoleClient({
 
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_320px]">
                 <div className="space-y-5">
-                  <div className="max-w-4xl space-y-3">
+                  <div className="max-w-4xl">
                     <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
                       {heroTitle}
                     </h1>
-                    <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                      {heroDescription}
-                    </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">

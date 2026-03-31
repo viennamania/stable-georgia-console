@@ -1189,15 +1189,10 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
                 </span>
               </div>
 
-              <div className="space-y-3">
+              <div>
                 <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
                   Clearance Order
                 </h1>
-                <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                  메인 `가맹점 청산관리` 흐름을 콘솔에 맞춰 옮겼습니다. 가맹점을 선택하고,
-                  구매자/판매자 결제계좌를 고른 뒤 청산주문 생성, 출금 live,
-                  `Clearance stream`까지 한 화면에서 확인할 수 있습니다.
-                </p>
               </div>
             </div>
 

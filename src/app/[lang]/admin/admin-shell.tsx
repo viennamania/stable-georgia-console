@@ -63,9 +63,6 @@ export default function AdminShell({
               <div className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-white">
                 Console
               </div>
-              <div className="mt-2 text-sm leading-6 text-slate-300">
-                운영 페이지를 한 곳에서 보고, 각 화면은 BFF와 Ably로 실시간 상태를 동기화합니다.
-              </div>
             </div>
 
             <nav className="space-y-2">

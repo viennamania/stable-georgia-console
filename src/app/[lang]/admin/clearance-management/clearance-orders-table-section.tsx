@@ -191,9 +191,6 @@ export default function ClearanceOrdersTableSection({
                             <div className="truncate font-semibold text-slate-950">
                               {getStoreDisplayName(order.store) || order.storecode || "-"}
                             </div>
-                            <div className="mt-0.5 truncate text-[11px] text-slate-500">
-                              {order.storecode || "-"}
-                            </div>
                           </div>
                           <div className="mt-2 break-all font-semibold text-slate-900">
                             {tradeId ? (

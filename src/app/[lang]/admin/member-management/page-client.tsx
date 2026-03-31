@@ -105,9 +105,6 @@ export default function AdminMemberManagementPageClient({
                     <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] text-white sm:text-[3.2rem]">
                       회원관리
                     </h1>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200/82 sm:text-[15px]">
-                      가맹점 하나를 고르거나 전체 가맹점 범위로 전환한 뒤 회원 목록, 회원 추가, 등급 변경, 결제페이지 링크 생성 기능을 운영합니다.
-                    </p>
                   </div>
                 </div>
 

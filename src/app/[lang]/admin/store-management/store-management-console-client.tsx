@@ -794,9 +794,6 @@ export default function StoreManagementConsoleClient({
                     <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] text-white sm:text-[3.2rem]">
                       가맹점관리
                     </h1>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200/82 sm:text-[15px]">
-                      전체 가맹점 목록, 에이전트 배정, 운영 노출 상태, 상세 설정 진입을 콘솔에서 한 번에 관리합니다.
-                    </p>
                   </div>
                 </div>
 

@@ -835,17 +835,13 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
                 이전 화면
               </button>
 
-              <div className="space-y-3">
+              <div>
                 <div className="console-mono inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-sky-100">
                   Client settings console
                 </div>
                 <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] text-white">
                   센터 시스템 설정
                 </h1>
-                <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                  본서버의 `ko/admin/client-settings` 구조를 콘솔 프로젝트에 맞춰 이식했습니다. 센터
-                  프로필, 매수/매도 환율, 변경 이력, 로고, 페이액션 상태를 한 화면에서 제어합니다.
-                </p>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">

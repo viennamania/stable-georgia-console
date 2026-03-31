@@ -890,9 +890,6 @@ export default function ClearanceManagementConsoleClient({
     ? "Stable Georgia / Store Clearance Console"
     : "Stable Georgia / Clearance Console";
   const heroTitle = isStoreScoped ? storeCoverageLabel : "Clearance Management";
-  const heroDescription = isStoreScoped
-    ? "해당 가맹점 범위의 청산 주문과 출금 webhook 흐름을 서명 기반으로 조회합니다."
-    : "청산 주문 목록과 출금 webhook 흐름을 한 화면에서 확인합니다. 현재 선택한 가맹점 범위 기준으로 동작하며 주문 목록은 `buyorder.status.changed`, 출금 live는 `banktransfer.updated`를 구독합니다.";
 
   const patchOrderInDashboard = useCallback(
     (orderId: string, updater: (order: ClearanceOrder) => ClearanceOrder) => {
@@ -1166,13 +1163,10 @@ export default function ClearanceManagementConsoleClient({
                 </span>
               </div>
 
-              <div className="space-y-3">
+              <div>
                 <h1 className="console-display text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
                   {heroTitle}
                 </h1>
-                <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                  {heroDescription}
-                </p>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
@@ -1391,7 +1385,7 @@ export default function ClearanceManagementConsoleClient({
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
                   ? "가맹점 청산주문 API 집계 기준"
-                  : "paymentConfirmed 기준 완료 건수",
+                  : "출금완료 처리된 주문 건수",
             },
             {
               label: "청산량",
