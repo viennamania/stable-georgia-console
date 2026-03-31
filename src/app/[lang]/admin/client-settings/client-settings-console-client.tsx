@@ -5,6 +5,7 @@ import { useActiveAccount } from "thirdweb/react";
 
 import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import AdminWalletCard from "@/components/admin/admin-wallet-card";
+import ClientSettingsSubnav from "@/components/admin/client-settings-subnav";
 import {
   CLIENT_EXCHANGE_RATE_KEYS,
   clientExchangeRateMapToForm,
@@ -867,6 +868,11 @@ export default function ClientSettingsConsoleClient({ lang }: ClientSettingsCons
             />
           </div>
         </section>
+
+        <ClientSettingsSubnav
+          lang={lang}
+          active="settings"
+        />
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_380px]">
           <div className="space-y-6">
