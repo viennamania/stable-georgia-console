@@ -232,6 +232,65 @@ export const createDefaultFilters = (storecode = ""): FilterState => ({
   searchMyOrders: false,
 });
 
+type SearchParamsLike = Pick<URLSearchParams, "get"> | null | undefined;
+
+const parsePositiveInt = (value: unknown, fallback: number) => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+
+  const parsed = Number.parseInt(normalizeText(value), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
+const parseBoolean = (value: unknown, fallback = false) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+};
+
+const normalizeInputDate = (value: unknown, fallback: string) => {
+  const normalized = normalizeText(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : fallback;
+};
+
+export const parseFilterStateFromSearchParams = (
+  searchParams: SearchParamsLike,
+  forcedStorecode = "",
+): FilterState => {
+  const normalizedForcedStorecode = normalizeText(forcedStorecode);
+  const defaults = createDefaultFilters(normalizedForcedStorecode);
+
+  return {
+    storecode: normalizedForcedStorecode || normalizeText(searchParams?.get("storecode")) || defaults.storecode,
+    limit: Math.min(parsePositiveInt(searchParams?.get("limit"), defaults.limit), 200),
+    page: parsePositiveInt(searchParams?.get("page"), defaults.page),
+    fromDate: normalizeInputDate(searchParams?.get("fromDate"), defaults.fromDate),
+    toDate: normalizeInputDate(searchParams?.get("toDate"), defaults.toDate),
+    searchMyOrders: parseBoolean(searchParams?.get("searchMyOrders"), defaults.searchMyOrders),
+  };
+};
+
+export const areFilterStatesEqual = (left: FilterState, right: FilterState) => {
+  return left.storecode === right.storecode
+    && left.limit === right.limit
+    && left.page === right.page
+    && left.fromDate === right.fromDate
+    && left.toDate === right.toDate
+    && left.searchMyOrders === right.searchMyOrders;
+};
+
 export const createBaseLoadSignature = (
   walletAddress?: string | null,
   storecode?: string | null,

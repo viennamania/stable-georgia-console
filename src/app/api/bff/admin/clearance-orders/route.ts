@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     page: Math.max(parsePositiveInt(orderFilters.page, 1), 1),
     fromDate: normalizeString(orderFilters.fromDate),
     toDate: normalizeString(orderFilters.toDate),
+    ...(ordersQueryMode === "clearanceHistory" ? { privateSale: true } : {}),
   };
 
   if (!hasSignedOrdersBody && ordersQueryMode === "collectOrdersForSeller") {

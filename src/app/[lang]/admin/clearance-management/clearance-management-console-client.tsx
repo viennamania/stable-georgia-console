@@ -2,6 +2,7 @@
 
 import * as Ably from "ably";
 import dynamic from "next/dynamic";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 
@@ -21,6 +22,7 @@ import {
 } from "@/lib/realtime/buyorder";
 
 import {
+  areFilterStatesEqual,
   BUY_ORDER_DEPOSIT_COMPLETED_SIGNING_PREFIX,
   CANCEL_CLEARANCE_ORDER_SIGNING_PREFIX,
   EMPTY_CLEARANCE_DASHBOARD,
@@ -34,7 +36,6 @@ import {
   WITHDRAWAL_RESYNC_LIMIT,
   buildPaginationItems,
   createBaseLoadSignature,
-  createDefaultFilters,
   createInputDate,
   createOrdersLoadSignature,
   formatDateTime,
@@ -45,6 +46,7 @@ import {
   getWithdrawalRealtimePrimaryTimestamp,
   normalizeBankTransferTransactionType,
   normalizeText,
+  parseFilterStateFromSearchParams,
   type ClearanceActionMode,
   type ClearanceActionModalState,
   type ClearanceBaseResult,
@@ -127,7 +129,11 @@ export default function ClearanceManagementConsoleClient({
   ordersQueryMode = "buyOrders",
   allowOrderActions = true,
 }: ClearanceManagementConsoleClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const activeAccount = useActiveAccount();
+  const searchParamsString = searchParams?.toString() || "";
   const walletConnectionStatus = useActiveWalletConnectionStatus();
   const normalizedForcedStorecode = normalizeText(forcedStorecode);
   const isStoreScoped = Boolean(normalizedForcedStorecode);
@@ -143,7 +149,11 @@ export default function ClearanceManagementConsoleClient({
   const walletCardMessage = isWalletRecovering
     ? "지갑 연결 상태를 확인하는 중입니다."
     : disconnectedMessage;
-  const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters(normalizedForcedStorecode));
+  const queryFilters = useMemo(
+    () => parseFilterStateFromSearchParams(searchParams, normalizedForcedStorecode),
+    [normalizedForcedStorecode, searchParams],
+  );
+  const [filters, setFilters] = useState<FilterState>(() => queryFilters);
   const effectiveStorecode = normalizedForcedStorecode || filters.storecode;
   const [data, setData] = useState<ClearanceDashboardResult | null>(null);
   const [, setLoading] = useState(true);
@@ -191,6 +201,14 @@ export default function ClearanceManagementConsoleClient({
     },
     activeAccount?.address,
   );
+
+  useEffect(() => {
+    setFilters((current) => (
+      areFilterStatesEqual(current, queryFilters)
+        ? current
+        : queryFilters
+    ));
+  }, [queryFilters]);
 
   const sortWithdrawalRealtimeItems = useCallback((items: WithdrawalRealtimeItem[]) => {
     return [...items]
@@ -721,6 +739,42 @@ export default function ClearanceManagementConsoleClient({
       };
     });
   }, [hideStoreFilter, normalizedForcedStorecode]);
+
+  useEffect(() => {
+    if (!pathname || areFilterStatesEqual(filters, queryFilters)) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParamsString);
+    if (normalizedForcedStorecode) {
+      nextParams.delete("storecode");
+    } else if (filters.storecode) {
+      nextParams.set("storecode", filters.storecode);
+    } else {
+      nextParams.delete("storecode");
+    }
+    nextParams.set("limit", String(filters.limit));
+    nextParams.set("page", String(filters.page));
+    nextParams.set("fromDate", filters.fromDate);
+    nextParams.set("toDate", filters.toDate);
+    if (filters.searchMyOrders) {
+      nextParams.set("searchMyOrders", "true");
+    } else {
+      nextParams.delete("searchMyOrders");
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+      scroll: false,
+    });
+  }, [
+    filters,
+    normalizedForcedStorecode,
+    pathname,
+    queryFilters,
+    router,
+    searchParamsString,
+  ]);
 
   useEffect(() => {
     const interval = setInterval(() => {
