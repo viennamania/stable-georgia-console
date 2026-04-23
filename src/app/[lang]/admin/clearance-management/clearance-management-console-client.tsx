@@ -434,7 +434,7 @@ export default function ClearanceManagementConsoleClient({
   const loadOrdersDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = Boolean(options?.silent);
-      const supportsPublicMaskedOrders = ordersQueryMode === "buyOrders";
+      const supportsPublicMaskedOrders = ordersQueryMode !== "collectOrdersForSeller";
       const loadSignature = createOrdersLoadSignature(
         {
           ...filters,
@@ -496,7 +496,9 @@ export default function ClearanceManagementConsoleClient({
 
         const ordersRoute = ordersQueryMode === "collectOrdersForSeller"
           ? "/api/order/getAllCollectOrdersForSeller"
-          : "/api/order/getAdminClearanceOrders";
+          : ordersQueryMode === "clearanceHistory"
+            ? "/api/order/getAllBuyOrders"
+            : "/api/order/getAdminClearanceOrders";
         const signingStorecode = ordersQueryMode === "collectOrdersForSeller"
           ? effectiveStorecode
           : "admin";
@@ -832,7 +834,7 @@ export default function ClearanceManagementConsoleClient({
   const stores = data?.stores || EMPTY_STORES;
   const storesError = normalizeText(data?.storesError);
   const hasPrivilegedOrderAccess = normalizeText(data?.ordersAccessLevel) === "privileged";
-  const supportsPublicMaskedOrders = ordersQueryMode === "buyOrders";
+  const supportsPublicMaskedOrders = ordersQueryMode !== "collectOrdersForSeller";
   const ordersError = normalizeText(data?.ordersError);
   const orders = data?.orders || EMPTY_ORDERS;
   const isOrdersAccessRecovering = isWalletRecovering || ordersSignerWarmup;
@@ -1129,6 +1131,7 @@ export default function ClearanceManagementConsoleClient({
     && orders.length === 0
     && !ordersError;
   const usesCollectOrdersSummary = ordersQueryMode === "collectOrdersForSeller";
+  const usesClearanceHistorySummary = ordersQueryMode === "clearanceHistory";
 
   useEffect(() => {
     if (filters.page <= totalOrderPages) {
@@ -1379,12 +1382,18 @@ export default function ClearanceManagementConsoleClient({
                   : "현재 필터 기준 청산 주문 수",
             },
             {
-              label: usesCollectOrdersSummary ? "청산주문" : "출금완료",
+              label: usesCollectOrdersSummary
+                ? "청산주문"
+                : usesClearanceHistorySummary
+                  ? "청산수"
+                  : "출금완료",
               value: showOrdersLoadingState ? "..." : NUMBER_FORMATTER.format(totalClearanceCount),
               caption: showOrdersLoadingState
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
                   ? "가맹점 청산주문 API 집계 기준"
+                  : usesClearanceHistorySummary
+                    ? "메인 청산내역과 동일한 주문 건수"
                   : "출금완료 처리된 주문 건수",
             },
             {
@@ -1394,6 +1403,8 @@ export default function ClearanceManagementConsoleClient({
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
                   ? "청산 대상 물량"
+                  : usesClearanceHistorySummary
+                    ? "메인 청산내역과 동일한 주문 물량"
                   : "완료된 청산 물량",
             },
             {
@@ -1403,6 +1414,8 @@ export default function ClearanceManagementConsoleClient({
                 ? "주문 집계 불러오는 중"
                 : usesCollectOrdersSummary
                   ? "청산 대상 금액"
+                  : usesClearanceHistorySummary
+                    ? "메인 청산내역과 동일한 주문 금액"
                   : "완료된 청산 금액",
             },
           ].map((item) => (

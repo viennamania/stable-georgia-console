@@ -113,7 +113,10 @@ export type ClearanceOrdersResult = {
 
 export type ClearanceDashboardResult = ClearanceBaseResult & ClearanceOrdersResult;
 
-export type ClearanceOrdersQueryMode = "buyOrders" | "collectOrdersForSeller";
+export type ClearanceOrdersQueryMode =
+  | "buyOrders"
+  | "collectOrdersForSeller"
+  | "clearanceHistory";
 
 export type FilterState = {
   storecode: string;

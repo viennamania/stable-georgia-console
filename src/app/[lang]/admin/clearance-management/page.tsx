@@ -7,5 +7,10 @@ export default function AdminClearanceManagementPage({
     lang: string;
   };
 }) {
-  return <ClearanceManagementConsoleClient lang={params.lang} />;
+  return (
+    <ClearanceManagementConsoleClient
+      lang={params.lang}
+      ordersQueryMode="clearanceHistory"
+    />
+  );
 }

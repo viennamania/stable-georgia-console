@@ -4,7 +4,7 @@ import { getRemoteBackendBaseUrl, postRemoteJson } from "@/lib/server/remote-bac
 
 export const runtime = "nodejs";
 
-type OrdersQueryMode = "buyOrders" | "collectOrdersForSeller";
+type OrdersQueryMode = "buyOrders" | "collectOrdersForSeller" | "clearanceHistory";
 
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") {
@@ -52,10 +52,13 @@ export async function POST(request: NextRequest) {
   const signedOrdersBody = asPlainObject(body.signedOrdersBody);
   const orderFilters = asPlainObject(body.orderFilters);
   const hasSignedOrdersBody = Object.keys(signedOrdersBody).length > 0;
+  const normalizedOrdersQueryMode = normalizeString(body.ordersQueryMode);
   const ordersQueryMode: OrdersQueryMode =
-    normalizeString(body.ordersQueryMode) === "collectOrdersForSeller"
+    normalizedOrdersQueryMode === "collectOrdersForSeller"
       ? "collectOrdersForSeller"
-      : "buyOrders";
+      : normalizedOrdersQueryMode === "clearanceHistory"
+        ? "clearanceHistory"
+        : "buyOrders";
   const unsignedOrdersBody = {
     storecode: normalizeString(orderFilters.storecode),
     limit: Math.min(parsePositiveInt(orderFilters.limit, 30), 200),
@@ -81,7 +84,9 @@ export async function POST(request: NextRequest) {
 
   const remoteOrdersRoute = ordersQueryMode === "collectOrdersForSeller"
     ? "/api/order/getAllCollectOrdersForSeller"
-    : "/api/order/getAdminClearanceOrders";
+    : ordersQueryMode === "clearanceHistory"
+      ? "/api/order/getAllBuyOrders"
+      : "/api/order/getAdminClearanceOrders";
   const signedOrdersResponse = await postRemoteJson(
     remoteOrdersRoute,
     hasSignedOrdersBody ? signedOrdersBody : unsignedOrdersBody,
@@ -100,24 +105,43 @@ export async function POST(request: NextRequest) {
       totalClearanceAmount: Number(signedOrdersResult.totalClearanceAmount || 0),
       totalClearanceAmountKRW: Number(signedOrdersResult.totalClearanceAmountKRW || 0),
     }
-    : {
-      totalCount: Number(signedOrdersResult.totalCount || 0),
-      totalClearanceCount: Number(
-        signedOrdersResult.totalClearanceCount
-          ?? signedOrdersResult.totalTransferCount
-          ?? 0,
-      ),
-      totalClearanceAmount: Number(
-        signedOrdersResult.totalClearanceAmount
-          ?? signedOrdersResult.totalTransferAmount
-          ?? 0,
-      ),
-      totalClearanceAmountKRW: Number(
-        signedOrdersResult.totalClearanceAmountKRW
-          ?? signedOrdersResult.totalTransferAmountKRW
-          ?? 0,
-      ),
-    };
+    : ordersQueryMode === "clearanceHistory"
+      ? {
+        totalCount: Number(signedOrdersResult.totalCount || 0),
+        totalClearanceCount: Number(
+          signedOrdersResult.totalCount
+            ?? signedOrdersResult.totalSettlementCount
+            ?? 0,
+        ),
+        totalClearanceAmount: Number(
+          signedOrdersResult.totalUsdtAmount
+            ?? signedOrdersResult.totalSettlementAmount
+            ?? 0,
+        ),
+        totalClearanceAmountKRW: Number(
+          signedOrdersResult.totalKrwAmount
+            ?? signedOrdersResult.totalSettlementAmountKRW
+            ?? 0,
+        ),
+      }
+      : {
+        totalCount: Number(signedOrdersResult.totalCount || 0),
+        totalClearanceCount: Number(
+          signedOrdersResult.totalClearanceCount
+            ?? signedOrdersResult.totalTransferCount
+            ?? 0,
+        ),
+        totalClearanceAmount: Number(
+          signedOrdersResult.totalClearanceAmount
+            ?? signedOrdersResult.totalTransferAmount
+            ?? 0,
+        ),
+        totalClearanceAmountKRW: Number(
+          signedOrdersResult.totalClearanceAmountKRW
+            ?? signedOrdersResult.totalTransferAmountKRW
+            ?? 0,
+        ),
+      };
 
   return NextResponse.json({
     result: {
