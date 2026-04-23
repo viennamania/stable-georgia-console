@@ -646,6 +646,7 @@ export default function ClearanceOrderConsoleClient({ lang }: { lang: string }) 
 
     const nextParams = new URLSearchParams(searchParamsString);
     nextParams.set(STORECODE_QUERY_KEY, selectedStorecode);
+    nextParams.set("page", "1");
     router.replace(`/${lang}/admin/clearance-order?${nextParams.toString()}`);
   }, [lang, router, searchParamsString, selectedStorecode, selectedStorecodeFromQuery]);
 

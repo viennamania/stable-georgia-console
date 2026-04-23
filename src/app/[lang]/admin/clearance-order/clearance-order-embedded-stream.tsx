@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Account } from "thirdweb/wallets";
 
@@ -43,14 +44,46 @@ type ClearanceOrdersResponse = {
 const DEFAULT_LIMIT = 15;
 const ORDERS_REFRESH_INTERVAL_MS = 60_000;
 
+const parsePositiveInt = (value: unknown, fallback: number) => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
+const normalizeInputDate = (value: unknown, fallback: string) => {
+  const normalized = normalizeText(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : fallback;
+};
+
 export default function ClearanceOrderEmbeddedStream({
   activeAccount,
   storecode,
   refreshKey,
 }: ClearanceOrderEmbeddedStreamProps) {
-  const [fromDate, setFromDate] = useState(createInputDate(0));
-  const [toDate, setToDate] = useState(createInputDate(0));
-  const [page, setPage] = useState(1);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams?.toString() || "";
+  const queryState = useMemo(() => {
+    const nextSearchParams = new URLSearchParams(searchParamsString);
+    const defaultDate = createInputDate(0);
+
+    return {
+      fromDate: normalizeInputDate(nextSearchParams.get("fromDate"), defaultDate),
+      toDate: normalizeInputDate(nextSearchParams.get("toDate"), defaultDate),
+      page: parsePositiveInt(nextSearchParams.get("page"), 1),
+    };
+  }, [searchParamsString]);
+  const [fromDate, setFromDate] = useState(queryState.fromDate);
+  const [toDate, setToDate] = useState(queryState.toDate);
+  const [page, setPage] = useState(queryState.page);
   const [orders, setOrders] = useState<ClearanceOrder[]>([]);
   const [ordersError, setOrdersError] = useState("");
   const [error, setError] = useState("");
@@ -70,8 +103,10 @@ export default function ClearanceOrderEmbeddedStream({
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setPage(1);
-  }, [storecode, fromDate, toDate]);
+    setFromDate((current) => (current === queryState.fromDate ? current : queryState.fromDate));
+    setToDate((current) => (current === queryState.toDate ? current : queryState.toDate));
+    setPage((current) => (current === queryState.page ? current : queryState.page));
+  }, [queryState]);
 
   useEffect(() => {
     return () => {
@@ -81,10 +116,37 @@ export default function ClearanceOrderEmbeddedStream({
     };
   }, []);
 
-  const canReadSignedData = Boolean(activeAccount?.address);
   const disconnectedMessage = "관리자 지갑을 연결하면 민감정보가 풀린 청산주문 상세 조회가 열립니다.";
   const hasPrivilegedOrderAccess = ordersAccessLevel === "privileged";
   const accessActorLabel = "관리자";
+  const matchesQueryState =
+    fromDate === queryState.fromDate
+    && toDate === queryState.toDate
+    && page === queryState.page;
+
+  useEffect(() => {
+    if (!pathname || matchesQueryState) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParamsString);
+    nextParams.set("fromDate", fromDate);
+    nextParams.set("toDate", toDate);
+    nextParams.set("page", String(page));
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+      scroll: false,
+    });
+  }, [
+    fromDate,
+    matchesQueryState,
+    page,
+    pathname,
+    router,
+    searchParamsString,
+    toDate,
+  ]);
 
   const loadOrders = useCallback(async (options?: { silent?: boolean }) => {
     const requestId = ++requestIdRef.current;
@@ -118,7 +180,7 @@ export default function ClearanceOrderEmbeddedStream({
         try {
           signedOrdersBody = await createCenterStoreAdminSignedBody({
             account: activeAccount,
-            route: "/api/order/getAdminClearanceOrders",
+            route: "/api/order/getAllBuyOrders",
             storecode: "admin",
             requesterWalletAddress: activeAccount.address,
             body: {
@@ -152,7 +214,7 @@ export default function ClearanceOrderEmbeddedStream({
             fromDate,
             toDate,
           },
-          ordersQueryMode: "buyOrders",
+          ordersQueryMode: "clearanceHistory",
         }),
       });
 
@@ -425,7 +487,10 @@ export default function ClearanceOrderEmbeddedStream({
               <input
                 type="date"
                 value={fromDate}
-                onChange={(event) => setFromDate(event.target.value || createInputDate(0))}
+                onChange={(event) => {
+                  setFromDate(event.target.value || createInputDate(0));
+                  setPage(1);
+                }}
                 className="rounded-md border-0 bg-transparent p-0 text-xs font-medium text-slate-700 outline-none"
               />
             </label>
@@ -434,7 +499,10 @@ export default function ClearanceOrderEmbeddedStream({
               <input
                 type="date"
                 value={toDate}
-                onChange={(event) => setToDate(event.target.value || createInputDate(0))}
+                onChange={(event) => {
+                  setToDate(event.target.value || createInputDate(0));
+                  setPage(1);
+                }}
                 className="rounded-md border-0 bg-transparent p-0 text-xs font-medium text-slate-700 outline-none"
               />
             </label>
