@@ -40,6 +40,12 @@ const NAV_ITEMS = [
     eyebrow: "Members",
     marker: "06",
   },
+  {
+    href: "/admin/withdraw-usdt",
+    label: "USDT 출금",
+    eyebrow: "Withdraw",
+    marker: "07",
+  },
 ];
 
 export default function AdminShell({
