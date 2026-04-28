@@ -61,12 +61,12 @@ export default function AdminShell({
     <div className="min-h-screen bg-[#edf3f8] text-slate-950">
       <div className="mx-auto flex min-h-screen w-full max-w-[1880px] gap-0">
         <aside className="hidden w-[272px] shrink-0 border-r border-slate-200 bg-slate-950 text-white lg:block">
-          <div className="sticky top-1/2 flex max-h-[calc(100vh-2.5rem)] -translate-y-1/2 flex-col gap-6 overflow-y-auto px-5 py-6">
-            <div className="rounded-[28px] border border-white/10 bg-white/5 px-4 py-4">
+          <div className="sticky top-1/2 flex max-h-[calc(100vh-2rem)] -translate-y-1/2 flex-col gap-4 overflow-y-auto px-4 py-5">
+            <div className="rounded-[24px] border border-white/10 bg-white/5 px-4 py-3.5">
               <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
                 Stable Georgia
               </div>
-              <div className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-white">
+              <div className="mt-1.5 text-2xl font-semibold tracking-[-0.05em] text-white">
                 Console
               </div>
             </div>
@@ -80,7 +80,7 @@ export default function AdminShell({
                   <Link
                     key={item.href}
                     href={href}
-                    className={`group relative block overflow-hidden rounded-[26px] border px-4 py-4 transition-all ${
+                    className={`group relative block overflow-hidden rounded-[22px] border px-3.5 py-3 transition-all ${
                       active
                         ? "border-sky-300/55 bg-[linear-gradient(135deg,rgba(56,189,248,0.24),rgba(14,165,233,0.14),rgba(15,23,42,0.2))] text-white shadow-[0_18px_38px_-20px_rgba(56,189,248,0.95)] ring-1 ring-inset ring-sky-200/20"
                         : "border-white/8 bg-white/5 text-slate-200 hover:border-white/16 hover:bg-white/8 hover:shadow-[0_12px_30px_-24px_rgba(148,163,184,0.65)]"
@@ -94,7 +94,7 @@ export default function AdminShell({
                     />
                     <div className="flex items-start gap-3">
                       <div
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold tracking-[0.2em] transition ${
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-xs font-semibold tracking-[0.18em] transition ${
                           active
                             ? "border-sky-200/35 bg-white/12 text-sky-50"
                             : "border-white/10 bg-white/5 text-slate-300 group-hover:border-white/16 group-hover:bg-white/10"
@@ -108,13 +108,13 @@ export default function AdminShell({
                             {item.eyebrow}
                           </div>
                           {active ? (
-                            <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-sky-200/30 bg-white/12 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-sky-50">
+                            <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-sky-200/30 bg-white/12 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-sky-50">
                               <span className="h-1.5 w-1.5 rounded-full bg-sky-200" aria-hidden="true" />
                               선택됨
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-2 text-[15px] font-semibold tracking-[-0.03em]">{item.label}</div>
+                        <div className="mt-1.5 text-[15px] font-semibold tracking-[-0.03em]">{item.label}</div>
                       </div>
                     </div>
                   </Link>
