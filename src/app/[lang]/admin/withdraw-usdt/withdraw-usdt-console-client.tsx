@@ -64,6 +64,8 @@ const normalizeText = (value: unknown) => {
   return value.trim();
 };
 
+const normalizeWalletAddress = (value: unknown) => normalizeText(value).toLowerCase();
+
 const isValidEvmAddress = (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value.trim());
 
 const shortAddress = (value: unknown) => {
@@ -122,14 +124,16 @@ export default function WithdrawUsdtConsoleClient({ lang }: { lang: string }) {
     || recipientConfirmSuffix.trim().toLowerCase() === recipientSuffix.toLowerCase();
 
   const createAdminVerificationBody = useCallback(async () => {
+    const adminWalletAddress = normalizeWalletAddress(activeAccount?.address || address);
+
     return createAdminSignedBody({
       account: activeAccount,
       route: "/api/user/getUserByWalletAddress",
       signingPrefix: GET_USER_BY_WALLET_ADDRESS_ADMIN_SIGNING_PREFIX,
-      requesterWalletAddress: activeAccount?.address || address,
+      requesterWalletAddress: adminWalletAddress,
       actionFields: {
         storecode: "admin",
-        walletAddress: activeAccount?.address || address,
+        walletAddress: adminWalletAddress,
       },
     });
   }, [activeAccount, address]);
