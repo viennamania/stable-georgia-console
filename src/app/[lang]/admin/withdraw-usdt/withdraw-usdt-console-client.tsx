@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConnectButton, useActiveAccount } from "thirdweb/react";
 import { getContract, sendAndConfirmTransaction } from "thirdweb";
-import { arbitrum, bsc, ethereum, polygon } from "thirdweb/chains";
+import { bsc } from "thirdweb/chains";
 import { balanceOf, transfer } from "thirdweb/extensions/erc20";
 import { createWallet, inAppWallet } from "thirdweb/wallets";
 
@@ -31,26 +31,10 @@ type AlertState = {
 const GET_USER_BY_WALLET_ADDRESS_ADMIN_SIGNING_PREFIX =
   "stable-georgia:get-user-by-wallet:admin:v1";
 
-const chainName = (process.env.NEXT_PUBLIC_CHAIN || "arbitrum").toLowerCase();
-
-const usdtContractAddressByChain: Record<string, string> = {
-  ethereum: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-  polygon: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
-  arbitrum: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
-  bsc: "0x55d398326f99059fF775485246999027B3197955",
-};
-
-const activeChain =
-  chainName === "ethereum"
-    ? ethereum
-    : chainName === "polygon"
-      ? polygon
-      : chainName === "bsc"
-        ? bsc
-        : arbitrum;
-
-const contractAddress = usdtContractAddressByChain[chainName] || usdtContractAddressByChain.arbitrum;
-const usdtDecimals = chainName === "bsc" ? 18 : 6;
+const chainName = "bsc";
+const activeChain = bsc;
+const contractAddress = "0x55d398326f99059fF775485246999027B3197955";
+const usdtDecimals = 18;
 
 const wallets = [
   inAppWallet({
@@ -142,9 +126,10 @@ export default function WithdrawUsdtConsoleClient({ lang }: { lang: string }) {
       account: activeAccount,
       route: "/api/user/getUserByWalletAddress",
       signingPrefix: GET_USER_BY_WALLET_ADDRESS_ADMIN_SIGNING_PREFIX,
+      requesterWalletAddress: activeAccount?.address || address,
       actionFields: {
         storecode: "admin",
-        walletAddress: address,
+        walletAddress: activeAccount?.address || address,
       },
     });
   }, [activeAccount, address]);
@@ -199,9 +184,12 @@ export default function WithdrawUsdtConsoleClient({ lang }: { lang: string }) {
           setAdminVerified(false);
           setServerWalletUsers([]);
           setTotalCount(0);
+          const remoteMessage = String(payload?.error || "");
           setAlert({
             tone: "error",
-            message: String(payload?.error || "관리자 권한 확인에 실패했습니다."),
+            message: remoteMessage === "Invalid signature"
+              ? "관리자 서명 검증에 실패했습니다. BSC 네트워크에서 관리자 지갑을 다시 연결한 뒤 시도해주세요."
+              : (remoteMessage || "관리자 권한 확인에 실패했습니다."),
           });
           return;
         }
