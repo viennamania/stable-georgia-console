@@ -1682,7 +1682,7 @@ export default function MemberManagementConsoleClient({
                   <th className="px-6 py-4">회원 통장</th>
                   <th className="px-6 py-4 text-right">구매 요약</th>
                   <th className="px-6 py-4">지갑</th>
-                  <th className="px-6 py-4">충전/결제</th>
+                  <th className="w-[184px] px-4 py-4">충전/결제</th>
                   <th className="px-6 py-4">주문상태</th>
                 </tr>
               </thead>
@@ -1825,8 +1825,8 @@ export default function MemberManagementConsoleClient({
                             {shortAddress(member.walletAddress)}
                           </button>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="min-w-[230px] space-y-2">
+                        <td className="px-4 py-4">
+                          <div className="w-[168px] max-w-[168px] space-y-2">
                             <input
                               type="text"
                               inputMode="numeric"
@@ -1835,14 +1835,14 @@ export default function MemberManagementConsoleClient({
                                 updatePaymentDraft(paymentDraftKey, event.target.value);
                               }}
                               placeholder="충전금액"
-                              className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-200"
+                              className="h-9 w-full rounded-2xl border border-slate-200 bg-slate-50 px-2.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-200"
                             />
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
                                 onClick={() => handleCopyPaymentPage(member, index)}
                                 disabled={!paymentUrlReady}
-                                className="inline-flex h-9 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                className="inline-flex h-8 items-center justify-center rounded-2xl bg-emerald-600 px-2.5 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
                               >
                                 링크 복사
                               </button>
@@ -1850,7 +1850,7 @@ export default function MemberManagementConsoleClient({
                                 type="button"
                                 onClick={() => handleOpenPaymentPage(member, index)}
                                 disabled={!paymentUrlReady}
-                                className="inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                                className="inline-flex h-8 items-center justify-center rounded-2xl border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
                               >
                                 새창 열기
                               </button>
