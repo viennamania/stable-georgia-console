@@ -1864,9 +1864,14 @@ export default function MemberManagementConsoleClient({
                         </td>
                         <td className="px-6 py-4">
                           <div className="space-y-2">
-                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
-                              {statusMeta.label}
-                            </span>
+                            <div className="space-y-1">
+                              <div className="text-[10px] font-semibold text-slate-400">
+                                현재
+                              </div>
+                              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                                {statusMeta.label}
+                              </span>
+                            </div>
                             {canConfirmPaymentStatus ? (
                               <button
                                 type="button"
@@ -1877,9 +1882,9 @@ export default function MemberManagementConsoleClient({
                                   || !(normalizeString(member.storecode) || normalizedForcedStorecode)
                                   || !normalizeString(member.walletAddress)
                                 }
-                                className="inline-flex h-8 whitespace-nowrap items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300"
+                                className="inline-flex h-8 whitespace-nowrap items-center justify-center rounded-2xl bg-slate-950 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white"
                               >
-                                결제완료 처리
+                                결제완료로 변경
                               </button>
                             ) : null}
                           </div>
@@ -2067,6 +2072,9 @@ export default function MemberManagementConsoleClient({
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-slate-500">
+                          현재
+                        </span>
                         <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
                           {statusMeta.label}
                         </span>
@@ -2080,9 +2088,9 @@ export default function MemberManagementConsoleClient({
                               || !(normalizeString(member.storecode) || normalizedForcedStorecode)
                               || !normalizeString(member.walletAddress)
                             }
-                            className="inline-flex h-8 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300"
+                            className="inline-flex h-8 items-center justify-center rounded-2xl bg-slate-950 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white"
                           >
-                            결제완료 처리
+                            결제완료로 변경
                           </button>
                         ) : null}
                       </div>
