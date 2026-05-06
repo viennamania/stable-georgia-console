@@ -5,6 +5,7 @@ import { postRemoteJson } from "@/lib/server/remote-backend";
 export const runtime = "nodejs";
 
 const ALLOWED_ROUTES = new Set([
+  "/api/admin/member/confirmBuyOrderPayment",
   "/api/user/insertBuyerWithoutWalletAddressByStorecode",
   "/api/user/updateUserType",
   "/api/user/updateUserBankInfo",
@@ -62,20 +63,23 @@ export async function POST(request: NextRequest) {
   }
 
   const response = await postRemoteJson(route, signedBody);
+  const remotePayload = asPlainObject(response.json);
 
   if (!response.ok) {
     return NextResponse.json(
       {
-        error: resolveRemoteError(response.json, "Member action failed"),
-        result: response.json?.result || null,
+        ...remotePayload,
+        error: resolveRemoteError(remotePayload, "Member action failed"),
+        result: remotePayload.result || null,
       },
       { status: response.status || 502 },
     );
   }
 
   return NextResponse.json({
-    result: response.json?.result || null,
-    walletAddress: response.json?.walletAddress || "",
+    ...remotePayload,
+    result: remotePayload.result || null,
+    walletAddress: normalizeString(remotePayload.walletAddress) || "",
     success: true,
   });
 }

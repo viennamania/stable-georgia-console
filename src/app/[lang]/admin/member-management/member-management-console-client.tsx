@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 
 import AdminWalletCard from "@/components/admin/admin-wallet-card";
+import { createAdminSignedBody } from "@/lib/client/create-admin-signed-body";
 import { createCenterStoreAdminSignedBody } from "@/lib/client/create-center-store-admin-signed-body";
 
 type MemberManagementConsoleClientProps = {
@@ -37,6 +38,9 @@ type MemberRow = {
   storecode?: string;
   userType?: string;
   buyOrderStatus?: string;
+  latestBuyOrderId?: string;
+  latestBuyOrderTradeId?: string;
+  latestBuyOrderCreatedAt?: string;
   totalPaymentConfirmedCount?: number;
   totalPaymentConfirmedUsdtAmount?: number;
   totalPaymentConfirmedKrwAmount?: number;
@@ -103,6 +107,11 @@ type GradeModalState = {
 } | null;
 
 type BankModalState = {
+  member: MemberRow;
+  index: number;
+} | null;
+
+type OrderStatusModalState = {
   member: MemberRow;
   index: number;
 } | null;
@@ -191,6 +200,10 @@ const EMPTY_BANK_MODAL_FORM: BankModalFormState = {
   depositBankAccountNumber: "",
   depositName: "",
 };
+
+const CONFIRM_BUYORDER_PAYMENT_ROUTE = "/api/admin/member/confirmBuyOrderPayment";
+const CONFIRM_BUYORDER_PAYMENT_SIGNING_PREFIX =
+  "stable-georgia:admin-member-confirm-buy-order-payment:v1";
 
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") {
@@ -435,6 +448,11 @@ const getBuyOrderStatusMeta = (status: unknown) => {
   };
 };
 
+const canConfirmBuyOrderStatus = (status: unknown) => {
+  const normalized = normalizeString(status);
+  return Boolean(normalized) && normalized !== "paymentConfirmed";
+};
+
 const createDefaultFilters = (): FilterState => ({
   searchStore: "",
   search: "",
@@ -515,11 +533,13 @@ export default function MemberManagementConsoleClient({
   const [addMemberForm, setAddMemberForm] = useState<AddMemberFormState>(EMPTY_ADD_MEMBER_FORM);
   const [gradeModalState, setGradeModalState] = useState<GradeModalState>(null);
   const [bankModalState, setBankModalState] = useState<BankModalState>(null);
+  const [orderStatusModalState, setOrderStatusModalState] = useState<OrderStatusModalState>(null);
   const [bankModalForm, setBankModalForm] = useState<BankModalFormState>(EMPTY_BANK_MODAL_FORM);
   const [nextUserType, setNextUserType] = useState("normal");
   const [submitting, setSubmitting] = useState(false);
   const [updatingUserType, setUpdatingUserType] = useState(false);
   const [updatingBankInfo, setUpdatingBankInfo] = useState(false);
+  const [updatingOrderStatus, setUpdatingOrderStatus] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, string>>({});
@@ -810,6 +830,18 @@ export default function MemberManagementConsoleClient({
     setBankModalForm(EMPTY_BANK_MODAL_FORM);
   }, [updatingBankInfo]);
 
+  const openOrderStatusModal = useCallback((member: MemberRow, index: number) => {
+    setOrderStatusModalState({ member, index });
+    setActionError("");
+  }, []);
+
+  const closeOrderStatusModal = useCallback(() => {
+    if (updatingOrderStatus) {
+      return;
+    }
+    setOrderStatusModalState(null);
+  }, [updatingOrderStatus]);
+
   const updatePaymentDraft = useCallback((key: string, value: string) => {
     const normalizedValue = digitsOnly(value);
     setPaymentDrafts((current) => {
@@ -1066,6 +1098,106 @@ export default function MemberManagementConsoleClient({
       setUpdatingBankInfo(false);
     }
   }, [activeAccount, bankModalForm, bankModalState, normalizedForcedStorecode]);
+
+  const submitOrderStatusConfirm = useCallback(async () => {
+    if (!orderStatusModalState?.member) {
+      return;
+    }
+
+    const targetStorecode = normalizeString(orderStatusModalState.member.storecode) || normalizedForcedStorecode;
+    const targetWalletAddress = normalizeString(orderStatusModalState.member.walletAddress);
+    const currentStatus = normalizeString(orderStatusModalState.member.buyOrderStatus);
+
+    if (!targetStorecode || !targetWalletAddress) {
+      setActionError("회원 storecode 또는 지갑주소가 없어 주문상태를 변경할 수 없습니다.");
+      setActionMessage("");
+      return;
+    }
+
+    if (!currentStatus) {
+      setActionError("변경할 주문상태가 없습니다.");
+      setActionMessage("");
+      return;
+    }
+
+    if (currentStatus === "paymentConfirmed") {
+      setActionError("이미 결제완료 상태입니다.");
+      setActionMessage("");
+      return;
+    }
+
+    if (!activeAccount) {
+      setActionError("전체 관리자 지갑 연결이 필요합니다.");
+      setActionMessage("");
+      return;
+    }
+
+    setUpdatingOrderStatus(true);
+
+    try {
+      const signedBody = await createAdminSignedBody({
+        account: activeAccount,
+        route: CONFIRM_BUYORDER_PAYMENT_ROUTE,
+        signingPrefix: CONFIRM_BUYORDER_PAYMENT_SIGNING_PREFIX,
+        requesterStorecode: "admin",
+        requesterWalletAddress: activeAccount.address,
+        actionFields: {
+          storecode: targetStorecode,
+          walletAddress: targetWalletAddress,
+        },
+      });
+
+      const response = await fetch("/api/bff/admin/member-signed-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route: CONFIRM_BUYORDER_PAYMENT_ROUTE,
+          signedBody,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      const result = payload?.result || {};
+      if (!response.ok || !result?.success) {
+        const currentRemoteStatus = normalizeString(payload?.currentStatus || result?.currentStatus);
+        const statusSuffix = currentRemoteStatus
+          ? ` 현재 주문상태는 ${getBuyOrderStatusMeta(currentRemoteStatus).label}입니다.`
+          : "";
+        throw new Error(`${payload?.error || "주문상태 변경에 실패했습니다."}${statusSuffix}`);
+      }
+
+      const targetKey = getMemberPaymentDraftKey(orderStatusModalState.member, orderStatusModalState.index);
+      setData((current) => ({
+        ...current,
+        members: current.members.map((member, index) => {
+          if (getMemberPaymentDraftKey(member, index) !== targetKey) {
+            return member;
+          }
+
+          return {
+            ...member,
+            buyOrderStatus: "paymentConfirmed",
+            latestBuyOrderId: normalizeString(result.orderId) || member.latestBuyOrderId,
+            latestBuyOrderTradeId: normalizeString(result.tradeId) || member.latestBuyOrderTradeId,
+          };
+        }),
+      }));
+
+      setActionMessage(
+        `${normalizeString(orderStatusModalState.member.nickname) || "회원"} 주문상태를 ${getBuyOrderStatusMeta(currentStatus).label}에서 결제완료로 변경했습니다.`,
+      );
+      setActionError("");
+      setOrderStatusModalState(null);
+      void loadDashboard({ silent: true });
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "주문상태 변경에 실패했습니다.");
+      setActionMessage("");
+    } finally {
+      setUpdatingOrderStatus(false);
+    }
+  }, [activeAccount, loadDashboard, normalizedForcedStorecode, orderStatusModalState]);
 
   const updateAddMemberField = <Key extends keyof AddMemberFormState>(
     key: Key,
@@ -1558,6 +1690,7 @@ export default function MemberManagementConsoleClient({
                 {data.members.length > 0 ? (
                   data.members.map((member, index) => {
                     const statusMeta = getBuyOrderStatusMeta(member.buyOrderStatus);
+                    const canConfirmPaymentStatus = canConfirmBuyOrderStatus(member.buyOrderStatus);
                     const memberStoreMeta = getMemberStoreMeta(member);
                     const memberStoreDisplayName = getStoreDisplayName(
                       memberStoreMeta,
@@ -1730,9 +1863,26 @@ export default function MemberManagementConsoleClient({
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
-                            {statusMeta.label}
-                          </span>
+                          <div className="space-y-2">
+                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                              {statusMeta.label}
+                            </span>
+                            {canConfirmPaymentStatus ? (
+                              <button
+                                type="button"
+                                onClick={() => openOrderStatusModal(member, index)}
+                                disabled={
+                                  !canReadSignedData
+                                  || updatingOrderStatus
+                                  || !(normalizeString(member.storecode) || normalizedForcedStorecode)
+                                  || !normalizeString(member.walletAddress)
+                                }
+                                className="inline-flex h-8 whitespace-nowrap items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300"
+                              >
+                                결제완료 처리
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1752,6 +1902,7 @@ export default function MemberManagementConsoleClient({
             {data.members.length > 0 ? (
               data.members.map((member, index) => {
                 const statusMeta = getBuyOrderStatusMeta(member.buyOrderStatus);
+                const canConfirmPaymentStatus = canConfirmBuyOrderStatus(member.buyOrderStatus);
                 const memberStoreMeta = getMemberStoreMeta(member);
                 const memberStoreDisplayName = getStoreDisplayName(
                   memberStoreMeta,
@@ -1915,9 +2066,26 @@ export default function MemberManagementConsoleClient({
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                      <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
-                        {statusMeta.label}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                          {statusMeta.label}
+                        </span>
+                        {canConfirmPaymentStatus ? (
+                          <button
+                            type="button"
+                            onClick={() => openOrderStatusModal(member, index)}
+                            disabled={
+                              !canReadSignedData
+                              || updatingOrderStatus
+                              || !(normalizeString(member.storecode) || normalizedForcedStorecode)
+                              || !normalizeString(member.walletAddress)
+                            }
+                            className="inline-flex h-8 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300"
+                          >
+                            결제완료 처리
+                          </button>
+                        ) : null}
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
@@ -2180,6 +2348,125 @@ export default function MemberManagementConsoleClient({
                 className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 {updatingBankInfo ? "변경 중..." : "통장 저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {orderStatusModalState ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="console-panel w-full max-w-xl rounded-[32px] bg-white p-6 shadow-[0_42px_90px_-56px_rgba(15,23,42,0.7)]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="console-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                  Order status
+                </div>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                  주문상태 변경
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {normalizeString(orderStatusModalState.member.nickname) || "회원"}의 최근 주문상태를 확인하고 결제완료로 변경합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeOrderStatusModal}
+                disabled={updatingOrderStatus}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs font-medium text-slate-500">회원</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">
+                    {normalizeString(orderStatusModalState.member.nickname) || "-"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500">가맹점</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">
+                    {normalizeString(orderStatusModalState.member.storecode) || normalizedForcedStorecode}
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <div className="text-xs font-medium text-slate-500">지갑주소</div>
+                  <div className="mt-1 break-all text-sm text-slate-700">
+                    {normalizeString(orderStatusModalState.member.walletAddress) || "-"}
+                  </div>
+                </div>
+                {normalizeString(orderStatusModalState.member.latestBuyOrderTradeId) ? (
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">최근 주문번호</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-950">
+                      {normalizeString(orderStatusModalState.member.latestBuyOrderTradeId)}
+                    </div>
+                  </div>
+                ) : null}
+                {normalizeString(orderStatusModalState.member.latestBuyOrderCreatedAt) ? (
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">최근 주문일</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-950">
+                      {formatDateTime(orderStatusModalState.member.latestBuyOrderCreatedAt)}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+                <div className="text-xs font-medium text-slate-500">현재 주문상태</div>
+                <div className="mt-3">
+                  <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getBuyOrderStatusMeta(orderStatusModalState.member.buyOrderStatus).className}`}>
+                    {getBuyOrderStatusMeta(orderStatusModalState.member.buyOrderStatus).label}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-[22px] border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-xs font-medium text-emerald-700">변경 후 주문상태</div>
+                <div className="mt-3">
+                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                    결제완료
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {!canConfirmBuyOrderStatus(orderStatusModalState.member.buyOrderStatus) ? (
+              <div className="mt-5 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                결제완료가 아닌 주문상태가 있을 때만 변경할 수 있습니다.
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeOrderStatusModal}
+                disabled={updatingOrderStatus}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void submitOrderStatusConfirm();
+                }}
+                disabled={
+                  updatingOrderStatus
+                  || !canReadSignedData
+                  || !canConfirmBuyOrderStatus(orderStatusModalState.member.buyOrderStatus)
+                  || !(normalizeString(orderStatusModalState.member.storecode) || normalizedForcedStorecode)
+                  || !normalizeString(orderStatusModalState.member.walletAddress)
+                }
+                className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {updatingOrderStatus ? "변경 중..." : "결제완료로 변경"}
               </button>
             </div>
           </div>
