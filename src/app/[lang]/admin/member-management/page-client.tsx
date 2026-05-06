@@ -36,7 +36,7 @@ export default function AdminMemberManagementPageClient({
   const activeAccount = useActiveAccount();
   const walletConnectionStatus = useActiveWalletConnectionStatus();
   const [stores, setStores] = useState<StoreOption[]>([]);
-  const [selectedStorecode, setSelectedStorecode] = useState("");
+  const [selectedStorecode, setSelectedStorecode] = useState(ALL_STORES_SCOPE);
   const [loadingStores, setLoadingStores] = useState(true);
   const [error, setError] = useState("");
   const inflightLoadRef = useRef(false);
